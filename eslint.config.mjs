@@ -6,7 +6,13 @@ import prettierRecommended from 'eslint-plugin-prettier/recommended';
 
 export default tseslint.config(
     {
-        ignores: ['eslint.config.mjs', 'commitlint.config.mjs', 'dist/**', 'node_modules/**'],
+        ignores: [
+            'eslint.config.mjs',
+            'commitlint.config.mjs',
+            `scripts/*`,
+            'dist/**',
+            'node_modules/**',
+        ],
     },
 
     eslint.configs.recommended,
