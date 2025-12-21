@@ -1,12 +1,17 @@
 import { Controller, Get } from '@nestjs/common';
-import { AppService } from './app.service';
+import { ConfigService } from '@nestjs/config';
 
 @Controller()
 export class AppController {
-    constructor(private readonly appService: AppService) {}
+    constructor(private readonly config: ConfigService) {}
 
     @Get()
-    getHello(): string {
-        return this.appService.getHello();
+    getStatus() {
+        return {
+            name: 'Nurtura API Server',
+            status: 'ok',
+            environment: this.config.get<string>('NODE_ENV') ?? 'development',
+            version: '0.0.1',
+        };
     }
 }
