@@ -5,10 +5,114 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+    provider = "prisma-client"
+    output   = "../generated/prisma"
 }
 
 datasource db {
-  provider = "postgresql"
+    provider = "postgresql"
 }
+
+enum PlantType {
+    ASTERACEAE
+    BASELLACEAE
+    LAMIACEAE
+    APIACEAE
+}
+
+enum SoilType {
+    LOAMY
+    SANDY
+    PEATY
+    SILTY
+    CHALKY
+    CLAY
+}
+
+enum ActivityEventType {
+    LIGHT_ON
+    LIGHT_OFF
+    WATERING_ON
+    WATERING_OFF
+    SENSORS_ON
+    SENSORS_OFF
+}
+
+enum NotificationType {
+    SYSTEM
+    ALERT
+    INFO
+}
+
+model User {
+    id          String         @id
+    firstName   String?
+    middleName  String?
+    lastName    String?
+    suffix      String?
+    email       String         @unique
+    birthdate   DateTime?
+    address     String?
+
+    racks        Rack[]
+    notifications Notification[]
+
+    @@map("user")
+}
+
+model Rack {
+    id         Int      @id @default(autoincrement())
+    userId     String
+    rackName   String
+    macAddress String
+
+    user        User     @relation(fields: [userId], references: [id])
+    plants      Plant[]
+    activities  Activity[]
+    notifications Notification[]
+
+    @@map("rack")
+}
+
+model Plant {
+    id              Int       @id @default(autoincrement())
+    rackId          Int
+    plantName       String
+    plantType       PlantType?
+    plantAmount     Int?
+    recommendedSoil SoilType?
+    datePlanted     DateTime? @default(now())
+    lastWateredAt   DateTime?
+    lastLightOn     DateTime?
+
+    rack Rack @relation(fields: [rackId], references: [id])
+
+    @@map("plant")
+}
+
+model Activity {
+    id           Int               @id @default(autoincrement())
+    rackId       Int
+    timestamp    DateTime          @default(now())
+    eventType    ActivityEventType
+    eventDetails String?
+
+    rack Rack @relation(fields: [rackId], references: [id])
+
+    @@map("activity")
+}
+
+model Notification {
+    id               Int               @id @default(autoincrement())
+    userId           String
+    rackId           Int?
+    message          String
+    notificationType NotificationType?
+
+    user User @relation(fields: [userId], references: [id])
+    rack Rack? @relation(fields: [rackId], references: [id])
+
+    @@map("notifications")
+}
+
+
