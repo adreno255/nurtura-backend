@@ -56,7 +56,7 @@ export default tseslint.config(
             '@typescript-eslint/require-await': 'warn',
 
             /* -------------------- Clean Code ------------------ */
-            'no-console': 'off', // NestJS logs are valid
+            'no-console': 'off',
             'no-debugger': 'warn',
             eqeqeq: ['error', 'always'],
         },
