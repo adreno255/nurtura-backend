@@ -9,10 +9,15 @@ async function bootstrap(): Promise<void> {
 
     const configService = app.get<ConfigService>(ConfigService);
     const port = configService.get<number>('PORT') ?? 3000;
+    const env = configService.get<string>('NODE_ENV') ?? 'development';
 
-    await app.listen(port);
+    // 0.0.0.0 for production/Docker, localhost for development
+    const host = env === 'production' ? '0.0.0.0' : 'localhost';
+
+    await app.listen(port, host);
 
     console.log(`Server running on http://localhost:${port}`);
+    console.log(`Environment: ${env}`);
 }
 
 void bootstrap();
