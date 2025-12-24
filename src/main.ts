@@ -3,13 +3,17 @@ import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
 import { MyLoggerService } from './my-logger/my-logger.service';
 import { AllExceptionsFilter } from './all-exceptions.filter';
+import { HttpLoggingInterceptor } from './http-logging.interceptor';
 
 async function bootstrap(): Promise<void> {
     const app = await NestFactory.create(AppModule, {
         bufferLogs: true,
+        logger: false,
     });
 
-    app.useLogger(app.get(MyLoggerService));
+    const logger = app.get(MyLoggerService);
+
+    app.useGlobalInterceptors(new HttpLoggingInterceptor(logger));
 
     app.useGlobalFilters(app.get(AllExceptionsFilter));
 
@@ -26,8 +30,8 @@ async function bootstrap(): Promise<void> {
 
     await app.listen(port, host);
 
-    console.log(`Server running on http://localhost:${port}`);
-    console.log(`Environment: ${env}`);
+    logger.log(`Server running on http://${host}:${port}`, 'Bootstrap');
+    logger.log(`Environment: ${env}`, 'Bootstrap');
 }
 
 void bootstrap();

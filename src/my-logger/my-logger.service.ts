@@ -17,7 +17,7 @@ export class MyLoggerService extends ConsoleLogger {
         }
     }
 
-    private format(message: unknown, context?: string): string {
+    private format(message: any, context?: string): string {
         const timestamp = new Intl.DateTimeFormat('en-US', {
             dateStyle: 'short',
             timeStyle: 'medium',
@@ -36,28 +36,31 @@ export class MyLoggerService extends ConsoleLogger {
         }
     }
 
-    log(message: unknown, context?: string): void {
+    log(message: any, context?: string): void {
         void this.writeToFile(this.appLog, this.format(message, context));
         super.log(message, context);
     }
 
-    error(message: unknown, stack?: string, context?: string): void {
-        const errorMessage = stack ? `${String(message)}\n${stack}` : String(message);
+    error(message: any, stack?: string, context?: string): void {
+        const shortStack = stack?.split('\n').slice(0, 1).join('\n');
+
+        const errorMessage = stack ? `${String(message)}\t${shortStack}` : String(message);
+
         void this.writeToFile(this.errorLog, this.format(errorMessage, context));
         super.error(message, stack, context);
     }
 
-    warn(message: unknown, context?: string): void {
+    warn(message: any, context?: string): void {
         void this.writeToFile(this.appLog, this.format(message, context));
         super.warn(message, context);
     }
 
-    debug(message: unknown, context?: string): void {
+    debug(message: any, context?: string): void {
         void this.writeToFile(this.appLog, this.format(message, context));
         super.debug(message, context);
     }
 
-    verbose(message: unknown, context?: string): void {
+    verbose(message: any, context?: string): void {
         void this.writeToFile(this.appLog, this.format(message, context));
         super.verbose(message, context);
     }
