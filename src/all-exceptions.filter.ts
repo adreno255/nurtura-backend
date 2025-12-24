@@ -17,21 +17,29 @@ export class AllExceptionsFilter extends BaseExceptionFilter {
         const request = ctx.getRequest<Request>();
 
         let statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
-        let responseBody: string | object = 'Internal Server Error';
+        let message: string = 'Internal Server Error';
 
         if (exception instanceof HttpException) {
             statusCode = exception.getStatus();
-            responseBody = exception.getResponse();
+
+            const exceptionResponse = exception.getResponse();
+            console.log(exceptionResponse);
+            if (typeof exceptionResponse === 'string') {
+                message = exceptionResponse;
+            } else if (typeof exceptionResponse === 'object' && 'message' in exceptionResponse) {
+                const msg = exceptionResponse['message'];
+                message = Array.isArray(msg) ? msg.join(', ') : String(msg);
+            }
         } else if (exception instanceof PrismaClientValidationError) {
             statusCode = HttpStatus.UNPROCESSABLE_ENTITY;
-            responseBody = exception.message.replace(/\n/g, ' ');
+            message = exception.message.replace(/\n/g, ' ');
         }
 
         const errorPayload = {
             statusCode,
             timestamp: new Date().toISOString(),
             path: request.url,
-            response: responseBody,
+            message,
         };
 
         this.logger.error(
