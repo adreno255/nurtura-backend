@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
 import { MyLoggerService } from './my-logger/my-logger.service';
+import { AllExceptionsFilter } from './all-exceptions.filter';
 
 async function bootstrap(): Promise<void> {
     const app = await NestFactory.create(AppModule, {
@@ -9,6 +10,8 @@ async function bootstrap(): Promise<void> {
     });
 
     app.useLogger(app.get(MyLoggerService));
+
+    app.useGlobalFilters(app.get(AllExceptionsFilter));
 
     app.enableCors();
 

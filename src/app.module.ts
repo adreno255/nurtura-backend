@@ -7,6 +7,7 @@ import { DatabaseModule } from './database/database.module';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { MyLoggerModule } from './my-logger/my-logger.module';
+import { AllExceptionsFilter } from './all-exceptions.filter';
 
 @Module({
     imports: [
@@ -26,6 +27,7 @@ import { MyLoggerModule } from './my-logger/my-logger.module';
     ],
     controllers: [AppController],
     providers: [
+        AllExceptionsFilter,
         {
             provide: APP_GUARD,
             useClass: ThrottlerGuard,
