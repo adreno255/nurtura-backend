@@ -15,8 +15,13 @@ describe('AppController', () => {
     });
 
     describe('root', () => {
-        it('should return "Hello World!"', () => {
-            expect(appController.getHello()).toBe('Hello World!');
+        it('should return API server details', () => {
+            expect(appController.getStatus()).toBe({
+                name: 'Nurtura API Server',
+                status: 'ok',
+                environment: 'development',
+                version: '0.0.1',
+            });
         });
     });
 });
