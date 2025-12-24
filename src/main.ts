@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { MyLoggerService } from './my-logger/my-logger.service';
 import { AllExceptionsFilter } from './all-exceptions.filter';
 import { HttpLoggingInterceptor } from './http-logging.interceptor';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 async function bootstrap(): Promise<void> {
     const app = await NestFactory.create(AppModule, {
@@ -20,6 +21,15 @@ async function bootstrap(): Promise<void> {
     app.enableCors();
 
     app.setGlobalPrefix('api');
+
+    const config = new DocumentBuilder()
+        .setTitle('Nurtura API')
+        .setDescription('Backend API for Nurtura platform')
+        .setVersion('0.0.1')
+        .build();
+
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('docs', app, document);
 
     const configService = app.get<ConfigService>(ConfigService);
     const port = configService.get<number>('PORT') ?? 3000;
