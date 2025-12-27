@@ -1,5 +1,11 @@
 import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBadRequestResponse } from '@nestjs/swagger';
+import {
+    ApiTags,
+    ApiOperation,
+    ApiResponse,
+    ApiBadRequestResponse,
+    ApiInternalServerErrorResponse,
+} from '@nestjs/swagger';
 import { OtpService } from './otp.service';
 import { SendRegistrationOtpDto } from './dto/send-registration-otp.dto';
 import { SendForgotPasswordOtpDto } from './dto/send-forgot-password-otp.dto';
@@ -10,29 +16,51 @@ import { VerifyOtpDto } from './dto/verify-otp.dto';
 export class OtpController {
     constructor(private readonly otpService: OtpService) {}
 
-    @Post('send')
+    @Post('registration')
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
         summary: 'Send registration OTP',
         description:
-            'Sends a 6-digit OTP code to the provided email for account registration verification',
+            'Sends a 5-digit OTP code to the provided email for account registration verification',
     })
     @ApiResponse({
         status: HttpStatus.OK,
         description: 'OTP sent successfully',
         schema: {
-            example: {
-                message: 'Registration OTP sent successfully. Please check your email.',
+            type: 'object',
+            properties: {
+                message: {
+                    type: 'string',
+                    example: 'Registration OTP sent successfully. Please check your email.',
+                },
             },
         },
     })
     @ApiBadRequestResponse({
-        description: 'Invalid email format or failed to send OTP',
+        description: 'Invalid email format or validation error',
         schema: {
-            example: {
-                statusCode: 400,
-                message: 'Failed to send OTP email. Please try again.',
-                error: 'Bad Request',
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 400 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/auth/otp/registration' },
+                message: {
+                    type: 'string',
+                    example:
+                        'email must be an email, code must be longer than or equal to 5 characters',
+                },
+            },
+        },
+    })
+    @ApiInternalServerErrorResponse({
+        description: 'Failed to send OTP email',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 500 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/auth/otp/registration' },
+                message: { type: 'string', example: 'Failed to send OTP email' },
             },
         },
     })
@@ -48,24 +76,46 @@ export class OtpController {
     @ApiOperation({
         summary: 'Send forgot password OTP',
         description:
-            'Sends a 6-digit OTP code to the provided email for password reset verification',
+            'Sends a 5-digit OTP code to the provided email for password reset verification',
     })
     @ApiResponse({
         status: HttpStatus.OK,
         description: 'Password reset OTP sent successfully',
         schema: {
-            example: {
-                message: 'Password reset OTP sent successfully. Please check your email.',
+            type: 'object',
+            properties: {
+                message: {
+                    type: 'string',
+                    example: 'Password reset OTP sent successfully. Please check your email.',
+                },
             },
         },
     })
     @ApiBadRequestResponse({
-        description: 'Invalid email format or failed to send OTP',
+        description: 'Invalid email format or validation error',
         schema: {
-            example: {
-                statusCode: 400,
-                message: 'Failed to send password reset OTP. Please try again.',
-                error: 'Bad Request',
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 400 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/auth/otp/forgot-password' },
+                message: {
+                    type: 'string',
+                    example:
+                        'email must be an email, code must be longer than or equal to 5 characters',
+                },
+            },
+        },
+    })
+    @ApiInternalServerErrorResponse({
+        description: 'Failed to send password reset OTP',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 500 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/auth/otp/forgot-password' },
+                message: { type: 'string', example: 'Failed to send password reset OTP email' },
             },
         },
     })
@@ -87,34 +137,88 @@ export class OtpController {
         status: HttpStatus.OK,
         description: 'OTP verified successfully',
         schema: {
-            example: {
-                message: 'OTP verified successfully.',
+            type: 'object',
+            properties: {
+                message: {
+                    type: 'string',
+                    example: 'OTP verified successfully.',
+                },
             },
         },
     })
     @ApiBadRequestResponse({
-        description: 'Invalid OTP, expired OTP, purpose mismatch, or no OTP found',
-        schema: {
-            examples: {
-                invalidCode: {
-                    value: {
-                        statusCode: 400,
-                        message: 'Invalid OTP code. Please check and try again.',
-                        error: 'Bad Request',
+        description:
+            'Invalid OTP, expired OTP, purpose mismatch, validation error, or no OTP found',
+        content: {
+            'application/json': {
+                schema: {
+                    type: 'object',
+                    properties: {
+                        statusCode: {
+                            type: 'number',
+                            example: 400,
+                        },
+                        timestamp: {
+                            type: 'string',
+                            format: 'date-time',
+                            example: '2025-12-27T10:30:00.000Z',
+                        },
+                        path: {
+                            type: 'string',
+                            example: '/api/auth/otp/verify',
+                        },
+                        message: {
+                            type: 'string',
+                        },
                     },
                 },
-                expired: {
-                    value: {
-                        statusCode: 400,
-                        message: 'OTP has expired. Please request a new one.',
-                        error: 'Bad Request',
+                examples: {
+                    invalidOtp: {
+                        summary: 'Invalid OTP',
+                        value: {
+                            statusCode: 400,
+                            timestamp: '2025-12-27T10:30:00.000Z',
+                            path: '/api/auth/otp/verify',
+                            message: 'Invalid OTP code. Please check and try again.',
+                        },
                     },
-                },
-                notFound: {
-                    value: {
-                        statusCode: 400,
-                        message: 'No OTP found for this email. Please request a new one.',
-                        error: 'Bad Request',
+                    expiredOtp: {
+                        summary: 'Expired OTP',
+                        value: {
+                            statusCode: 400,
+                            timestamp: '2025-12-27T10:30:00.000Z',
+                            path: '/api/auth/otp/verify',
+                            message: 'OTP has expired. Please request a new one.',
+                        },
+                    },
+                    notFound: {
+                        summary: 'OTP not found',
+                        value: {
+                            statusCode: 400,
+                            timestamp: '2025-12-27T10:30:00.000Z',
+                            path: '/api/auth/otp/verify',
+                            message: 'No OTP found for this email. Please request a new one.',
+                        },
+                    },
+                    invalidPurpose: {
+                        summary: 'Invalid OTP purpose',
+                        value: {
+                            statusCode: 400,
+                            timestamp: '2025-12-27T10:30:00.000Z',
+                            path: '/api/auth/otp/verify',
+                            message:
+                                'Invalid OTP context. Please use the correct verification flow.',
+                        },
+                    },
+                    validationError: {
+                        summary: 'DTO validation error',
+                        value: {
+                            statusCode: 400,
+                            timestamp: '2025-12-27T10:30:00.000Z',
+                            path: '/api/auth/otp/verify',
+                            message:
+                                'email must be an email, code must be longer than or equal to 5 characters',
+                        },
                     },
                 },
             },

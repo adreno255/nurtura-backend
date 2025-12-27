@@ -3,8 +3,8 @@ import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
 import { MyLoggerService } from './my-logger/my-logger.service';
-import { AllExceptionsFilter } from './all-exceptions.filter';
-import { HttpLoggingInterceptor } from './http-logging.interceptor';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { HttpLoggingInterceptor } from './common/interceptors/http-logging.interceptor';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 async function bootstrap(): Promise<void> {
