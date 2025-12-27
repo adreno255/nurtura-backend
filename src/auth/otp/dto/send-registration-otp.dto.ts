@@ -18,11 +18,4 @@ export class SendRegistrationOtpDto {
     @IsString()
     @Length(5, 5, { message: 'OTP code must be exactly 5 digits' })
     code!: string;
-
-    @ApiProperty({
-        example: '3:45 PM',
-        description: 'Formatted expiration time for display in email',
-    })
-    @IsString()
-    time!: string;
 }

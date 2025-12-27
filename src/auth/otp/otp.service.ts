@@ -17,10 +17,16 @@ export class OtpService {
     ) {}
 
     async sendRegistrationOtp(dto: SendRegistrationOtpDto): Promise<void> {
-        const { email, code, time } = dto;
+        const { email, code } = dto;
 
         // Store OTP before sending email
         this.storeOtp(email, code, 'registration');
+
+        const time: string = new Intl.DateTimeFormat('en-US', {
+            hour: 'numeric',
+            minute: 'numeric',
+            hour12: true,
+        }).format(this.otpStore[email].expiresAt);
 
         try {
             await this.emailService.sendRegistrationOtp(email, code, time);
@@ -38,10 +44,16 @@ export class OtpService {
     }
 
     async sendForgotPasswordOtp(dto: SendForgotPasswordOtpDto): Promise<void> {
-        const { email, code, time } = dto;
+        const { email, code } = dto;
 
         // Store OTP before sending email
         this.storeOtp(email, code, 'forgot-password');
+
+        const time: string = new Intl.DateTimeFormat('en-US', {
+            hour: 'numeric',
+            minute: 'numeric',
+            hour12: true,
+        }).format(this.otpStore[email].expiresAt);
 
         try {
             await this.emailService.sendForgotPasswordOtp(email, code, time);
