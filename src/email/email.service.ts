@@ -1,21 +1,24 @@
-import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import * as sgMail from '@sendgrid/mail';
+import sgMail from '@sendgrid/mail';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getRegistrationOtpTemplate } from './templates/registration-otp.template';
 import { getForgotPasswordOtpTemplate } from './templates/forgot-password-otp.template';
+import { MyLoggerService } from '../my-logger/my-logger.service';
 
 @Injectable()
 export class EmailService {
-    private readonly logger = new Logger(EmailService.name);
     private readonly logoBase64: string;
     private readonly facebookBase64: string;
 
-    constructor(private readonly configService: ConfigService) {
+    constructor(
+        private readonly configService: ConfigService,
+        private readonly logger: MyLoggerService,
+    ) {
         const apiKey = this.configService.get<string>('SENDGRID_API_KEY');
         if (!apiKey) {
-            this.logger.error('SENDGRID_API_KEY is not configured');
+            this.logger.error('SENDGRID_API_KEY is not configured', '', 'EmailService');
             throw new Error('SENDGRID_API_KEY is not configured');
         }
         sgMail.setApiKey(apiKey);
@@ -32,15 +35,15 @@ export class EmailService {
                 .readFileSync(path.join(assetsPath, 'Facebook-icon.png'))
                 .toString('base64');
 
-            this.logger.log('Email assets loaded successfully');
+            this.logger.log('Email assets loaded successfully', 'EmailService');
         } catch (error) {
-            this.logger.error('Failed to load email assets', error);
+            this.logger.error('Failed to load email assets', String(error), 'EmailService');
             throw new Error(
                 'Failed to load email assets. Please ensure images exist in src/assets/email/',
             );
         }
 
-        this.logger.log('SendGrid initialized successfully');
+        this.logger.log('SendGrid initialized successfully', 'EmailService');
     }
 
     async sendRegistrationOtp(email: string, code: string, expiryTime: string): Promise<void> {
@@ -75,11 +78,17 @@ export class EmailService {
 
         try {
             await sgMail.send(msg);
-            this.logger.log(`Registration OTP email sent to ${email}`);
+            this.logger.log(`Registration OTP email sent to ${email}`, 'EmailService');
         } catch (error: any) {
             if (error instanceof Error) {
-                this.logger.error(`Failed to send registration OTP to ${email}`, error.message);
+                const errorMessage = error.message;
+                this.logger.error(
+                    `Failed to send registration OTP to ${email}`,
+                    String(errorMessage),
+                    'EmailService',
+                );
             }
+
             throw new InternalServerErrorException('Failed to send OTP email');
         }
     }
@@ -116,10 +125,15 @@ export class EmailService {
 
         try {
             await sgMail.send(msg);
-            this.logger.log(`Forgot password OTP email sent to ${email}`);
+            this.logger.log(`Forgot password OTP email sent to ${email}`, 'EmailService');
         } catch (error: any) {
             if (error instanceof Error) {
-                this.logger.error(`Failed to send forgot password OTP to ${email}`, error.message);
+                const errorMessage = error.message;
+                this.logger.error(
+                    `Failed to send forgot password OTP to ${email}`,
+                    String(errorMessage),
+                    'EmailService',
+                );
             }
             throw new InternalServerErrorException('Failed to send password reset OTP email');
         }

@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
@@ -8,12 +8,13 @@ export class AppController {
     constructor(private readonly config: ConfigService) {}
 
     @Get()
+    @HttpCode(HttpStatus.OK)
     @ApiOperation({
         summary: 'API health check',
         description: 'Returns server status and environment information',
     })
     @ApiResponse({
-        status: 200,
+        status: HttpStatus.OK,
         description: 'Server is running',
         schema: {
             example: {

@@ -21,7 +21,6 @@ import { FirebaseModule } from './firebase/firebase.module';
                 allowUnknown: true,
             },
         }),
-        DatabaseModule,
         ThrottlerModule.forRoot([
             {
                 ttl: 60000,
@@ -29,8 +28,9 @@ import { FirebaseModule } from './firebase/firebase.module';
             },
         ]),
         MyLoggerModule,
-        AuthModule,
+        DatabaseModule,
         EmailModule,
+        AuthModule,
         FirebaseModule,
     ],
     controllers: [AppController],
