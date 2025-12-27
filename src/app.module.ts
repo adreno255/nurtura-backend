@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { envValidationSchema } from './config/env.validation';
 import { AppController } from './app.controller';
 import { DatabaseModule } from './database/database.module';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
@@ -14,6 +15,11 @@ import { FirebaseModule } from './firebase/firebase.module';
     imports: [
         ConfigModule.forRoot({
             isGlobal: true,
+            validationSchema: envValidationSchema,
+            validationOptions: {
+                abortEarly: false,
+                allowUnknown: true,
+            },
         }),
         DatabaseModule,
         ThrottlerModule.forRoot([
