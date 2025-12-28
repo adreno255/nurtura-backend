@@ -7,8 +7,7 @@ import {
     ApiInternalServerErrorResponse,
 } from '@nestjs/swagger';
 import { OtpService } from './otp.service';
-import { SendRegistrationOtpDto } from './dto/send-registration-otp.dto';
-import { SendForgotPasswordOtpDto } from './dto/send-forgot-password-otp.dto';
+import { SendOtpRequestDto } from './dto/send-otp-request.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 
 @ApiTags('Authentication - OTP')
@@ -64,7 +63,7 @@ export class OtpController {
             },
         },
     })
-    async sendRegistrationOtp(@Body() dto: SendRegistrationOtpDto) {
+    async sendRegistrationOtp(@Body() dto: SendOtpRequestDto) {
         await this.otpService.sendRegistrationOtp(dto);
         return {
             message: 'Registration OTP sent successfully. Please check your email.',
@@ -119,7 +118,7 @@ export class OtpController {
             },
         },
     })
-    async sendForgotPasswordOtp(@Body() dto: SendForgotPasswordOtpDto) {
+    async sendForgotPasswordOtp(@Body() dto: SendOtpRequestDto) {
         await this.otpService.sendForgotPasswordOtp(dto);
         return {
             message: 'Password reset OTP sent successfully. Please check your email.',
