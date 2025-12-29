@@ -9,6 +9,12 @@ import { DatabaseService } from '../database/database.service';
 import { EmailQueryDto } from './dto/email-query.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { MyLoggerService } from '../my-logger/my-logger.service';
+import {
+    AuthProvidersResponse,
+    OnboardingStatusResponse,
+    PasswordResetResponse,
+    FirebaseAuthError,
+} from './interfaces';
 
 @Injectable()
 export class AuthService {
@@ -18,7 +24,7 @@ export class AuthService {
         private readonly logger: MyLoggerService,
     ) {}
 
-    async getProviders(dto: EmailQueryDto): Promise<{ providers: string[] }> {
+    async getProviders(dto: EmailQueryDto): Promise<AuthProvidersResponse> {
         const { email } = dto;
 
         try {
@@ -33,26 +39,22 @@ export class AuthService {
             );
 
             return { providers };
-        } catch (error: any) {
-            if (error instanceof Error && 'code' in error && error.code === 'auth/user-not-found') {
+        } catch (error) {
+            if (this.isFirebaseAuthError(error) && error.code === 'auth/user-not-found') {
                 this.logger.log(`No user found for email: ${email}`, 'AuthService');
                 return { providers: [] };
             }
 
             this.logger.error(
                 `Error checking sign-in providers for ${email}`,
-                String(error),
+                error instanceof Error ? error.message : String(error),
                 'AuthService',
             );
             throw new InternalServerErrorException('Failed to check sign-in providers');
         }
     }
 
-    async getOnboardingStatus(dto: EmailQueryDto): Promise<{
-        needsOnboarding: boolean;
-        providers?: string[];
-        message: string;
-    }> {
+    async getOnboardingStatus(dto: EmailQueryDto): Promise<OnboardingStatusResponse> {
         const { email } = dto;
 
         try {
@@ -84,8 +86,8 @@ export class AuthService {
                 needsOnboarding: false,
                 message: 'User profile exists',
             };
-        } catch (error: any) {
-            if (error instanceof Error && 'code' in error && error.code === 'auth/user-not-found') {
+        } catch (error) {
+            if (this.isFirebaseAuthError(error) && error.code === 'auth/user-not-found') {
                 throw new NotFoundException('No user found for this email');
             }
 
@@ -95,14 +97,14 @@ export class AuthService {
 
             this.logger.error(
                 `Error checking onboarding status for ${email}`,
-                String(error),
+                error instanceof Error ? error.message : String(error),
                 'AuthService',
             );
             throw new InternalServerErrorException('Failed to check user status');
         }
     }
 
-    async resetPassword(dto: ResetPasswordDto): Promise<{ message: string }> {
+    async resetPassword(dto: ResetPasswordDto): Promise<PasswordResetResponse> {
         const { email, newPassword } = dto;
 
         try {
@@ -115,17 +117,22 @@ export class AuthService {
 
             this.logger.log(`Password reset successfully for ${email}`, 'AuthService');
             return { message: 'Password updated successfully' };
-        } catch (error: any) {
-            if (error instanceof Error && 'code' in error && error.code === 'auth/user-not-found') {
+        } catch (error) {
+            if (this.isFirebaseAuthError(error) && error.code === 'auth/user-not-found') {
                 throw new NotFoundException('No user found for this email');
             }
 
             this.logger.error(
                 `Error resetting password for ${email}`,
-                String(error),
+                error instanceof Error ? error.message : String(error),
                 'AuthService',
             );
             throw new InternalServerErrorException('Failed to reset password');
         }
+    }
+
+    // Type guard helper
+    private isFirebaseAuthError(error: unknown): error is FirebaseAuthError {
+        return error instanceof Error && 'code' in error && typeof error.code === 'string';
     }
 }
