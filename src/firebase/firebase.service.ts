@@ -28,7 +28,7 @@ export class FirebaseService implements OnModuleInit {
                 credential: admin.credential.cert(serviceAccountKey),
             });
 
-            this.logger.log('Firebase Admin initialized successfully', 'FirebaseService');
+            this.logger.bootstrap('Firebase Admin initialized successfully', 'FirebaseService');
         } catch (error) {
             const errorMsg = `Failed to initialize Firebase Admin: ${error instanceof Error ? error.message : String(error)}`;
             console.error(errorMsg);

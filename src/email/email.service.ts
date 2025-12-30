@@ -35,7 +35,7 @@ export class EmailService {
                 .readFileSync(path.join(assetsPath, 'Facebook-icon.png'))
                 .toString('base64');
 
-            this.logger.log('Email assets loaded successfully', 'EmailService');
+            this.logger.bootstrap('Email assets loaded successfully', 'EmailService');
         } catch (error) {
             this.logger.error('Failed to load email assets', String(error), 'EmailService');
             throw new Error(
@@ -43,7 +43,7 @@ export class EmailService {
             );
         }
 
-        this.logger.log('SendGrid initialized successfully', 'EmailService');
+        this.logger.bootstrap('SendGrid initialized successfully', 'EmailService');
     }
 
     async sendRegistrationOtp(email: string, code: string, expiryTime: string): Promise<void> {

@@ -68,9 +68,9 @@ async function bootstrap(): Promise<void> {
 
     await app.listen(port, host);
 
-    logger.log(`Server running on http://${host}:${port}`, 'Bootstrap');
-    logger.log(`Swagger docs available at http://${host}:${port}/api/docs`, 'Bootstrap');
-    logger.log(`Environment: ${env}`, 'Bootstrap');
+    logger.bootstrap(`Server running on http://${host}:${port}`, 'Bootstrap');
+    logger.bootstrap(`Swagger docs available at http://${host}:${port}/api/docs`, 'Bootstrap');
+    logger.bootstrap(`Environment: ${env}`, 'Bootstrap');
 }
 
 void bootstrap();
