@@ -1,6 +1,6 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
-import { Strategy, ExtractJwt } from 'passport-jwt';
+import { Strategy, ExtractJwt } from 'passport-firebase-jwt';
 import { FirebaseService } from '../../firebase/firebase.service';
 import { MyLoggerService } from '../../my-logger/my-logger.service';
 import { DecodedIdToken } from 'firebase-admin/auth';
@@ -15,7 +15,7 @@ export class FirebaseJwtStrategy extends PassportStrategy(Strategy, 'firebase-jw
         super({
             jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
             ignoreExpiration: false,
-            secretOrKey: 'firebase', // dummy value (required by passport-jwt)
+            secretOrKey: 'nurtura-b967b',
             passReqToCallback: false,
         });
     }

@@ -9,7 +9,9 @@ import {
 import { OtpService } from './otp.service';
 import { SendOtpRequestDto } from './dto/send-otp-request.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { Public } from 'src/common/decorators';
 
+@Public()
 @ApiTags('Authentication - OTP')
 @Controller('auth/otp')
 export class OtpController {

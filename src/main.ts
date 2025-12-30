@@ -1,4 +1,4 @@
-import { NestFactory, Reflector } from '@nestjs/core';
+import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
@@ -6,12 +6,10 @@ import { MyLoggerService } from './my-logger/my-logger.service';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { HttpLoggingInterceptor } from './common/interceptors/http-logging.interceptor';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { FirebaseAuthGuard } from './common/guards/firebase-auth.guard';
 
 async function bootstrap(): Promise<void> {
     const app = await NestFactory.create(AppModule, {
         bufferLogs: true,
-        logger: false,
     });
 
     const logger = app.get(MyLoggerService);
@@ -30,9 +28,6 @@ async function bootstrap(): Promise<void> {
     app.useGlobalInterceptors(new HttpLoggingInterceptor(logger));
 
     app.useGlobalFilters(app.get(AllExceptionsFilter));
-
-    const reflector = app.get(Reflector);
-    app.useGlobalGuards(new FirebaseAuthGuard(reflector));
 
     app.enableCors();
 
