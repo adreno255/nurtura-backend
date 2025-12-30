@@ -1,13 +1,15 @@
 import { Module } from '@nestjs/common';
-import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
+import { AuthService } from './auth.service';
 import { OtpController } from './otp/otp.controller';
 import { OtpService } from './otp/otp.service';
-import { EmailModule } from 'src/email/email.module';
-import { MyLoggerModule } from 'src/my-logger/my-logger.module';
+import { FirebaseModule } from '../firebase/firebase.module';
+import { DatabaseModule } from '../database/database.module';
+import { EmailModule } from '../email/email.module';
+import { MyLoggerModule } from '../my-logger/my-logger.module';
 
 @Module({
-    imports: [EmailModule, MyLoggerModule],
+    imports: [FirebaseModule, DatabaseModule, EmailModule, MyLoggerModule],
     controllers: [AuthController, OtpController],
     providers: [AuthService, OtpService],
     exports: [AuthService, OtpService],

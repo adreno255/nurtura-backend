@@ -10,7 +10,6 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 async function bootstrap(): Promise<void> {
     const app = await NestFactory.create(AppModule, {
         bufferLogs: true,
-        logger: false,
     });
 
     const logger = app.get(MyLoggerService);
@@ -41,6 +40,17 @@ async function bootstrap(): Promise<void> {
         .addTag('System', 'Entry endpoint of the API server')
         .addTag('Authentication', 'User authentication and authorization endpoints')
         .addTag('Authentication - OTP', 'OTP verification and management')
+        .addBearerAuth(
+            {
+                type: 'http',
+                scheme: 'bearer',
+                bearerFormat: 'JWT',
+                name: 'Firebase ID Token',
+                description: 'Enter Firebase ID Token (obtained from Firebase Authentication)',
+                in: 'header',
+            },
+            'firebase-jwt',
+        )
         .build();
 
     const document = SwaggerModule.createDocument(app, config);
@@ -58,9 +68,9 @@ async function bootstrap(): Promise<void> {
 
     await app.listen(port, host);
 
-    logger.log(`Server running on http://${host}:${port}`, 'Bootstrap');
-    logger.log(`Swagger docs available at http://${host}:${port}/api/docs`, 'Bootstrap');
-    logger.log(`Environment: ${env}`, 'Bootstrap');
+    logger.bootstrap(`Server running on http://${host}:${port}`, 'Bootstrap');
+    logger.bootstrap(`Swagger docs available at http://${host}:${port}/api/docs`, 'Bootstrap');
+    logger.bootstrap(`Environment: ${env}`, 'Bootstrap');
 }
 
 void bootstrap();

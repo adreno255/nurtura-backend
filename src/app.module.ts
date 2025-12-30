@@ -10,6 +10,8 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { AuthModule } from './auth/auth.module';
 import { EmailModule } from './email/email.module';
 import { FirebaseModule } from './firebase/firebase.module';
+import { CommonModule } from 'src/common/common.module';
+import { FirebaseAuthGuard } from './common/guards/firebase-auth.guard';
 
 @Module({
     imports: [
@@ -29,6 +31,7 @@ import { FirebaseModule } from './firebase/firebase.module';
         ]),
         MyLoggerModule,
         DatabaseModule,
+        CommonModule,
         EmailModule,
         AuthModule,
         FirebaseModule,
@@ -39,6 +42,10 @@ import { FirebaseModule } from './firebase/firebase.module';
         {
             provide: APP_GUARD,
             useClass: ThrottlerGuard,
+        },
+        {
+            provide: APP_GUARD,
+            useClass: FirebaseAuthGuard,
         },
     ],
 })

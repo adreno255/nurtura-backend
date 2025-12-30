@@ -9,7 +9,9 @@ import {
 import { OtpService } from './otp.service';
 import { SendOtpRequestDto } from './dto/send-otp-request.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
+import { Public } from 'src/common/decorators';
 
+@Public()
 @ApiTags('Authentication - OTP')
 @Controller('auth/otp')
 export class OtpController {
@@ -36,7 +38,7 @@ export class OtpController {
         },
     })
     @ApiBadRequestResponse({
-        description: 'Invalid email format or validation error',
+        description: 'Invalid email format',
         schema: {
             type: 'object',
             properties: {
@@ -45,8 +47,7 @@ export class OtpController {
                 path: { type: 'string', example: '/api/auth/otp/registration' },
                 message: {
                     type: 'string',
-                    example:
-                        'email must be an email, code must be longer than or equal to 5 characters',
+                    example: 'Invalid email format',
                 },
             },
         },
@@ -91,7 +92,7 @@ export class OtpController {
         },
     })
     @ApiBadRequestResponse({
-        description: 'Invalid email format or validation error',
+        description: 'Invalid email format',
         schema: {
             type: 'object',
             properties: {
@@ -100,8 +101,7 @@ export class OtpController {
                 path: { type: 'string', example: '/api/auth/otp/forgot-password' },
                 message: {
                     type: 'string',
-                    example:
-                        'email must be an email, code must be longer than or equal to 5 characters',
+                    example: 'Invalid email format',
                 },
             },
         },
@@ -216,7 +216,7 @@ export class OtpController {
                             timestamp: '2025-12-27T10:30:00.000Z',
                             path: '/api/auth/otp/verify',
                             message:
-                                'email must be an email, code must be longer than or equal to 5 characters',
+                                'Invalid email format, code must be longer than or equal to 5 characters',
                         },
                     },
                 },

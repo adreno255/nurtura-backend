@@ -12,9 +12,9 @@ export class AllExceptionsFilter extends BaseExceptionFilter {
     }
 
     catch(exception: unknown, host: ArgumentsHost): void {
-        const ctx = host.switchToHttp();
-        const response = ctx.getResponse<Response>();
-        const request = ctx.getRequest<Request>();
+        const context = host.switchToHttp();
+        const response = context.getResponse<Response>();
+        const request = context.getRequest<Request>();
 
         let statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
         let message: string = 'Internal Server Error';

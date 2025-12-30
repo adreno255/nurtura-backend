@@ -5,6 +5,7 @@ import * as path from 'path';
 @Injectable()
 export class MyLoggerService extends ConsoleLogger {
     private readonly logDir = path.resolve(process.cwd(), 'logs');
+    private readonly bootstrapLog = path.join(this.logDir, 'bootstrap.log');
     private readonly appLog = path.join(this.logDir, 'app.log');
     private readonly errorLog = path.join(this.logDir, 'error.log');
 
@@ -34,6 +35,11 @@ export class MyLoggerService extends ConsoleLogger {
         } catch (error) {
             console.error('Failed to write to log file:', error);
         }
+    }
+
+    bootstrap(message: any, context?: string): void {
+        void this.writeToFile(this.bootstrapLog, this.format(message, context));
+        super.log(message, context);
     }
 
     log(message: any, context?: string): void {

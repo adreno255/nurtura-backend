@@ -9,7 +9,7 @@ import * as crypto from 'crypto';
 @Injectable()
 export class OtpService {
     private readonly otpStore: OtpStore = {};
-    private readonly OTP_EXPIRY_MINUTES = 1;
+    private readonly OTP_EXPIRY_MINUTES = 15;
     private readonly OTP_LENGTH = 5;
 
     constructor(
