@@ -47,6 +47,18 @@ export class AuthController {
             },
         },
     })
+    @ApiNotFoundResponse({
+        description: 'No user found for this email',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 404 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/auth/providers' },
+                message: { type: 'string', example: 'No user found for this email' },
+            },
+        },
+    })
     @ApiBadRequestResponse({
         description: 'Invalid email format',
         schema: {

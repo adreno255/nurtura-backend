@@ -13,8 +13,8 @@ import {
     AuthProvidersResponse,
     OnboardingStatusResponse,
     PasswordResetResponse,
-    FirebaseAuthError,
 } from './interfaces';
+import { isFirebaseAuthError } from 'src/common/type-guards';
 
 @Injectable()
 export class AuthService {
@@ -40,9 +40,8 @@ export class AuthService {
 
             return { providers };
         } catch (error) {
-            if (this.isFirebaseAuthError(error) && error.code === 'auth/user-not-found') {
-                this.logger.log(`No user found for email: ${email}`, 'AuthService');
-                return { providers: [] };
+            if (isFirebaseAuthError(error) && error.code === 'auth/user-not-found') {
+                throw new NotFoundException('No user found for this email');
             }
 
             this.logger.error(
@@ -87,7 +86,7 @@ export class AuthService {
                 message: 'User profile exists',
             };
         } catch (error) {
-            if (this.isFirebaseAuthError(error) && error.code === 'auth/user-not-found') {
+            if (isFirebaseAuthError(error) && error.code === 'auth/user-not-found') {
                 throw new NotFoundException('No user found for this email');
             }
 
@@ -118,7 +117,7 @@ export class AuthService {
             this.logger.log(`Password reset successfully for ${email}`, 'AuthService');
             return { message: 'Password updated successfully' };
         } catch (error) {
-            if (this.isFirebaseAuthError(error) && error.code === 'auth/user-not-found') {
+            if (isFirebaseAuthError(error) && error.code === 'auth/user-not-found') {
                 throw new NotFoundException('No user found for this email');
             }
 
@@ -129,10 +128,5 @@ export class AuthService {
             );
             throw new InternalServerErrorException('Failed to reset password');
         }
-    }
-
-    // Type guard helper
-    private isFirebaseAuthError(error: unknown): error is FirebaseAuthError {
-        return error instanceof Error && 'code' in error && typeof error.code === 'string';
     }
 }

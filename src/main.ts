@@ -40,6 +40,7 @@ async function bootstrap(): Promise<void> {
         .addTag('System', 'Entry endpoint of the API server')
         .addTag('Authentication', 'User authentication and authorization endpoints')
         .addTag('Authentication - OTP', 'OTP verification and management')
+        .addTag('Users', 'User profile management')
         .addBearerAuth(
             {
                 type: 'http',

@@ -1,5 +1,5 @@
 export interface CurrentUserPayload {
-    uid: string;
+    firebaseUid: string;
     email: string;
 }
 

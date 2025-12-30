@@ -37,7 +37,11 @@ export class EmailService {
 
             this.logger.bootstrap('Email assets loaded successfully', 'EmailService');
         } catch (error) {
-            this.logger.error('Failed to load email assets', String(error), 'EmailService');
+            this.logger.error(
+                'Failed to load email assets',
+                error instanceof Error ? error.message : String(error),
+                'EmailService',
+            );
             throw new Error(
                 'Failed to load email assets. Please ensure images exist in src/assets/email/',
             );
@@ -79,17 +83,14 @@ export class EmailService {
         try {
             await sgMail.send(msg);
             this.logger.log(`Registration OTP email sent to ${email}`, 'EmailService');
-        } catch (error: any) {
-            if (error instanceof Error) {
-                const errorMessage = error.message;
-                this.logger.error(
-                    `Failed to send registration OTP to ${email}`,
-                    String(errorMessage),
-                    'EmailService',
-                );
-            }
+        } catch (error) {
+            this.logger.error(
+                `Failed to send registration OTP to ${email}`,
+                error instanceof Error ? error.message : String(error),
+                'EmailService',
+            );
 
-            throw new InternalServerErrorException('Failed to send OTP email');
+            throw new InternalServerErrorException('Failed to send registration OTP email');
         }
     }
 
@@ -126,15 +127,13 @@ export class EmailService {
         try {
             await sgMail.send(msg);
             this.logger.log(`Forgot password OTP email sent to ${email}`, 'EmailService');
-        } catch (error: any) {
-            if (error instanceof Error) {
-                const errorMessage = error.message;
-                this.logger.error(
-                    `Failed to send forgot password OTP to ${email}`,
-                    String(errorMessage),
-                    'EmailService',
-                );
-            }
+        } catch (error) {
+            this.logger.error(
+                `Failed to send forgot password OTP to ${email}`,
+                error instanceof Error ? error.message : String(error),
+                'EmailService',
+            );
+
             throw new InternalServerErrorException('Failed to send password reset OTP email');
         }
     }

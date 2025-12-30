@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { OtpStore } from './interfaces/otp-record.interface';
 import { SendOtpRequestDto } from './dto/send-otp-request.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
@@ -60,7 +60,7 @@ export class OtpService {
                 String(error),
                 'OtpService',
             );
-            throw new BadRequestException('Failed to send OTP email. Please try again.');
+            throw new InternalServerErrorException('Failed to send registration OTP email');
         }
     }
 
@@ -85,7 +85,7 @@ export class OtpService {
                 String(error),
                 'OtpService',
             );
-            throw new BadRequestException('Failed to send password reset OTP. Please try again.');
+            throw new InternalServerErrorException('Failed to send password reset OTP email');
         }
     }
 
