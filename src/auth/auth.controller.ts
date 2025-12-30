@@ -55,7 +55,7 @@ export class AuthController {
                 statusCode: { type: 'number', example: 400 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
                 path: { type: 'string', example: '/api/auth/providers' },
-                message: { type: 'string', example: 'email must be an email' },
+                message: { type: 'string', example: 'Invalid email format' },
             },
         },
     })
@@ -71,8 +71,7 @@ export class AuthController {
             },
         },
     })
-    async getProviders(@Query('email') email: string) {
-        const dto: EmailQueryDto = { email };
+    async getProviders(@Query() dto: EmailQueryDto) {
         return this.authService.getProviders(dto);
     }
 
@@ -161,7 +160,7 @@ export class AuthController {
                             statusCode: 400,
                             timestamp: '2025-12-27T10:30:00.000Z',
                             path: '/api/auth/onboarding-status',
-                            message: 'email must be an email',
+                            message: 'Invalid email format',
                         },
                     },
                     noSignInMethods: {
@@ -189,8 +188,7 @@ export class AuthController {
             },
         },
     })
-    async getOnboardingStatus(@Query('email') email: string) {
-        const dto: EmailQueryDto = { email };
+    async getOnboardingStatus(@Query() dto: EmailQueryDto) {
         return this.authService.getOnboardingStatus(dto);
     }
 
@@ -245,7 +243,7 @@ export class AuthController {
                             statusCode: 400,
                             timestamp: '2025-12-27T10:30:00.000Z',
                             path: '/api/auth/reset-password',
-                            message: 'email must be an email',
+                            message: 'Invalid email format',
                         },
                     },
                     weakPassword: {
@@ -255,7 +253,7 @@ export class AuthController {
                             timestamp: '2025-12-27T10:30:00.000Z',
                             path: '/api/auth/reset-password',
                             message:
-                                'Password must be at least 8 characters long, Password must contain at least one uppercase letter, one lowercase letter, and one number',
+                                'Password must be at least 8 characters long, Password must contain at least one uppercase letter, one lowercase letter, one digit, and one symbol',
                         },
                     },
                 },
