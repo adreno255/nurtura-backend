@@ -1,4 +1,4 @@
 export interface FirebaseTokenPayload {
-    uid: string;
+    firebaseUid: string;
     email: string;
 }

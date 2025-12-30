@@ -46,19 +46,20 @@ enum NotificationType {
 }
 
 model User {
-    id          String         @id
-    firstName   String?
-    middleName  String?
-    lastName    String?
-    suffix      String?
-    email       String         @unique
-    birthdate   DateTime?
-    address     String?
+  id         String   @id @default(cuid())
+  firebaseUid String  @unique @map("firebase_uid")
+  email      String   @unique
+  firstName  String   @map("first_name")
+  middleName String?  @map("middle_name")
+  lastName   String   @map("last_name")
+  suffix     String?
+  address    String
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
-    racks        Rack[]
-    notifications Notification[]
-
-    @@map("user")
+  @@map("users")
+  notifications Notification[]
+  racks Rack[]
 }
 
 model Rack {
@@ -66,13 +67,12 @@ model Rack {
     userId     String
     rackName   String
     macAddress String
-
     user        User     @relation(fields: [userId], references: [id])
     plants      Plant[]
     activities  Activity[]
     notifications Notification[]
 
-    @@map("rack")
+    @@map("racks")
 }
 
 model Plant {
@@ -88,7 +88,7 @@ model Plant {
 
     rack Rack @relation(fields: [rackId], references: [id])
 
-    @@map("plant")
+    @@map("plants")
 }
 
 model Activity {
@@ -100,7 +100,7 @@ model Activity {
 
     rack Rack @relation(fields: [rackId], references: [id])
 
-    @@map("activity")
+    @@map("activities")
 }
 
 model Notification {

@@ -60,7 +60,7 @@ export class OtpController {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
                 path: { type: 'string', example: '/api/auth/otp/registration' },
-                message: { type: 'string', example: 'Failed to send OTP email' },
+                message: { type: 'string', example: 'Failed to send registration OTP email' },
             },
         },
     })

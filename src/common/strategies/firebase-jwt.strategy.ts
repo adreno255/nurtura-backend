@@ -31,11 +31,14 @@ export class FirebaseJwtStrategy extends PassportStrategy(Strategy, 'firebase-jw
         }
 
         const user: FirebaseTokenPayload = {
-            uid: decodedToken.uid,
+            firebaseUid: decodedToken.uid,
             email: decodedToken.email ?? '',
         };
 
-        this.logger.log(`User authenticated: ${user.email ?? user.uid}`, 'FirebaseJwtStrategy');
+        this.logger.log(
+            `User authenticated: ${user.email ?? user.firebaseUid}`,
+            'FirebaseJwtStrategy',
+        );
 
         return user;
     }

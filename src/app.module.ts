@@ -12,6 +12,7 @@ import { EmailModule } from './email/email.module';
 import { FirebaseModule } from './firebase/firebase.module';
 import { CommonModule } from 'src/common/common.module';
 import { FirebaseAuthGuard } from './common/guards/firebase-auth.guard';
+import { UsersModule } from './users/users.module';
 
 @Module({
     imports: [
@@ -33,8 +34,9 @@ import { FirebaseAuthGuard } from './common/guards/firebase-auth.guard';
         DatabaseModule,
         CommonModule,
         EmailModule,
-        AuthModule,
         FirebaseModule,
+        AuthModule,
+        UsersModule,
     ],
     controllers: [AppController],
     providers: [
