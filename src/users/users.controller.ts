@@ -22,8 +22,8 @@ import { type CurrentUserPayload } from '../common/interfaces';
 export class UsersController {
     constructor(private readonly usersService: UsersService) {}
 
-    @Public()
     @Get()
+    @Public()
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
         summary: 'Check email availability',

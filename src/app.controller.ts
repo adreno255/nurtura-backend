@@ -12,7 +12,7 @@ export class AppController {
     @Get()
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
-        summary: 'API health check',
+        summary: 'API server status check',
         description: 'Returns server status and environment information',
     })
     @ApiResponse({
