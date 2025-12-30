@@ -1,4 +1,4 @@
-import { NestFactory } from '@nestjs/core';
+import { NestFactory, Reflector } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
@@ -6,6 +6,7 @@ import { MyLoggerService } from './my-logger/my-logger.service';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { HttpLoggingInterceptor } from './common/interceptors/http-logging.interceptor';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { FirebaseAuthGuard } from './common/guards/firebase-auth.guard';
 
 async function bootstrap(): Promise<void> {
     const app = await NestFactory.create(AppModule, {
@@ -30,6 +31,9 @@ async function bootstrap(): Promise<void> {
 
     app.useGlobalFilters(app.get(AllExceptionsFilter));
 
+    const reflector = app.get(Reflector);
+    app.useGlobalGuards(new FirebaseAuthGuard(reflector));
+
     app.enableCors();
 
     app.setGlobalPrefix('api');
@@ -41,6 +45,17 @@ async function bootstrap(): Promise<void> {
         .addTag('System', 'Entry endpoint of the API server')
         .addTag('Authentication', 'User authentication and authorization endpoints')
         .addTag('Authentication - OTP', 'OTP verification and management')
+        .addBearerAuth(
+            {
+                type: 'http',
+                scheme: 'bearer',
+                bearerFormat: 'JWT',
+                name: 'Firebase ID Token',
+                description: 'Enter Firebase ID Token (obtained from Firebase Authentication)',
+                in: 'header',
+            },
+            'firebase-jwt',
+        )
         .build();
 
     const document = SwaggerModule.createDocument(app, config);
