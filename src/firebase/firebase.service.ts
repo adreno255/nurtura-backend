@@ -18,7 +18,7 @@ export class FirebaseService implements OnModuleInit {
 
             if (!serviceAccountJson) {
                 const errorMsg = 'FIREBASE_SERVICE_ACCOUNT is not configured';
-                console.error(errorMsg);
+                this.logger.error(errorMsg, '', 'FirebaseService');
                 throw new Error(errorMsg);
             }
 
@@ -31,7 +31,11 @@ export class FirebaseService implements OnModuleInit {
             this.logger.bootstrap('Firebase Admin initialized successfully', 'FirebaseService');
         } catch (error) {
             const errorMsg = `Failed to initialize Firebase Admin: ${error instanceof Error ? error.message : String(error)}`;
-            console.error(errorMsg);
+            this.logger.error(
+                'Failed to initialize Firebase Admin',
+                error instanceof Error ? error.message : String(error),
+                'FirebaseService',
+            );
             throw new Error(errorMsg);
         }
     }

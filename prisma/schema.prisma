@@ -14,106 +14,166 @@ datasource db {
     provider = "postgresql"
 }
 
+// ============================================
+// ENUMS
+// ============================================
+
 enum PlantType {
-    ASTERACEAE
-    BASELLACEAE
-    LAMIACEAE
-    APIACEAE
+  ASTERACEAE  // Lettuce, Sunflower
+  BASELLACEAE // Alugbati, Malabar spinach
+  LAMIACEAE   // Basil, Mint
+  APIACEAE    // Parsley, Celery
+  
+  @@map("plant_type")
 }
 
 enum SoilType {
-    LOAMY
-    SANDY
-    PEATY
-    SILTY
-    CHALKY
-    CLAY
+  LOAMY
+  SANDY
+  PEATY
+  SILTY
+  CHALKY
+  CLAY
+  
+  @@map("soil_type")
 }
 
 enum ActivityEventType {
-    LIGHT_ON
-    LIGHT_OFF
-    WATERING_ON
-    WATERING_OFF
-    SENSORS_ON
-    SENSORS_OFF
+  LIGHT_ON
+  LIGHT_OFF
+  WATERING_ON
+  WATERING_OFF
+  SENSORS_ON
+  SENSORS_OFF
+  SYSTEM_START
+  SYSTEM_STOP
+  
+  @@map("activity_event_type")
 }
 
 enum NotificationType {
-    SYSTEM
-    ALERT
-    INFO
+  SYSTEM
+  ALERT
+  WARNING
+  INFO
+  SUCCESS
+  
+  @@map("notification_type")
 }
 
+enum NotificationStatus {
+  UNREAD
+  READ
+  ARCHIVED
+  
+  @@map("notification_status")
+}
+
+// ============================================
+// MODELS
+// ============================================
+
 model User {
-  id         String   @id @default(cuid())
-  firebaseUid String  @unique @map("firebase_uid")
-  email      String   @unique
-  firstName  String   @map("first_name")
-  middleName String?  @map("middle_name")
-  lastName   String   @map("last_name")
-  suffix     String?
-  address    String
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  id          String   @id @default(cuid())
+  firebaseUid String   @unique @map("firebase_uid")
+  email       String   @unique
+  firstName   String   @map("first_name")
+  middleName  String?  @map("middle_name")
+  lastName    String   @map("last_name")
+  suffix      String?
+  address     String
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  racks         Rack[]
+  notifications Notification[]
 
   @@map("users")
-  notifications Notification[]
-  racks Rack[]
 }
 
 model Rack {
-    id         Int      @id @default(autoincrement())
-    userId     String
-    rackName   String
-    macAddress String
-    user        User     @relation(fields: [userId], references: [id])
-    plants      Plant[]
-    activities  Activity[]
-    notifications Notification[]
+  id             String    @id @default(cuid())
+  userId         String    @map("user_id")
+  name           String
+  macAddress     String    @unique @map("mac_address")
+  description    String?
+  isActive       Boolean   @default(true) @map("is_active")
+  lastActivityAt DateTime? @map("last_activity_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
 
-    @@map("racks")
+  // Relations
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plants        Plant[]
+  activities    Activity[]
+  notifications Notification[]
+
+  @@index([userId])
+  @@index([macAddress])
+  @@map("racks")
 }
 
 model Plant {
-    id              Int       @id @default(autoincrement())
-    rackId          Int
-    plantName       String
-    plantType       PlantType?
-    plantAmount     Int?
-    recommendedSoil SoilType?
-    datePlanted     DateTime? @default(now())
-    lastWateredAt   DateTime?
-    lastLightOn     DateTime?
+  id              String     @id @default(cuid())
+  rackId          String     @map("rack_id")
+  name            String
+  type            PlantType?
+  quantity        Int        @default(1)
+  recommendedSoil SoilType?  @map("recommended_soil")
+  plantedAt       DateTime   @default(now()) @map("planted_at")
+  harvestAt       DateTime?  @map("harvest_at")
+  lastWateredAt   DateTime?  @map("last_watered_at")
+  lastLightOnAt   DateTime?  @map("last_light_on_at")
+  notes           String?
+  isActive        Boolean    @default(true) @map("is_active")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
 
-    rack Rack @relation(fields: [rackId], references: [id])
+  // Relations
+  rack Rack @relation(fields: [rackId], references: [id], onDelete: Cascade)
 
-    @@map("plants")
+  @@index([rackId])
+  @@index([plantedAt])
+  @@map("plants")
 }
 
 model Activity {
-    id           Int               @id @default(autoincrement())
-    rackId       Int
-    timestamp    DateTime          @default(now())
-    eventType    ActivityEventType
-    eventDetails String?
+  id        String            @id @default(cuid())
+  rackId    String            @map("rack_id")
+  eventType ActivityEventType @map("event_type")
+  details   String?
+  metadata  Json?             // Store additional data as JSON
+  timestamp DateTime          @default(now())
 
-    rack Rack @relation(fields: [rackId], references: [id])
+  // Relations
+  rack Rack @relation(fields: [rackId], references: [id], onDelete: Cascade)
 
-    @@map("activities")
+  @@index([rackId])
+  @@index([timestamp])
+  @@index([eventType])
+  @@map("activities")
 }
 
 model Notification {
-    id               Int               @id @default(autoincrement())
-    userId           String
-    rackId           Int?
-    message          String
-    notificationType NotificationType?
+  id        String              @id @default(cuid())
+  userId    String              @map("user_id")
+  rackId    String?             @map("rack_id")
+  type      NotificationType    @default(INFO)
+  status    NotificationStatus  @default(UNREAD)
+  title     String
+  message   String
+  metadata  Json?               // Store additional context as JSON
+  readAt    DateTime?           @map("read_at")
+  createdAt DateTime            @default(now()) @map("created_at")
+  updatedAt DateTime            @updatedAt @map("updated_at")
 
-    user User @relation(fields: [userId], references: [id])
-    rack Rack? @relation(fields: [rackId], references: [id])
+  // Relations
+  user User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rack Rack? @relation(fields: [rackId], references: [id], onDelete: SetNull)
 
-    @@map("notifications")
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("notifications")
 }
-
-

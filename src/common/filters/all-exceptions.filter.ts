@@ -23,7 +23,7 @@ export class AllExceptionsFilter extends BaseExceptionFilter {
             statusCode = exception.getStatus();
 
             const exceptionResponse = exception.getResponse();
-            console.log(exceptionResponse);
+
             if (typeof exceptionResponse === 'string') {
                 message = exceptionResponse;
             } else if (typeof exceptionResponse === 'object' && 'message' in exceptionResponse) {
