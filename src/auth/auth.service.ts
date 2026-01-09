@@ -68,7 +68,7 @@ export class AuthService {
 
             // Check if user profile exists in database using Prisma
             const userProfile = await this.databaseService.user.findUnique({
-                where: { id: user.uid },
+                where: { firebaseUid: user.uid },
             });
 
             if (!userProfile) {
