@@ -215,8 +215,7 @@ export class OtpController {
                             statusCode: 400,
                             timestamp: '2025-12-27T10:30:00.000Z',
                             path: '/api/auth/otp/verify',
-                            message:
-                                'Invalid email format, code must be longer than or equal to 5 characters',
+                            message: 'Invalid email format, OTP code must be exactly 5 digits',
                         },
                     },
                 },

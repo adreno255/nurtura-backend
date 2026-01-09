@@ -13,6 +13,7 @@ import { FirebaseModule } from './firebase/firebase.module';
 import { CommonModule } from 'src/common/common.module';
 import { FirebaseAuthGuard } from './common/guards/firebase-auth.guard';
 import { UsersModule } from './users/users.module';
+import { MqttModule } from './mqtt/mqtt.module';
 
 @Module({
     imports: [
@@ -37,6 +38,7 @@ import { UsersModule } from './users/users.module';
         FirebaseModule,
         AuthModule,
         UsersModule,
+        MqttModule,
     ],
     controllers: [AppController],
     providers: [
