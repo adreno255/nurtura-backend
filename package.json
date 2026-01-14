@@ -20,7 +20,8 @@
         "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
         "test:e2e": "jest --config ./test/jest-e2e.json",
         "prepare": "husky",
-        "env:init": "node scripts/init-env.js"
+        "init:dev": "npm install && node scripts/init-env.js && prisma generate",
+        "deploy:prod": "npm install && prisma generate && nest build"
     },
     "dependencies": {
         "@nestjs/common": "^11.0.1",
@@ -85,13 +86,24 @@
         "rootDir": "src",
         "testRegex": ".*\\.spec\\.ts$",
         "transform": {
-            "^.+\\.(t|j)s$": "ts-jest"
+            "^.+\\.(t|j)s$": [
+                "ts-jest",
+                {
+                    "useESM": false
+                }
+            ]
         },
         "collectCoverageFrom": [
             "**/*.(t|j)s"
         ],
         "coverageDirectory": "../coverage",
-        "testEnvironment": "node"
+        "testEnvironment": "node",
+        "moduleNameMapper": {
+            "^(\\.*/.*)\\.(j|t)s$": "$1"
+        },
+        "extensionsToTreatAsEsm": [
+            ".ts"
+        ]
     },
     "lint-staged": {
         "*.{ts,js}": [
