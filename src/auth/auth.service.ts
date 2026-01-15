@@ -14,7 +14,7 @@ import {
     OnboardingStatusResponse,
     PasswordResetResponse,
 } from './interfaces';
-import { isFirebaseAuthError } from 'src/common/type-guards';
+import { isFirebaseAuthError } from '../common/type-guards';
 
 @Injectable()
 export class AuthService {

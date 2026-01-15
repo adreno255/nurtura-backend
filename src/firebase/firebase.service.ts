@@ -46,11 +46,4 @@ export class FirebaseService implements OnModuleInit {
         }
         return admin.auth();
     }
-
-    getFirestore(): admin.firestore.Firestore {
-        if (!this.app) {
-            throw new Error('Firebase app not initialized');
-        }
-        return admin.firestore();
-    }
 }

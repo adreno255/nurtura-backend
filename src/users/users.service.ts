@@ -15,7 +15,7 @@ import {
     UserInfoResponse,
     UserInfo,
 } from './interfaces/user.interface';
-import { isFirebaseAuthError } from 'src/common/type-guards';
+import { isFirebaseAuthError } from '../common/type-guards';
 
 @Injectable()
 export class UsersService {
@@ -72,7 +72,6 @@ export class UsersService {
                 throw new ConflictException('User profile already exists');
             }
 
-            // Clean and format data
             const firstName = dto.firstName.trim();
             const middleName = dto.middleName?.trim() || null;
             const lastName = dto.lastName.trim();
@@ -84,7 +83,6 @@ export class UsersService {
 
             const address = addressParts.join(', ');
 
-            // Create user in database
             const user = await this.databaseService.user.create({
                 data: {
                     firebaseUid,
