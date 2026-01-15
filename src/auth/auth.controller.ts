@@ -11,7 +11,7 @@ import {
 import { AuthService } from './auth.service';
 import { EmailQueryDto } from './dto/email-query.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
-import { Public } from 'src/common/decorators';
+import { Public } from '../common/decorators';
 
 @Public()
 @ApiTags('Authentication')
