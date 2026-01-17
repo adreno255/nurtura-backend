@@ -5,6 +5,7 @@ import { PrismaClient } from '../generated/prisma/client';
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Injectable } from '@nestjs/common';
+import { createMockConfigService } from '../../test/mocks';
 
 // Mock pg Pool
 jest.mock('pg', () => {
@@ -47,14 +48,7 @@ jest.mock('@prisma/adapter-pg', () => {
 describe('DatabaseService', () => {
     let service: DatabaseService;
 
-    const mockConfigService = {
-        get: jest.fn((key: string) => {
-            if (key === 'DATABASE_URL') return mockDatabaseUrl;
-            return undefined;
-        }),
-    };
-
-    const mockDatabaseUrl = 'postgresql://user:password@localhost:5432/nurtura_test';
+    const mockConfigService = createMockConfigService();
 
     beforeEach(async () => {
         // Clear all mocks
@@ -88,7 +82,7 @@ describe('DatabaseService', () => {
 
         it('should create Pool with connection string', () => {
             expect(Pool).toHaveBeenCalledWith({
-                connectionString: mockDatabaseUrl,
+                connectionString: mockConfigService.get('DATABASE_URL'),
             });
         });
 
@@ -303,7 +297,7 @@ describe('DatabaseService', () => {
                     {
                         provide: ConfigService,
                         useValue: {
-                            get: jest.fn(() => mockDatabaseUrl),
+                            get: jest.fn(() => mockConfigService.get('DATABASE_URL')),
                         },
                     },
                 ],
@@ -330,7 +324,7 @@ describe('DatabaseService', () => {
                     {
                         provide: ConfigService,
                         useValue: {
-                            get: jest.fn(() => mockDatabaseUrl),
+                            get: jest.fn(() => mockConfigService.get('DATABASE_URL')),
                         },
                     },
                 ],
@@ -347,7 +341,7 @@ describe('DatabaseService', () => {
         it('should configure connection pool via pg.Pool', () => {
             expect(Pool).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    connectionString: mockDatabaseUrl,
+                    connectionString: mockConfigService.get('DATABASE_URL'),
                 }),
             );
         });
