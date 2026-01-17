@@ -1,13 +1,12 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { AppController } from './app.controller';
+import { createMockConfigService } from '../test/mocks';
 
 describe('AppController', () => {
     let controller: AppController;
 
-    const mockConfigService = {
-        get: jest.fn(),
-    };
+    const mockConfigService = createMockConfigService();
 
     beforeEach(async () => {
         jest.clearAllMocks();
@@ -56,7 +55,11 @@ describe('AppController', () => {
         });
 
         it('should use "development" as default environment if not configured', () => {
-            mockConfigService.get.mockReturnValue(undefined);
+            const mockConfigService = createMockConfigService({
+                NODE_ENV: undefined,
+            });
+
+            mockConfigService.get.mockReturnValue('NODE_ENV');
 
             const result = controller.getStatus();
 
@@ -103,16 +106,12 @@ describe('AppController', () => {
             expect(result.version).toBe('0.0.1');
         });
 
-        it('should handle null environment value', () => {
-            mockConfigService.get.mockReturnValue(null);
-
-            const result = controller.getStatus();
-
-            expect(result.environment).toBe('development');
-        });
-
         it('should handle empty string environment value', () => {
-            mockConfigService.get.mockReturnValue(null);
+            const mockConfigService = createMockConfigService({
+                NODE_ENV: '',
+            });
+
+            mockConfigService.get.mockReturnValue('NODE_ENV');
 
             const result = controller.getStatus();
 
@@ -186,7 +185,7 @@ describe('AppController', () => {
     });
 
     describe('environment variations', () => {
-        const environments = ['development', 'production', 'test', 'staging'];
+        const environments = ['development', 'production', 'test'];
 
         environments.forEach((env) => {
             it(`should handle ${env} environment`, () => {

@@ -3,23 +3,21 @@ import { BadRequestException, InternalServerErrorException } from '@nestjs/commo
 import { OtpService } from './otp.service';
 import { EmailService } from '../../email/email.service';
 import { MyLoggerService } from '../../my-logger/my-logger.service';
-import { type SendOtpRequestDto } from './dto/send-otp-request.dto';
 import { type VerifyOtpDto } from './dto/verify-otp.dto';
+import { createMockEmailService, createMockLogger } from '../../../test/mocks';
+import { expectedOtpErrors, testEmails, validSendOtpDto } from '../../../test/fixtures';
 
 describe('OtpService', () => {
     let service: OtpService;
 
-    const mockEmailService = {
-        sendRegistrationOtp: jest.fn(),
-        sendForgotPasswordOtp: jest.fn(),
-    };
+    const mockEmailService = createMockEmailService();
 
-    const mockLoggerService = {
-        bootstrap: jest.fn(),
-        log: jest.fn(),
-        error: jest.fn(),
-        warn: jest.fn(),
-    };
+    const mockLoggerService = createMockLogger();
+
+    const testEmail = testEmails.valid;
+    const email1 = testEmails.valid;
+    const email2 = testEmails.alternative;
+    const dto = validSendOtpDto;
 
     beforeEach(async () => {
         jest.clearAllMocks();
@@ -52,9 +50,6 @@ describe('OtpService', () => {
     });
 
     describe('sendRegistrationOtp', () => {
-        const testEmail = 'test@example.com';
-        const dto: SendOtpRequestDto = { email: testEmail };
-
         beforeEach(() => {
             mockEmailService.sendRegistrationOtp.mockResolvedValue(undefined);
         });
@@ -175,9 +170,7 @@ describe('OtpService', () => {
                 purpose: 'registration',
             };
 
-            expect(() => service.verifyOtp(verifyDto)).toThrow(
-                'No OTP found for this email. Please request a new one.',
-            );
+            expect(() => service.verifyOtp(verifyDto)).toThrow(expectedOtpErrors.notFound);
         });
 
         it('should overwrite existing OTP when sending new one', async () => {
@@ -193,7 +186,7 @@ describe('OtpService', () => {
                 code: firstCode,
                 purpose: 'registration',
             };
-            expect(() => service.verifyOtp(oldOtpDto)).toThrow('Invalid OTP code');
+            expect(() => service.verifyOtp(oldOtpDto)).toThrow(expectedOtpErrors.invalid);
 
             // New OTP should work
             const newOtpDto: VerifyOtpDto = {
@@ -206,9 +199,6 @@ describe('OtpService', () => {
     });
 
     describe('sendForgotPasswordOtp', () => {
-        const testEmail = 'test@example.com';
-        const dto: SendOtpRequestDto = { email: testEmail };
-
         beforeEach(() => {
             mockEmailService.sendForgotPasswordOtp.mockResolvedValue(undefined);
         });
@@ -299,9 +289,7 @@ describe('OtpService', () => {
                 purpose: 'forgot-password',
             };
 
-            expect(() => service.verifyOtp(verifyDto)).toThrow(
-                'No OTP found for this email. Please request a new one.',
-            );
+            expect(() => service.verifyOtp(verifyDto)).toThrow(expectedOtpErrors.notFound);
         });
     });
 
@@ -333,9 +321,7 @@ describe('OtpService', () => {
             };
 
             expect(() => service.verifyOtp(verifyDto)).toThrow(BadRequestException);
-            expect(() => service.verifyOtp(verifyDto)).toThrow(
-                'No OTP found for this email. Please request a new one.',
-            );
+            expect(() => service.verifyOtp(verifyDto)).toThrow(expectedOtpErrors.notFound);
         });
 
         it('should throw error if OTP code is incorrect', async () => {
@@ -348,9 +334,7 @@ describe('OtpService', () => {
             };
 
             expect(() => service.verifyOtp(verifyDto)).toThrow(BadRequestException);
-            expect(() => service.verifyOtp(verifyDto)).toThrow(
-                'Invalid OTP code. Please check and try again.',
-            );
+            expect(() => service.verifyOtp(verifyDto)).toThrow(expectedOtpErrors.invalid);
         });
 
         it('should throw error if purpose mismatches', async () => {
@@ -364,9 +348,7 @@ describe('OtpService', () => {
             };
 
             expect(() => service.verifyOtp(verifyDto)).toThrow(BadRequestException);
-            expect(() => service.verifyOtp(verifyDto)).toThrow(
-                'Invalid OTP context. Please use the correct verification flow.',
-            );
+            expect(() => service.verifyOtp(verifyDto)).toThrow(expectedOtpErrors.purposeMismatch);
         });
 
         it('should throw error if OTP has expired', async () => {
@@ -394,9 +376,7 @@ describe('OtpService', () => {
 
             expect(thrownError).not.toBeNull();
             expect(thrownError).toBeInstanceOf(BadRequestException);
-            expect((thrownError as BadRequestException).message).toBe(
-                'OTP has expired. Please request a new one.',
-            );
+            expect((thrownError as BadRequestException).message).toBe(expectedOtpErrors.expired);
         });
 
         it('should remove OTP after successful verification', async () => {
@@ -412,9 +392,7 @@ describe('OtpService', () => {
             service.verifyOtp(verifyDto);
 
             // Trying to verify again should fail
-            expect(() => service.verifyOtp(verifyDto)).toThrow(
-                'No OTP found for this email. Please request a new one.',
-            );
+            expect(() => service.verifyOtp(verifyDto)).toThrow(expectedOtpErrors.notFound);
         });
 
         it('should remove expired OTP when verifying', async () => {
@@ -433,10 +411,10 @@ describe('OtpService', () => {
                 purpose: 'registration',
             };
 
-            expect(() => service.verifyOtp(verifyDto)).toThrow('OTP has expired');
+            expect(() => service.verifyOtp(verifyDto)).toThrow(expectedOtpErrors.expired);
 
             // OTP should be removed, trying again should show "not found"
-            expect(() => service.verifyOtp(verifyDto)).toThrow('No OTP found');
+            expect(() => service.verifyOtp(verifyDto)).toThrow(expectedOtpErrors.notFound);
         });
 
         it('should log success message on verification', async () => {
@@ -543,9 +521,6 @@ describe('OtpService', () => {
         });
 
         it('should handle multiple OTPs for different emails', async () => {
-            const email1 = 'user1@example.com';
-            const email2 = 'user2@example.com';
-
             await service.sendRegistrationOtp({ email: email1 });
             await service.sendRegistrationOtp({ email: email2 });
 
@@ -563,9 +538,6 @@ describe('OtpService', () => {
         });
 
         it('should isolate OTPs by email address', async () => {
-            const email1 = 'user1@example.com';
-            const email2 = 'user2@example.com';
-
             await service.sendRegistrationOtp({ email: email1 });
             const [, code1] = mockEmailService.sendRegistrationOtp.mock.calls[0] as string[];
 

@@ -4,6 +4,12 @@ import { OtpController } from './otp.controller';
 import { OtpService } from './otp.service';
 import { type SendOtpRequestDto } from './dto/send-otp-request.dto';
 import { type VerifyOtpDto } from './dto/verify-otp.dto';
+import {
+    validEmailQueryDto,
+    validSendOtpDto,
+    validVerifyOtpForgotPasswordDto,
+    validVerifyOtpRegistrationDto,
+} from '../../../test/fixtures';
 
 describe('OtpController', () => {
     let controller: OtpController;
@@ -39,7 +45,7 @@ describe('OtpController', () => {
     });
 
     describe('sendRegistrationOtp', () => {
-        const dto: SendOtpRequestDto = { email: 'test@example.com' };
+        const dto: SendOtpRequestDto = validSendOtpDto;
 
         it('should send registration OTP successfully', async () => {
             mockOtpService.sendRegistrationOtp.mockResolvedValue(undefined);
@@ -106,7 +112,7 @@ describe('OtpController', () => {
     });
 
     describe('sendForgotPasswordOtp', () => {
-        const dto: SendOtpRequestDto = { email: 'test@example.com' };
+        const dto: SendOtpRequestDto = validSendOtpDto;
 
         it('should send forgot password OTP successfully', async () => {
             mockOtpService.sendForgotPasswordOtp.mockResolvedValue(undefined);
@@ -175,11 +181,7 @@ describe('OtpController', () => {
     });
 
     describe('verifyOtp', () => {
-        const dto: VerifyOtpDto = {
-            email: 'test@example.com',
-            code: '12345',
-            purpose: 'registration',
-        };
+        const dto: VerifyOtpDto = validVerifyOtpRegistrationDto;
 
         it('should verify OTP successfully', () => {
             mockOtpService.verifyOtp.mockReturnValue(undefined);
@@ -254,29 +256,17 @@ describe('OtpController', () => {
         });
 
         it('should verify registration OTP', () => {
-            const registrationDto: VerifyOtpDto = {
-                email: 'test@example.com',
-                code: '12345',
-                purpose: 'registration',
-            };
-
             mockOtpService.verifyOtp.mockReturnValue(undefined);
 
-            const result = controller.verifyOtp(registrationDto);
+            const result = controller.verifyOtp(validVerifyOtpRegistrationDto);
 
             expect(result.message).toBe('OTP verified successfully.');
         });
 
         it('should verify forgot-password OTP', () => {
-            const forgotPasswordDto: VerifyOtpDto = {
-                email: 'test@example.com',
-                code: '54321',
-                purpose: 'forgot-password',
-            };
-
             mockOtpService.verifyOtp.mockReturnValue(undefined);
 
-            const result = controller.verifyOtp(forgotPasswordDto);
+            const result = controller.verifyOtp(validVerifyOtpForgotPasswordDto);
 
             expect(result.message).toBe('OTP verified successfully.');
         });
@@ -320,11 +310,7 @@ describe('OtpController', () => {
         it('should return object with message property for verifyOtp', () => {
             mockOtpService.verifyOtp.mockReturnValue(undefined);
 
-            const result = controller.verifyOtp({
-                email: 'test@example.com',
-                code: '12345',
-                purpose: 'registration',
-            });
+            const result = controller.verifyOtp(validVerifyOtpRegistrationDto);
 
             expect(Object.keys(result)).toEqual(['message']);
         });
@@ -336,13 +322,9 @@ describe('OtpController', () => {
             mockOtpService.sendForgotPasswordOtp.mockResolvedValue(undefined);
             mockOtpService.verifyOtp.mockReturnValue(undefined);
 
-            await controller.sendRegistrationOtp({ email: 'test@example.com' });
-            await controller.sendForgotPasswordOtp({ email: 'test@example.com' });
-            controller.verifyOtp({
-                email: 'test@example.com',
-                code: '12345',
-                purpose: 'registration',
-            });
+            await controller.sendRegistrationOtp(validEmailQueryDto);
+            await controller.sendForgotPasswordOtp(validEmailQueryDto);
+            controller.verifyOtp(validVerifyOtpRegistrationDto);
 
             expect(mockOtpService.sendRegistrationOtp).toHaveBeenCalled();
             expect(mockOtpService.sendForgotPasswordOtp).toHaveBeenCalled();
@@ -353,11 +335,10 @@ describe('OtpController', () => {
             // Controller should only wrap service calls with response formatting
             mockOtpService.sendRegistrationOtp.mockResolvedValue(undefined);
 
-            const dto: SendOtpRequestDto = { email: 'test@example.com' };
-            await controller.sendRegistrationOtp(dto);
+            await controller.sendRegistrationOtp(validSendOtpDto);
 
             // Should pass DTO directly to service without modification
-            expect(mockOtpService.sendRegistrationOtp).toHaveBeenCalledWith(dto);
+            expect(mockOtpService.sendRegistrationOtp).toHaveBeenCalledWith(validSendOtpDto);
         });
     });
 
@@ -366,18 +347,18 @@ describe('OtpController', () => {
             const serviceError = new Error('OTP service error');
             mockOtpService.sendRegistrationOtp.mockRejectedValue(serviceError);
 
-            await expect(
-                controller.sendRegistrationOtp({ email: 'test@example.com' }),
-            ).rejects.toThrow('OTP service error');
+            await expect(controller.sendRegistrationOtp(validSendOtpDto)).rejects.toThrow(
+                'OTP service error',
+            );
         });
 
         it('should not catch service errors in sendForgotPasswordOtp', async () => {
             const serviceError = new Error('OTP service error');
             mockOtpService.sendForgotPasswordOtp.mockRejectedValue(serviceError);
 
-            await expect(
-                controller.sendForgotPasswordOtp({ email: 'test@example.com' }),
-            ).rejects.toThrow('OTP service error');
+            await expect(controller.sendForgotPasswordOtp(validSendOtpDto)).rejects.toThrow(
+                'OTP service error',
+            );
         });
 
         it('should not catch service errors in verifyOtp', () => {
@@ -386,13 +367,9 @@ describe('OtpController', () => {
                 throw serviceError;
             });
 
-            expect(() =>
-                controller.verifyOtp({
-                    email: 'test@example.com',
-                    code: '12345',
-                    purpose: 'registration',
-                }),
-            ).toThrow(BadRequestException);
+            expect(() => controller.verifyOtp(validVerifyOtpRegistrationDto)).toThrow(
+                BadRequestException,
+            );
         });
     });
 });

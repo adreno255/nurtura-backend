@@ -10,32 +10,38 @@ import { DatabaseService } from '../database/database.service';
 import { MyLoggerService } from '../my-logger/my-logger.service';
 import { type EmailQueryDto } from './dto/email-query.dto';
 import { type ResetPasswordDto } from './dto/reset-password.dto';
+import {
+    createMockDatabaseService,
+    createMockFirebaseAuth,
+    createMockFirebaseService,
+    createMockLogger,
+    FirebaseAuthErrors,
+} from '../../test/mocks';
+import {
+    expectedOnboardingResponses,
+    expectedProviderResponses,
+    mockFirebaseUserNoProviders,
+    mockFirebaseUserWithMultipleProviders,
+    mockFirebaseUserWithPassword,
+    testEmails,
+    validEmailQueryDto,
+    validResetPasswordDto,
+} from '../../test/fixtures';
 
 describe('AuthService', () => {
     let service: AuthService;
 
-    const mockFirebaseAuth = {
-        getUserByEmail: jest.fn(),
-        updateUser: jest.fn(),
-        verifyIdToken: jest.fn(),
-    };
+    const mockFirebaseAuth = createMockFirebaseAuth();
 
-    const mockFirebaseService = {
-        getAuth: jest.fn(() => mockFirebaseAuth),
-    };
+    const mockFirebaseService = createMockFirebaseService(mockFirebaseAuth);
 
-    const mockDatabaseService = {
-        user: {
-            findUnique: jest.fn(),
-        },
-    };
+    const mockDatabaseService = createMockDatabaseService();
 
-    const mockLoggerService = {
-        bootstrap: jest.fn(),
-        log: jest.fn(),
-        error: jest.fn(),
-        warn: jest.fn(),
-    };
+    const mockLoggerService = createMockLogger();
+
+    const testEmail = testEmails.valid;
+    const emailQueryDto = validEmailQueryDto;
+    const resetPasswordDto = validResetPasswordDto;
 
     beforeEach(async () => {
         jest.clearAllMocks();
@@ -70,33 +76,20 @@ describe('AuthService', () => {
     });
 
     describe('getProviders', () => {
-        const testEmail = 'test@example.com';
-        const dto: EmailQueryDto = { email: testEmail };
+        const dto: EmailQueryDto = emailQueryDto;
 
         it('should return sign-in providers for existing user', async () => {
-            const mockUser = {
-                uid: 'test-uid',
-                email: testEmail,
-                providerData: [{ providerId: 'password' }, { providerId: 'google.com' }],
-            };
-
-            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockUser);
+            mockFirebaseAuth.getUserByEmail.mockResolvedValue(
+                mockFirebaseUserWithMultipleProviders,
+            );
 
             const result = await service.getProviders(dto);
 
-            expect(result).toEqual({
-                providers: ['password', 'google.com'],
-            });
+            expect(result).toEqual(expectedProviderResponses.multiple);
         });
 
         it('should call Firebase Auth with correct email', async () => {
-            const mockUser = {
-                uid: 'test-uid',
-                email: testEmail,
-                providerData: [{ providerId: 'password' }],
-            };
-
-            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockUser);
+            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockFirebaseUserWithPassword);
 
             await service.getProviders(dto);
 
@@ -104,13 +97,9 @@ describe('AuthService', () => {
         });
 
         it('should log providers found', async () => {
-            const mockUser = {
-                uid: 'test-uid',
-                email: testEmail,
-                providerData: [{ providerId: 'password' }, { providerId: 'google.com' }],
-            };
-
-            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockUser);
+            mockFirebaseAuth.getUserByEmail.mockResolvedValue(
+                mockFirebaseUserWithMultipleProviders,
+            );
 
             await service.getProviders(dto);
 
@@ -121,10 +110,7 @@ describe('AuthService', () => {
         });
 
         it('should throw NotFoundException if user not found', async () => {
-            const firebaseError = new Error('User not found');
-            Object.assign(firebaseError, { code: 'auth/user-not-found' });
-
-            mockFirebaseAuth.getUserByEmail.mockRejectedValue(firebaseError);
+            mockFirebaseAuth.getUserByEmail.mockRejectedValue(FirebaseAuthErrors.userNotFound());
 
             await expect(service.getProviders(dto)).rejects.toThrow(NotFoundException);
             await expect(service.getProviders(dto)).rejects.toThrow('No user found for this email');
@@ -154,59 +140,32 @@ describe('AuthService', () => {
         });
 
         it('should handle user with no providers', async () => {
-            const mockUser = {
-                uid: 'test-uid',
-                email: testEmail,
-                providerData: [],
-            };
-
-            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockUser);
+            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockFirebaseUserNoProviders);
 
             const result = await service.getProviders(dto);
 
-            expect(result).toEqual({
-                providers: [],
-            });
+            expect(result).toEqual(expectedProviderResponses.none);
         });
 
         it('should handle user with single provider', async () => {
-            const mockUser = {
-                uid: 'test-uid',
-                email: testEmail,
-                providerData: [{ providerId: 'password' }],
-            };
-
-            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockUser);
+            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockFirebaseUserWithPassword);
 
             const result = await service.getProviders(dto);
 
-            expect(result).toEqual({
-                providers: ['password'],
-            });
+            expect(result).toEqual(expectedProviderResponses.password);
         });
     });
 
     describe('getOnboardingStatus', () => {
-        const testEmail = 'test@example.com';
-        const dto: EmailQueryDto = { email: testEmail };
+        const dto: EmailQueryDto = emailQueryDto;
 
         it('should return needsOnboarding=true if user not in database', async () => {
-            const mockUser = {
-                uid: 'test-uid',
-                email: testEmail,
-                providerData: [{ providerId: 'password' }],
-            };
-
-            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockUser);
+            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockFirebaseUserWithPassword);
             mockDatabaseService.user.findUnique.mockResolvedValue(null);
 
             const result = await service.getOnboardingStatus(dto);
 
-            expect(result).toEqual({
-                needsOnboarding: true,
-                providers: ['password'],
-                message: 'User exists in Firebase, but no profile found in database',
-            });
+            expect(result).toEqual(expectedOnboardingResponses.needsOnboarding);
         });
 
         it('should return needsOnboarding=false if user exists in database', async () => {
@@ -229,10 +188,7 @@ describe('AuthService', () => {
 
             const result = await service.getOnboardingStatus(dto);
 
-            expect(result).toEqual({
-                needsOnboarding: false,
-                message: 'User profile exists',
-            });
+            expect(result).toEqual(expectedOnboardingResponses.onboardingComplete);
         });
 
         it('should query database with Firebase UID', async () => {
@@ -295,10 +251,7 @@ describe('AuthService', () => {
         });
 
         it('should throw NotFoundException if user not found in Firebase', async () => {
-            const firebaseError = new Error('User not found');
-            Object.assign(firebaseError, { code: 'auth/user-not-found' });
-
-            mockFirebaseAuth.getUserByEmail.mockRejectedValue(firebaseError);
+            mockFirebaseAuth.getUserByEmail.mockRejectedValue(FirebaseAuthErrors.userNotFound());
 
             await expect(service.getOnboardingStatus(dto)).rejects.toThrow(NotFoundException);
             await expect(service.getOnboardingStatus(dto)).rejects.toThrow(
@@ -307,13 +260,7 @@ describe('AuthService', () => {
         });
 
         it('should throw BadRequestException if no sign-in methods found', async () => {
-            const mockUser = {
-                uid: 'test-uid',
-                email: testEmail,
-                providerData: [],
-            };
-
-            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockUser);
+            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockFirebaseUserNoProviders);
 
             await expect(service.getOnboardingStatus(dto)).rejects.toThrow(BadRequestException);
             await expect(service.getOnboardingStatus(dto)).rejects.toThrow(
@@ -347,13 +294,7 @@ describe('AuthService', () => {
         });
 
         it('should not throw BadRequestException error if providers exist', async () => {
-            const mockUser = {
-                uid: 'test-uid',
-                email: testEmail,
-                providerData: [{ providerId: 'password' }],
-            };
-
-            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockUser);
+            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockFirebaseUserWithPassword);
             mockDatabaseService.user.findUnique.mockResolvedValue(null);
 
             await expect(service.getOnboardingStatus(dto)).resolves.not.toThrow();
@@ -361,17 +302,10 @@ describe('AuthService', () => {
     });
 
     describe('resetPassword', () => {
-        const testEmail = 'test@example.com';
-        const newPassword = 'NewSecurePass123!';
-        const dto: ResetPasswordDto = { email: testEmail, newPassword };
+        const dto: ResetPasswordDto = resetPasswordDto;
 
         it('should reset password successfully', async () => {
-            const mockUser = {
-                uid: 'test-uid',
-                email: testEmail,
-            };
-
-            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockUser);
+            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockFirebaseUserWithPassword);
             mockFirebaseAuth.updateUser.mockResolvedValue(undefined);
 
             const result = await service.resetPassword(dto);
@@ -382,12 +316,7 @@ describe('AuthService', () => {
         });
 
         it('should call getUserByEmail with correct email', async () => {
-            const mockUser = {
-                uid: 'test-uid',
-                email: testEmail,
-            };
-
-            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockUser);
+            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockFirebaseUserWithPassword);
             mockFirebaseAuth.updateUser.mockResolvedValue(undefined);
 
             await service.resetPassword(dto);
@@ -396,28 +325,18 @@ describe('AuthService', () => {
         });
 
         it('should call updateUser with correct uid and password', async () => {
-            const mockUser = {
-                uid: 'test-uid-123',
-                email: testEmail,
-            };
-
-            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockUser);
+            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockFirebaseUserWithPassword);
             mockFirebaseAuth.updateUser.mockResolvedValue(undefined);
 
             await service.resetPassword(dto);
 
-            expect(mockFirebaseAuth.updateUser).toHaveBeenCalledWith('test-uid-123', {
-                password: newPassword,
+            expect(mockFirebaseAuth.updateUser).toHaveBeenCalledWith('test-uid', {
+                password: dto.newPassword,
             });
         });
 
         it('should log success message', async () => {
-            const mockUser = {
-                uid: 'test-uid',
-                email: testEmail,
-            };
-
-            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockUser);
+            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockFirebaseUserWithPassword);
             mockFirebaseAuth.updateUser.mockResolvedValue(undefined);
 
             await service.resetPassword(dto);
@@ -429,10 +348,7 @@ describe('AuthService', () => {
         });
 
         it('should throw NotFoundException if user not found', async () => {
-            const firebaseError = new Error('User not found');
-            Object.assign(firebaseError, { code: 'auth/user-not-found' });
-
-            mockFirebaseAuth.getUserByEmail.mockRejectedValue(firebaseError);
+            mockFirebaseAuth.getUserByEmail.mockRejectedValue(FirebaseAuthErrors.userNotFound());
 
             await expect(service.resetPassword(dto)).rejects.toThrow(NotFoundException);
             await expect(service.resetPassword(dto)).rejects.toThrow(
@@ -462,30 +378,15 @@ describe('AuthService', () => {
         });
 
         it('should handle updateUser failure', async () => {
-            const mockUser = {
-                uid: 'test-uid',
-                email: testEmail,
-            };
-
-            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockUser);
+            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockFirebaseUserWithPassword);
             mockFirebaseAuth.updateUser.mockRejectedValue(new Error('Update failed'));
 
             await expect(service.resetPassword(dto)).rejects.toThrow(InternalServerErrorException);
         });
 
         it('should handle Firebase auth errors in updateUser', async () => {
-            const mockUser = {
-                uid: 'test-uid',
-                email: testEmail,
-            };
-
-            const firebaseError = {
-                code: 'auth/weak-password',
-                message: 'Password is too weak',
-            };
-
-            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockUser);
-            mockFirebaseAuth.updateUser.mockRejectedValue(firebaseError);
+            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockFirebaseUserWithPassword);
+            mockFirebaseAuth.updateUser.mockRejectedValue(FirebaseAuthErrors.invalidPassword());
 
             await expect(service.resetPassword(dto)).rejects.toThrow(InternalServerErrorException);
         });
@@ -493,21 +394,16 @@ describe('AuthService', () => {
 
     describe('Firebase error type guard', () => {
         it('should correctly identify Firebase auth errors', async () => {
-            const firebaseError = new Error('User not found');
-            Object.assign(firebaseError, { code: 'auth/user-not-found' });
+            mockFirebaseAuth.getUserByEmail.mockRejectedValue(FirebaseAuthErrors.userNotFound());
 
-            mockFirebaseAuth.getUserByEmail.mockRejectedValue(firebaseError);
-
-            await expect(service.getProviders({ email: 'test@example.com' })).rejects.toThrow(
-                NotFoundException,
-            );
+            await expect(service.getProviders(emailQueryDto)).rejects.toThrow(NotFoundException);
         });
 
         it('should handle non-Firebase errors', async () => {
             const genericError = new Error('Generic error');
             mockFirebaseAuth.getUserByEmail.mockRejectedValue(genericError);
 
-            await expect(service.getProviders({ email: 'test@example.com' })).rejects.toThrow(
+            await expect(service.getProviders(emailQueryDto)).rejects.toThrow(
                 InternalServerErrorException,
             );
         });
@@ -515,7 +411,7 @@ describe('AuthService', () => {
         it('should handle string errors', async () => {
             mockFirebaseAuth.getUserByEmail.mockRejectedValue('String error');
 
-            await expect(service.getProviders({ email: 'test@example.com' })).rejects.toThrow(
+            await expect(service.getProviders(emailQueryDto)).rejects.toThrow(
                 InternalServerErrorException,
             );
         });
@@ -523,41 +419,26 @@ describe('AuthService', () => {
 
     describe('integration', () => {
         it('should work with FirebaseService', async () => {
-            mockFirebaseAuth.getUserByEmail.mockResolvedValue({
-                email: 'test@example.com',
-                providerData: [],
-            });
+            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockFirebaseUserNoProviders);
 
-            await service.getProviders({ email: 'test@example.com' });
+            await service.getProviders(emailQueryDto);
 
             expect(mockFirebaseService.getAuth).toHaveBeenCalled();
         });
 
         it('should work with DatabaseService for onboarding check', async () => {
-            const mockUser = {
-                uid: 'test-uid',
-                email: 'test@example.com',
-                providerData: [{ providerId: 'password' }],
-            };
-
-            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockUser);
+            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockFirebaseUserWithPassword);
             mockDatabaseService.user.findUnique.mockResolvedValue(null);
 
-            await service.getOnboardingStatus({ email: 'test@example.com' });
+            await service.getOnboardingStatus(emailQueryDto);
 
             expect(mockDatabaseService.user.findUnique).toHaveBeenCalled();
         });
 
         it('should use logger for all operations', async () => {
-            const mockUser = {
-                uid: 'test-uid',
-                email: 'test@example.com',
-                providerData: [{ providerId: 'password' }],
-            };
+            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockFirebaseUserWithPassword);
 
-            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockUser);
-
-            await service.getProviders({ email: 'test@example.com' });
+            await service.getProviders(emailQueryDto);
 
             expect(mockLoggerService.log).toHaveBeenCalled();
         });

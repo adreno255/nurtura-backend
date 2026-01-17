@@ -4,6 +4,7 @@ import { FirebaseService } from './firebase.service';
 import { MyLoggerService } from '../my-logger/my-logger.service';
 import * as admin from 'firebase-admin';
 import { Injectable } from '@nestjs/common';
+import { createMockConfigService, createMockLogger } from '../../test/mocks';
 
 // Mock firebase-admin
 jest.mock('firebase-admin', () => {
@@ -24,38 +25,29 @@ jest.mock('firebase-admin', () => {
     };
 });
 
+export interface FirebaseServiceAccount {
+    type: string;
+    project_id: string;
+    private_key_id: string;
+    private_key: string;
+    client_email: string;
+    client_id: string;
+    auth_uri: string;
+    token_uri: string;
+    auth_provider_x509_cert_url: string;
+    client_x509_cert_url: string;
+}
+
 describe('FirebaseService', () => {
     let service: FirebaseService;
 
-    const mockConfigService = {
-        get: jest.fn((key: string) => {
-            if (key === 'FIREBASE_SERVICE_ACCOUNT') return mockServiceAccountJson;
-            return undefined;
-        }),
-    };
+    const mockConfigService = createMockConfigService();
 
-    const mockLoggerService = {
-        bootstrap: jest.fn(),
-        log: jest.fn(),
-        error: jest.fn(),
-        warn: jest.fn(),
-    };
+    const mockLoggerService = createMockLogger();
 
-    const mockServiceAccount = {
-        type: 'service_account',
-        project_id: 'test-project',
-        private_key_id: 'test-key-id',
-        private_key: 'test-private-key',
-        client_email: 'test@test-project.iam.gserviceaccount.com',
-        client_id: 'test-client-id',
-        auth_uri: 'https://accounts.google.com/o/oauth2/auth',
-        token_uri: 'https://oauth2.googleapis.com/token',
-        auth_provider_x509_cert_url: 'https://www.googleapis.com/oauth2/v1/certs',
-        client_x509_cert_url:
-            'https://www.googleapis.com/robot/v1/metadata/x509/test.iam.gserviceaccount.com',
-    };
-
-    const mockServiceAccountJson = JSON.stringify(mockServiceAccount);
+    const mockServiceAccountJSON = JSON.parse(
+        mockConfigService.get('FIREBASE_SERVICE_ACCOUNT') as string,
+    ) as FirebaseServiceAccount;
 
     beforeEach(async () => {
         jest.clearAllMocks();
@@ -97,7 +89,7 @@ describe('FirebaseService', () => {
         });
 
         it('should parse service account JSON', () => {
-            expect(admin.credential.cert).toHaveBeenCalledWith(mockServiceAccount);
+            expect(admin.credential.cert).toHaveBeenCalledWith(mockServiceAccountJSON);
         });
 
         it('should log success message', () => {
@@ -109,30 +101,27 @@ describe('FirebaseService', () => {
 
         it('should initialize with correct credentials', () => {
             expect(admin.initializeApp).toHaveBeenCalledWith({
-                credential: mockServiceAccount,
+                credential: mockServiceAccountJSON,
             });
         });
     });
 
     describe('error handling', () => {
         it('should throw error if FIREBASE_SERVICE_ACCOUNT is not configured', async () => {
+            const mockConfigService = createMockConfigService({
+                FIREBASE_SERVICE_ACCOUNT: undefined,
+            });
+
             const module: TestingModule = await Test.createTestingModule({
                 providers: [
                     FirebaseService,
                     {
                         provide: ConfigService,
-                        useValue: {
-                            get: jest.fn(() => undefined),
-                        },
+                        useValue: mockConfigService,
                     },
                     {
                         provide: MyLoggerService,
-                        useValue: {
-                            bootstrap: jest.fn(),
-                            log: jest.fn(),
-                            error: jest.fn(),
-                            warn: jest.fn(),
-                        },
+                        useValue: mockLoggerService,
                     },
                 ],
             }).compile();
@@ -143,23 +132,20 @@ describe('FirebaseService', () => {
         });
 
         it('should throw error if service account JSON is invalid', async () => {
+            const mockConfigService = createMockConfigService({
+                FIREBASE_SERVICE_ACCOUNT: 'invalid-json',
+            });
+
             const module: TestingModule = await Test.createTestingModule({
                 providers: [
                     FirebaseService,
                     {
                         provide: ConfigService,
-                        useValue: {
-                            get: jest.fn(() => 'invalid-json'),
-                        },
+                        useValue: mockConfigService,
                     },
                     {
                         provide: MyLoggerService,
-                        useValue: {
-                            bootstrap: jest.fn(),
-                            log: jest.fn(),
-                            error: jest.fn(),
-                            warn: jest.fn(),
-                        },
+                        useValue: mockLoggerService,
                     },
                 ],
             }).compile();
@@ -173,31 +159,24 @@ describe('FirebaseService', () => {
                 throw initError;
             });
 
-            const mockLogger = {
-                bootstrap: jest.fn(),
-                log: jest.fn(),
-                error: jest.fn(),
-                warn: jest.fn(),
-            };
+            //const mockLogger = createMockLogger();
 
             const module: TestingModule = await Test.createTestingModule({
                 providers: [
                     FirebaseService,
                     {
                         provide: ConfigService,
-                        useValue: {
-                            get: jest.fn(() => mockServiceAccountJson),
-                        },
+                        useValue: mockConfigService,
                     },
                     {
                         provide: MyLoggerService,
-                        useValue: mockLogger,
+                        useValue: mockLoggerService,
                     },
                 ],
             }).compile();
 
             await expect(module.init()).rejects.toThrow('Failed to initialize Firebase Admin');
-            expect(mockLogger.error).toHaveBeenCalledWith(
+            expect(mockLoggerService.error).toHaveBeenCalledWith(
                 'Failed to initialize Firebase Admin',
                 'Init failed',
                 'FirebaseService',
@@ -215,18 +194,11 @@ describe('FirebaseService', () => {
                     FirebaseService,
                     {
                         provide: ConfigService,
-                        useValue: {
-                            get: jest.fn(() => mockServiceAccountJson),
-                        },
+                        useValue: mockConfigService,
                     },
                     {
                         provide: MyLoggerService,
-                        useValue: {
-                            bootstrap: jest.fn(),
-                            log: jest.fn(),
-                            error: jest.fn(),
-                            warn: jest.fn(),
-                        },
+                        useValue: mockLoggerService,
                     },
                 ],
             }).compile();
@@ -260,18 +232,11 @@ describe('FirebaseService', () => {
                     FirebaseService,
                     {
                         provide: ConfigService,
-                        useValue: {
-                            get: jest.fn(() => mockServiceAccountJson),
-                        },
+                        useValue: mockConfigService,
                     },
                     {
                         provide: MyLoggerService,
-                        useValue: {
-                            bootstrap: jest.fn(),
-                            log: jest.fn(),
-                            error: jest.fn(),
-                            warn: jest.fn(),
-                        },
+                        useValue: mockLoggerService,
                     },
                 ],
             }).compile();
@@ -286,18 +251,21 @@ describe('FirebaseService', () => {
 
     describe('service account validation', () => {
         it('should accept valid service account format', () => {
-            expect(() => {
-                JSON.parse(mockServiceAccountJson);
-            }).not.toThrow();
+            expect(
+                () =>
+                    JSON.parse(
+                        mockConfigService.get('FIREBASE_SERVICE_ACCOUNT') as string,
+                    ) as FirebaseServiceAccount,
+            ).not.toThrow();
         });
 
         it('should require type field', () => {
-            const invalidAccount = { ...mockServiceAccount };
-            delete (invalidAccount as Partial<typeof mockServiceAccount>).type;
+            const invalidAccount = { ...mockServiceAccountJSON };
+            delete (invalidAccount as Partial<typeof mockServiceAccountJSON>).type;
 
             expect(admin.credential.cert).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    project_id: mockServiceAccount.project_id,
+                    project_id: mockServiceAccountJSON.project_id,
                 }),
             );
         });
@@ -313,7 +281,7 @@ describe('FirebaseService', () => {
         it('should require private_key field', () => {
             expect(admin.credential.cert).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    private_key: mockServiceAccount.private_key,
+                    private_key: mockServiceAccountJSON.private_key,
                 }),
             );
         });
@@ -321,7 +289,7 @@ describe('FirebaseService', () => {
         it('should require client_email field', () => {
             expect(admin.credential.cert).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    client_email: mockServiceAccount.client_email,
+                    client_email: mockServiceAccountJSON.client_email,
                 }),
             );
         });
@@ -334,18 +302,11 @@ describe('FirebaseService', () => {
                     FirebaseService,
                     {
                         provide: ConfigService,
-                        useValue: {
-                            get: jest.fn(() => mockServiceAccountJson),
-                        },
+                        useValue: mockConfigService,
                     },
                     {
                         provide: MyLoggerService,
-                        useValue: {
-                            bootstrap: jest.fn(),
-                            log: jest.fn(),
-                            error: jest.fn(),
-                            warn: jest.fn(),
-                        },
+                        useValue: mockLoggerService,
                     },
                 ],
             }).compile();
@@ -370,18 +331,11 @@ describe('FirebaseService', () => {
                     FirebaseService,
                     {
                         provide: ConfigService,
-                        useValue: {
-                            get: jest.fn(() => mockServiceAccountJson),
-                        },
+                        useValue: mockConfigService,
                     },
                     {
                         provide: MyLoggerService,
-                        useValue: {
-                            bootstrap: jest.fn(),
-                            log: jest.fn(),
-                            error: jest.fn(),
-                            warn: jest.fn(),
-                        },
+                        useValue: mockLoggerService,
                     },
                 ],
             }).compile();

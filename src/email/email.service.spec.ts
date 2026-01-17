@@ -5,6 +5,8 @@ import { EmailService } from './email.service';
 import { MyLoggerService } from '../my-logger/my-logger.service';
 import sgMail from '@sendgrid/mail';
 import * as fs from 'fs';
+import { createMockConfigService, createMockLogger } from '../../test/mocks';
+import { testEmails, testExpiryTimes, testOtpCodes } from '../../test/fixtures';
 
 // Mock @sendgrid/mail
 jest.mock('@sendgrid/mail', () => ({
@@ -20,33 +22,16 @@ jest.mock('fs', () => ({
 describe('EmailService', () => {
     let service: EmailService;
 
-    const mockConfigService = {
-        get: jest.fn((key: string) => {
-            switch (key) {
-                case 'SENDGRID_API_KEY':
-                    return mockApiKey;
-                case 'SENDGRID_FROM_EMAIL':
-                    return mockFromEmail;
-                case 'SENDGRID_FROM_NAME':
-                    return mockFromName;
-                default:
-                    return undefined;
-            }
-        }),
-    };
+    const mockConfigService = createMockConfigService();
 
-    const mockLoggerService = {
-        bootstrap: jest.fn(),
-        log: jest.fn(),
-        error: jest.fn(),
-        warn: jest.fn(),
-    };
+    const mockLoggerService = createMockLogger();
 
-    const mockApiKey = 'SG.test-api-key';
-    const mockFromEmail = 'noreply@nurtura.com';
-    const mockFromName = 'Nurtura';
     const mockLogoBase64 = 'mock-logo-base64-content';
     const mockFacebookBase64 = 'mock-facebook-base64-content';
+
+    const testEmail = testEmails.valid;
+    const testCode = testOtpCodes.valid;
+    const testExpiryTime = testExpiryTimes.future;
 
     beforeEach(async () => {
         jest.clearAllMocks();
@@ -94,7 +79,7 @@ describe('EmailService', () => {
 
         it('should set SendGrid API key', () => {
             const setApiKeySpy = jest.spyOn(sgMail, 'setApiKey');
-            expect(setApiKeySpy).toHaveBeenCalledWith(mockApiKey);
+            expect(setApiKeySpy).toHaveBeenCalledWith(mockConfigService.get('SENDGRID_API_KEY'));
         });
 
         it('should load email assets', () => {
@@ -118,24 +103,19 @@ describe('EmailService', () => {
         });
 
         it('should throw error if SENDGRID_API_KEY is not configured', async () => {
+            const mockConfigService = createMockConfigService({ SENDGRID_API_KEY: undefined });
+
             const createService = async () => {
                 await Test.createTestingModule({
                     providers: [
                         EmailService,
                         {
                             provide: ConfigService,
-                            useValue: {
-                                get: jest.fn(() => undefined),
-                            },
+                            useValue: mockConfigService,
                         },
                         {
                             provide: MyLoggerService,
-                            useValue: {
-                                bootstrap: jest.fn(),
-                                log: jest.fn(),
-                                error: jest.fn(),
-                                warn: jest.fn(),
-                            },
+                            useValue: mockLoggerService,
                         },
                     ],
                 }).compile();
@@ -155,21 +135,11 @@ describe('EmailService', () => {
                         EmailService,
                         {
                             provide: ConfigService,
-                            useValue: {
-                                get: jest.fn((key: string) => {
-                                    if (key === 'SENDGRID_API_KEY') return mockApiKey;
-                                    return undefined;
-                                }),
-                            },
+                            useValue: mockConfigService,
                         },
                         {
                             provide: MyLoggerService,
-                            useValue: {
-                                bootstrap: jest.fn(),
-                                log: jest.fn(),
-                                error: jest.fn(),
-                                warn: jest.fn(),
-                            },
+                            useValue: mockLoggerService,
                         },
                     ],
                 }).compile();
@@ -185,36 +155,24 @@ describe('EmailService', () => {
                 throw new Error('Read error');
             });
 
-            const mockLogger = {
-                bootstrap: jest.fn(),
-                log: jest.fn(),
-                error: jest.fn(),
-                warn: jest.fn(),
-            };
-
             const createService = async () => {
                 await Test.createTestingModule({
                     providers: [
                         EmailService,
                         {
                             provide: ConfigService,
-                            useValue: {
-                                get: jest.fn((key: string) => {
-                                    if (key === 'SENDGRID_API_KEY') return mockApiKey;
-                                    return undefined;
-                                }),
-                            },
+                            useValue: mockConfigService,
                         },
                         {
                             provide: MyLoggerService,
-                            useValue: mockLogger,
+                            useValue: mockLoggerService,
                         },
                     ],
                 }).compile();
             };
 
             await expect(createService()).rejects.toThrow();
-            expect(mockLogger.error).toHaveBeenCalledWith(
+            expect(mockLoggerService.error).toHaveBeenCalledWith(
                 'Failed to load email assets',
                 'Read error',
                 'EmailService',
@@ -223,10 +181,6 @@ describe('EmailService', () => {
     });
 
     describe('sendRegistrationOtp', () => {
-        const testEmail = 'test@example.com';
-        const testCode = '123456';
-        const testExpiryTime = '10:30 AM';
-
         it('should send registration OTP email successfully', async () => {
             (sgMail.send as jest.Mock).mockResolvedValueOnce([{ statusCode: 200 }, {}]);
             const sendSpy = jest.spyOn(sgMail, 'send');
@@ -246,8 +200,8 @@ describe('EmailService', () => {
                 expect.objectContaining({
                     to: testEmail,
                     from: {
-                        email: mockFromEmail,
-                        name: mockFromName,
+                        email: mockConfigService.get('SENDGRID_FROM_EMAIL'),
+                        name: mockConfigService.get('SENDGRID_FROM_NAME'),
                     },
                     subject: 'OTP for your Nurtura authentication',
                 }),
@@ -329,10 +283,6 @@ describe('EmailService', () => {
     });
 
     describe('sendForgotPasswordOtp', () => {
-        const testEmail = 'test@example.com';
-        const testCode = '654321';
-        const testExpiryTime = '11:45 AM';
-
         it('should send forgot password OTP email successfully', async () => {
             (sgMail.send as jest.Mock).mockResolvedValueOnce([{ statusCode: 200 }, {}]);
             const sendSpy = jest.spyOn(sgMail, 'send');
@@ -352,8 +302,8 @@ describe('EmailService', () => {
                 expect.objectContaining({
                     to: testEmail,
                     from: {
-                        email: mockFromEmail,
-                        name: mockFromName,
+                        email: mockConfigService.get('SENDGRID_FROM_EMAIL'),
+                        name: mockConfigService.get('SENDGRID_FROM_NAME'),
                     },
                     subject: 'Password Reset OTP for Nurtura',
                 }),
@@ -437,8 +387,7 @@ describe('EmailService', () => {
         it('should pass OTP code to registration template', async () => {
             (sgMail.send as jest.Mock).mockResolvedValueOnce([{ statusCode: 200 }, {}]);
 
-            const testCode = '12345';
-            await service.sendRegistrationOtp('test@example.com', testCode, '10:00 AM');
+            await service.sendRegistrationOtp(testEmail, testCode, testExpiryTime);
 
             const [callArgs] = (sgMail.send as jest.Mock).mock.calls[0] as [{ html: string }];
             const regexPattern = testCode.split('').join('.*?');
@@ -450,8 +399,7 @@ describe('EmailService', () => {
         it('should pass OTP code to forgot password template', async () => {
             (sgMail.send as jest.Mock).mockResolvedValueOnce([{ statusCode: 200 }, {}]);
 
-            const testCode = '12345';
-            await service.sendForgotPasswordOtp('test@example.com', testCode, '11:00 AM');
+            await service.sendForgotPasswordOtp(testEmail, testCode, testExpiryTime);
 
             const [callArgs] = (sgMail.send as jest.Mock).mock.calls[0] as [{ html: string }];
             const regexPattern = testCode.split('').join('.*?');
@@ -463,21 +411,19 @@ describe('EmailService', () => {
         it('should pass expiry time to registration template', async () => {
             (sgMail.send as jest.Mock).mockResolvedValueOnce([{ statusCode: 200 }, {}]);
 
-            const expiryTime = '2:30 PM';
-            await service.sendRegistrationOtp('test@example.com', '123456', expiryTime);
+            await service.sendRegistrationOtp(testEmail, testCode, testExpiryTime);
 
             const [callArgs] = (sgMail.send as jest.Mock).mock.calls[0] as [{ html: string }];
-            expect(callArgs.html).toContain(expiryTime);
+            expect(callArgs.html).toContain(testExpiryTime);
         });
 
         it('should pass expiry time to forgot password template', async () => {
             (sgMail.send as jest.Mock).mockResolvedValueOnce([{ statusCode: 200 }, {}]);
 
-            const expiryTime = '3:45 PM';
-            await service.sendForgotPasswordOtp('test@example.com', '654321', expiryTime);
+            await service.sendForgotPasswordOtp(testEmail, testCode, testExpiryTime);
 
             const [callArgs] = (sgMail.send as jest.Mock).mock.calls[0] as [{ html: string }];
-            expect(callArgs.html).toContain(expiryTime);
+            expect(callArgs.html).toContain(testExpiryTime);
         });
     });
 
@@ -501,21 +447,11 @@ describe('EmailService', () => {
                         EmailService,
                         {
                             provide: ConfigService,
-                            useValue: {
-                                get: jest.fn((key: string) => {
-                                    if (key === 'SENDGRID_API_KEY') return mockApiKey;
-                                    return undefined;
-                                }),
-                            },
+                            useValue: mockConfigService,
                         },
                         {
                             provide: MyLoggerService,
-                            useValue: {
-                                bootstrap: jest.fn(),
-                                log: jest.fn(),
-                                error: jest.fn(),
-                                warn: jest.fn(),
-                            },
+                            useValue: mockLoggerService,
                         },
                     ],
                 }).compile();

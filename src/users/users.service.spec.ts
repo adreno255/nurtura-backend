@@ -8,60 +8,50 @@ import { type CheckEmailAvailabilityDto } from './dto/check-email-availability.d
 import { type CreateUserDto } from './dto/create-user.dto';
 import { type User } from './interfaces/user.interface';
 import { type Prisma } from '../generated/prisma/client';
+import {
+    inputUser,
+    testEmails,
+    testFirebaseUids,
+    validCreateUserDto,
+    validEmailQueryDto,
+    validUser,
+} from '../../test/fixtures';
+import {
+    createMockDatabaseService,
+    createMockFirebaseAuth,
+    createMockFirebaseService,
+    createMockLogger,
+    FirebaseAuthErrors,
+} from '../../test/mocks';
 
 // Test helper to create mock users
-const createMockUser = (overrides: Partial<User> = {}): User =>
-    ({
-        id: 'user-id-123',
-        firebaseUid: 'test-firebase-uid',
-        email: 'test@example.com',
-        firstName: 'John',
-        middleName: null,
-        lastName: 'Doe',
-        suffix: null,
-        address: 'Block 5, Sampaguita St, Brgy Commonwealth, Quezon City',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        ...overrides,
-    }) as User;
+const createMockUser = (overrides: Partial<User> = {}): User => ({
+    ...validUser,
+    ...overrides,
+});
 
 const createMockUserCreateArgs = (
     overrides?: Partial<Prisma.UserCreateInput>,
 ): Prisma.UserCreateInput => ({
-    firebaseUid: 'test-firebase-uid',
-    email: 'test@example.com',
-    firstName: 'John',
-    middleName: 'Michael',
-    lastName: 'Doe',
-    suffix: 'Jr.',
-    address: 'Block 5, Sampaguita St, Brgy Commonwealth, Quezon City',
+    ...inputUser,
     ...overrides,
 });
 
 describe('UsersService', () => {
     let service: UsersService;
 
-    const mockFirebaseAuth = {
-        getUserByEmail: jest.fn(),
-    };
+    const mockFirebaseAuth = createMockFirebaseAuth();
 
-    const mockFirebaseService = {
-        getAuth: jest.fn(() => mockFirebaseAuth),
-    };
+    const mockFirebaseService = createMockFirebaseService(mockFirebaseAuth);
 
-    const mockDatabaseService = {
-        user: {
-            findUnique: jest.fn(),
-            create: jest.fn(),
-        },
-    };
+    const mockDatabaseService = createMockDatabaseService();
 
-    const mockLoggerService = {
-        bootstrap: jest.fn(),
-        log: jest.fn(),
-        error: jest.fn(),
-        warn: jest.fn(),
-    };
+    const mockLoggerService = createMockLogger();
+
+    const testEmail = testEmails.valid;
+    const testFirebaseUid = testFirebaseUids.primary;
+    const checkEmailAvailabilityDto = validEmailQueryDto;
+    const createUserDto = validCreateUserDto;
 
     beforeEach(async () => {
         jest.clearAllMocks();
@@ -96,16 +86,10 @@ describe('UsersService', () => {
     });
 
     describe('checkEmailAvailability', () => {
-        const testEmail = 'test@example.com';
-        const dto: CheckEmailAvailabilityDto = { email: testEmail };
+        const dto: CheckEmailAvailabilityDto = checkEmailAvailabilityDto;
 
         it('should return available=false if email exists in Firebase', async () => {
-            const mockUser = {
-                uid: 'test-firebase-uid',
-                email: testEmail,
-            };
-
-            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockUser);
+            mockFirebaseAuth.getUserByEmail.mockResolvedValue(validUser);
 
             const result = await service.checkEmailAvailability(dto);
 
@@ -116,10 +100,7 @@ describe('UsersService', () => {
         });
 
         it('should return available=true if email not found in Firebase', async () => {
-            const firebaseError = new Error('User not found');
-            Object.assign(firebaseError, { code: 'auth/user-not-found' });
-
-            mockFirebaseAuth.getUserByEmail.mockRejectedValue(firebaseError);
+            mockFirebaseAuth.getUserByEmail.mockRejectedValue(FirebaseAuthErrors.userNotFound());
 
             const result = await service.checkEmailAvailability(dto);
 
@@ -130,10 +111,7 @@ describe('UsersService', () => {
         });
 
         it('should call Firebase Auth with correct email', async () => {
-            const firebaseError = new Error('User not found');
-            Object.assign(firebaseError, { code: 'auth/user-not-found' });
-
-            mockFirebaseAuth.getUserByEmail.mockRejectedValue(firebaseError);
+            mockFirebaseAuth.getUserByEmail.mockRejectedValue(FirebaseAuthErrors.userNotFound());
 
             await service.checkEmailAvailability(dto);
 
@@ -141,12 +119,7 @@ describe('UsersService', () => {
         });
 
         it('should log when email is already registered', async () => {
-            const mockUser = {
-                uid: 'test-firebase-uid',
-                email: testEmail,
-            };
-
-            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockUser);
+            mockFirebaseAuth.getUserByEmail.mockResolvedValue(validUser);
 
             await service.checkEmailAvailability(dto);
 
@@ -157,10 +130,7 @@ describe('UsersService', () => {
         });
 
         it('should log when email is available', async () => {
-            const firebaseError = new Error('User not found');
-            Object.assign(firebaseError, { code: 'auth/user-not-found' });
-
-            mockFirebaseAuth.getUserByEmail.mockRejectedValue(firebaseError);
+            mockFirebaseAuth.getUserByEmail.mockRejectedValue(FirebaseAuthErrors.userNotFound());
 
             await service.checkEmailAvailability(dto);
 
@@ -197,25 +167,14 @@ describe('UsersService', () => {
     });
 
     describe('create', () => {
-        const firebaseUid = 'test-firebase-uid';
-        const email = 'test@example.com';
-        const dto: CreateUserDto = {
-            firstName: 'John',
-            middleName: 'Michael',
-            lastName: 'Doe',
-            suffix: 'Jr.',
-            block: 'Block 5',
-            street: 'Sampaguita St',
-            barangay: 'Brgy Commonwealth',
-            city: 'Quezon City',
-        };
+        const dto: CreateUserDto = createUserDto;
 
         it('should create user successfully', async () => {
             mockDatabaseService.user.findUnique.mockResolvedValue(null);
             mockDatabaseService.user.create.mockResolvedValue({
                 id: 'user-id-123',
-                firebaseUid,
-                email,
+                testFirebaseUid,
+                testEmail,
                 firstName: dto.firstName,
                 middleName: dto.middleName,
                 lastName: dto.lastName,
@@ -223,7 +182,7 @@ describe('UsersService', () => {
                 address: 'Block 5, Sampaguita St, Brgy Commonwealth, Quezon City',
             });
 
-            const result = await service.create(firebaseUid, email, dto);
+            const result = await service.create(testFirebaseUid, testEmail, dto);
 
             expect(result).toEqual({
                 message: 'User registered successfully',
@@ -235,22 +194,22 @@ describe('UsersService', () => {
             mockDatabaseService.user.findUnique.mockResolvedValue(null);
             mockDatabaseService.user.create.mockResolvedValue(createMockUser());
 
-            await service.create(firebaseUid, email, dto);
+            await service.create(testFirebaseUid, testEmail, dto);
 
             expect(mockDatabaseService.user.findUnique).toHaveBeenCalledWith({
-                where: { firebaseUid },
+                where: { firebaseUid: testFirebaseUid },
             });
         });
 
         it('should throw ConflictException if user already exists', async () => {
-            const existingUser = createMockUser({ firebaseUid });
+            const existingUser = createMockUser({ firebaseUid: testFirebaseUid });
 
             mockDatabaseService.user.findUnique.mockResolvedValue(existingUser);
 
-            await expect(service.create(firebaseUid, email, dto)).rejects.toThrow(
+            await expect(service.create(testFirebaseUid, testEmail, dto)).rejects.toThrow(
                 ConflictException,
             );
-            await expect(service.create(firebaseUid, email, dto)).rejects.toThrow(
+            await expect(service.create(testFirebaseUid, testEmail, dto)).rejects.toThrow(
                 'User profile already exists',
             );
         });
@@ -259,7 +218,7 @@ describe('UsersService', () => {
             mockDatabaseService.user.findUnique.mockResolvedValue(null);
             mockDatabaseService.user.create.mockResolvedValue(createMockUser());
 
-            await service.create(firebaseUid, email, dto);
+            await service.create(testFirebaseUid, testEmail, dto);
 
             expect(mockDatabaseService.user.create).toHaveBeenCalledWith({
                 data: createMockUserCreateArgs({
@@ -283,7 +242,7 @@ describe('UsersService', () => {
             mockDatabaseService.user.findUnique.mockResolvedValue(null);
             mockDatabaseService.user.create.mockResolvedValue(createMockUser());
 
-            await service.create(firebaseUid, email, dtoWithSpaces);
+            await service.create(testFirebaseUid, testEmail, dtoWithSpaces);
 
             expect(mockDatabaseService.user.create).toHaveBeenCalledWith({
                 data: createMockUserCreateArgs({
@@ -309,7 +268,7 @@ describe('UsersService', () => {
             mockDatabaseService.user.findUnique.mockResolvedValue(null);
             mockDatabaseService.user.create.mockResolvedValue(createMockUser());
 
-            await service.create(firebaseUid, email, dtoWithoutMiddleName);
+            await service.create(testFirebaseUid, testEmail, dtoWithoutMiddleName);
 
             expect(mockDatabaseService.user.create).toHaveBeenCalledWith({
                 data: createMockUserCreateArgs({
@@ -332,7 +291,7 @@ describe('UsersService', () => {
             mockDatabaseService.user.findUnique.mockResolvedValue(null);
             mockDatabaseService.user.create.mockResolvedValue(createMockUser());
 
-            await service.create(firebaseUid, email, dtoWithoutSuffix);
+            await service.create(testFirebaseUid, testEmail, dtoWithoutSuffix);
 
             expect(mockDatabaseService.user.create).toHaveBeenCalledWith({
                 data: createMockUserCreateArgs({
@@ -345,10 +304,10 @@ describe('UsersService', () => {
             mockDatabaseService.user.findUnique.mockResolvedValue(null);
             mockDatabaseService.user.create.mockResolvedValue(createMockUser());
 
-            await service.create(firebaseUid, email, dto);
+            await service.create(testFirebaseUid, testEmail, dto);
 
             expect(mockLoggerService.log).toHaveBeenCalledWith(
-                `User registered successfully: ${email}`,
+                `User registered successfully: ${testEmail}`,
                 'UsersService',
             );
         });
@@ -357,10 +316,10 @@ describe('UsersService', () => {
             mockDatabaseService.user.findUnique.mockResolvedValue(null);
             mockDatabaseService.user.create.mockRejectedValue(new Error('Database error'));
 
-            await expect(service.create(firebaseUid, email, dto)).rejects.toThrow(
+            await expect(service.create(testFirebaseUid, testEmail, dto)).rejects.toThrow(
                 InternalServerErrorException,
             );
-            await expect(service.create(firebaseUid, email, dto)).rejects.toThrow(
+            await expect(service.create(testFirebaseUid, testEmail, dto)).rejects.toThrow(
                 'Failed to register user to the database',
             );
         });
@@ -369,10 +328,10 @@ describe('UsersService', () => {
             mockDatabaseService.user.findUnique.mockResolvedValue(null);
             mockDatabaseService.user.create.mockRejectedValue(new Error('Database error'));
 
-            await expect(service.create(firebaseUid, email, dto)).rejects.toThrow();
+            await expect(service.create(testFirebaseUid, testEmail, dto)).rejects.toThrow();
 
             expect(mockLoggerService.error).toHaveBeenCalledWith(
-                `Error registering user: ${email}`,
+                `Error registering user: ${testEmail}`,
                 'Database error',
                 'UsersService',
             );
@@ -382,16 +341,16 @@ describe('UsersService', () => {
             mockDatabaseService.user.findUnique.mockResolvedValue(null);
             mockDatabaseService.user.create.mockResolvedValue({
                 id: 'user-id-123',
-                firebaseUid,
-                email,
+                testFirebaseUid,
+                testEmail,
             });
 
-            await service.create(firebaseUid, email, dto);
+            await service.create(testFirebaseUid, testEmail, dto);
 
             expect(mockDatabaseService.user.create).toHaveBeenCalledWith({
                 data: {
-                    firebaseUid,
-                    email,
+                    firebaseUid: testFirebaseUid,
+                    email: testEmail,
                     firstName: 'John',
                     middleName: 'Michael',
                     lastName: 'Doe',
@@ -406,12 +365,7 @@ describe('UsersService', () => {
         const userId = 'user-id-123';
 
         it('should find user by id successfully', async () => {
-            const mockUser = createMockUser({
-                middleName: 'Michael',
-                suffix: 'Jr.',
-            });
-
-            mockDatabaseService.user.findUnique.mockResolvedValue(mockUser);
+            mockDatabaseService.user.findUnique.mockResolvedValue(validUser);
 
             const result = await service.findById(userId);
 
@@ -421,12 +375,7 @@ describe('UsersService', () => {
         });
 
         it('should parse address into components', async () => {
-            const mockUser = createMockUser({
-                middleName: 'Michael',
-                suffix: 'Jr.',
-            });
-
-            mockDatabaseService.user.findUnique.mockResolvedValue(mockUser);
+            mockDatabaseService.user.findUnique.mockResolvedValue(validUser);
 
             const result = await service.findById(userId);
 
@@ -437,9 +386,7 @@ describe('UsersService', () => {
         });
 
         it('should query database with correct id', async () => {
-            const mockUser = createMockUser();
-
-            mockDatabaseService.user.findUnique.mockResolvedValue(mockUser);
+            mockDatabaseService.user.findUnique.mockResolvedValue(validUser);
 
             await service.findById(userId);
 
@@ -456,14 +403,12 @@ describe('UsersService', () => {
         });
 
         it('should log success message', async () => {
-            const mockUser = createMockUser();
-
-            mockDatabaseService.user.findUnique.mockResolvedValue(mockUser);
+            mockDatabaseService.user.findUnique.mockResolvedValue(validUser);
 
             await service.findById(userId);
 
             expect(mockLoggerService.log).toHaveBeenCalledWith(
-                `User info fetched: ${mockUser.email}`,
+                `User info fetched: ${validUser.email}`,
                 'UsersService',
             );
         });
@@ -519,40 +464,29 @@ describe('UsersService', () => {
     });
 
     describe('findByFirebaseUid', () => {
-        const firebaseUid = 'test-firebase-uid';
-
         it('should find user by Firebase UID successfully', async () => {
-            const mockUser = createMockUser({
-                middleName: 'Michael',
-                suffix: 'Jr.',
-            });
+            mockDatabaseService.user.findUnique.mockResolvedValue(validUser);
 
-            mockDatabaseService.user.findUnique.mockResolvedValue(mockUser);
-
-            const result = await service.findByFirebaseUid(firebaseUid);
+            const result = await service.findByFirebaseUid(testFirebaseUid);
 
             expect(result.message).toBe('User info fetched successfully');
             expect(result.userInfo.id).toBe('user-id-123');
         });
 
         it('should query database with Firebase UID', async () => {
-            const mockUser = createMockUser();
+            mockDatabaseService.user.findUnique.mockResolvedValue(validUser);
 
-            mockDatabaseService.user.findUnique.mockResolvedValue(mockUser);
-
-            await service.findByFirebaseUid(firebaseUid);
+            await service.findByFirebaseUid(testFirebaseUid);
 
             expect(mockDatabaseService.user.findUnique).toHaveBeenCalledWith({
-                where: { firebaseUid },
+                where: { firebaseUid: testFirebaseUid },
             });
         });
 
         it('should parse address into components', async () => {
-            const mockUser = createMockUser();
+            mockDatabaseService.user.findUnique.mockResolvedValue(validUser);
 
-            mockDatabaseService.user.findUnique.mockResolvedValue(mockUser);
-
-            const result = await service.findByFirebaseUid(firebaseUid);
+            const result = await service.findByFirebaseUid(testFirebaseUid);
 
             expect(result.userInfo.block).toBe('Block 5');
             expect(result.userInfo.street).toBe('Sampaguita St');
@@ -563,21 +497,21 @@ describe('UsersService', () => {
         it('should throw NotFoundException if user not found', async () => {
             mockDatabaseService.user.findUnique.mockResolvedValue(null);
 
-            await expect(service.findByFirebaseUid(firebaseUid)).rejects.toThrow(NotFoundException);
-            await expect(service.findByFirebaseUid(firebaseUid)).rejects.toThrow(
+            await expect(service.findByFirebaseUid(testFirebaseUid)).rejects.toThrow(
+                NotFoundException,
+            );
+            await expect(service.findByFirebaseUid(testFirebaseUid)).rejects.toThrow(
                 'User profile not found in database',
             );
         });
 
         it('should log success message', async () => {
-            const mockUser = createMockUser();
+            mockDatabaseService.user.findUnique.mockResolvedValue(validUser);
 
-            mockDatabaseService.user.findUnique.mockResolvedValue(mockUser);
-
-            await service.findByFirebaseUid(firebaseUid);
+            await service.findByFirebaseUid(testFirebaseUid);
 
             expect(mockLoggerService.log).toHaveBeenCalledWith(
-                `User info fetched by Firebase UID: ${mockUser.email}`,
+                `User info fetched by Firebase UID: ${validUser.email}`,
                 'UsersService',
             );
         });
@@ -585,10 +519,10 @@ describe('UsersService', () => {
         it('should throw InternalServerErrorException for database errors', async () => {
             mockDatabaseService.user.findUnique.mockRejectedValue(new Error('Database error'));
 
-            await expect(service.findByFirebaseUid(firebaseUid)).rejects.toThrow(
+            await expect(service.findByFirebaseUid(testFirebaseUid)).rejects.toThrow(
                 InternalServerErrorException,
             );
-            await expect(service.findByFirebaseUid(firebaseUid)).rejects.toThrow(
+            await expect(service.findByFirebaseUid(testFirebaseUid)).rejects.toThrow(
                 'Failed to fetch user by Firebase UID',
             );
         });
@@ -596,10 +530,10 @@ describe('UsersService', () => {
         it('should log error for database errors', async () => {
             mockDatabaseService.user.findUnique.mockRejectedValue(new Error('Database error'));
 
-            await expect(service.findByFirebaseUid(firebaseUid)).rejects.toThrow();
+            await expect(service.findByFirebaseUid(testFirebaseUid)).rejects.toThrow();
 
             expect(mockLoggerService.error).toHaveBeenCalledWith(
-                `Error fetching user by Firebase UID: ${firebaseUid}`,
+                `Error fetching user by Firebase UID: ${testFirebaseUid}`,
                 'Database error',
                 'UsersService',
             );
@@ -622,7 +556,7 @@ describe('UsersService', () => {
             mockDatabaseService.user.findUnique.mockResolvedValue(null);
             mockDatabaseService.user.create.mockResolvedValue(createMockUser());
 
-            await service.create('test-firebase-uid', 'test@example.com', dto);
+            await service.create(testFirebaseUid, testEmail, dto);
 
             expect(mockDatabaseService.user.create).toHaveBeenCalledWith({
                 data: createMockUserCreateArgs({

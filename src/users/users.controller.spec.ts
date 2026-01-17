@@ -5,6 +5,14 @@ import { UsersService } from './users.service';
 import { type CheckEmailAvailabilityDto } from './dto/check-email-availability.dto';
 import { type CreateUserDto } from './dto/create-user.dto';
 import { type CurrentUserPayload } from '../common/interfaces';
+import {
+    minimalCreateUserDto,
+    testEmails,
+    testFirebaseUids,
+    validCreateUserDto,
+    validEmailQueryDto,
+    validUser,
+} from '../../test/fixtures';
 
 describe('UsersController', () => {
     let controller: UsersController;
@@ -41,7 +49,7 @@ describe('UsersController', () => {
     });
 
     describe('checkEmail', () => {
-        const dto: CheckEmailAvailabilityDto = { email: 'test@example.com' };
+        const dto: CheckEmailAvailabilityDto = validEmailQueryDto;
 
         it('should return email availability as available', async () => {
             const mockResponse = {
@@ -140,20 +148,11 @@ describe('UsersController', () => {
 
     describe('createUser', () => {
         const currentUser: CurrentUserPayload = {
-            firebaseUid: 'test-firebase-uid',
-            email: 'test@example.com',
+            firebaseUid: testFirebaseUids.primary,
+            email: testEmails.valid,
         };
 
-        const dto: CreateUserDto = {
-            firstName: 'John',
-            middleName: 'Michael',
-            lastName: 'Doe',
-            suffix: 'Jr.',
-            block: 'Block 5',
-            street: 'Sampaguita St',
-            barangay: 'Brgy Commonwealth',
-            city: 'Quezon City',
-        };
+        const dto: CreateUserDto = validCreateUserDto;
 
         it('should create user successfully', async () => {
             const mockResponse = {
@@ -244,14 +243,7 @@ describe('UsersController', () => {
         });
 
         it('should work with user without middle name', async () => {
-            const dtoWithoutMiddleName: CreateUserDto = {
-                firstName: 'John',
-                lastName: 'Doe',
-                block: 'Block 5',
-                street: 'Sampaguita St',
-                barangay: 'Brgy Commonwealth',
-                city: 'Quezon City',
-            };
+            const dtoWithoutMiddleName: CreateUserDto = minimalCreateUserDto;
 
             mockUsersService.create.mockResolvedValue({
                 message: 'User registered successfully',
@@ -268,14 +260,7 @@ describe('UsersController', () => {
         });
 
         it('should work with user without suffix', async () => {
-            const dtoWithoutSuffix: CreateUserDto = {
-                firstName: 'John',
-                lastName: 'Doe',
-                block: 'Block 5',
-                street: 'Sampaguita St',
-                barangay: 'Brgy Commonwealth',
-                city: 'Quezon City',
-            };
+            const dtoWithoutSuffix: CreateUserDto = minimalCreateUserDto;
 
             mockUsersService.create.mockResolvedValue({
                 message: 'User registered successfully',
@@ -317,25 +302,14 @@ describe('UsersController', () => {
     });
 
     describe('getUserById', () => {
-        const firebaseUid = 'test-firebase-uid';
+        const firebaseUid = testFirebaseUids.primary;
 
         it('should get user by Firebase UID successfully', async () => {
             const mockResponse = {
                 message: 'User info fetched successfully',
-                userInfo: {
-                    id: 'user-id-123',
-                    firstName: 'John',
-                    middleName: 'Michael',
-                    lastName: 'Doe',
-                    suffix: 'Jr.',
-                    email: 'test@example.com',
-                    address: 'Block 5, Sampaguita St, Brgy Commonwealth, Quezon City',
-                    block: 'Block 5',
-                    street: 'Sampaguita St',
-                    barangay: 'Brgy Commonwealth',
-                    city: 'Quezon City',
-                },
+                userInfo: validUser,
             };
+
             mockUsersService.findByFirebaseUid.mockResolvedValue(mockResponse);
 
             const result = await controller.getUserById(firebaseUid);
@@ -346,15 +320,7 @@ describe('UsersController', () => {
         it('should call UsersService.findByFirebaseUid with correct parameter', async () => {
             mockUsersService.findByFirebaseUid.mockResolvedValue({
                 message: 'User info fetched successfully',
-                userInfo: {
-                    id: 'user-id-123',
-                    email: 'test@example.com',
-                    address: 'Block 5, Sampaguita St, Brgy Commonwealth, Quezon City',
-                    block: 'Block 5',
-                    street: 'Sampaguita St',
-                    barangay: 'Brgy Commonwealth',
-                    city: 'Quezon City',
-                },
+                userInfo: validUser,
             });
 
             await controller.getUserById(firebaseUid);
@@ -365,15 +331,7 @@ describe('UsersController', () => {
         it('should call UsersService.findByFirebaseUid once', async () => {
             mockUsersService.findByFirebaseUid.mockResolvedValue({
                 message: 'User info fetched successfully',
-                userInfo: {
-                    id: 'user-id-123',
-                    email: 'test@example.com',
-                    address: 'Block 5, Sampaguita St, Brgy Commonwealth, Quezon City',
-                    block: 'Block 5',
-                    street: 'Sampaguita St',
-                    barangay: 'Brgy Commonwealth',
-                    city: 'Quezon City',
-                },
+                userInfo: validUser,
             });
 
             await controller.getUserById(firebaseUid);
@@ -402,15 +360,7 @@ describe('UsersController', () => {
         it('should return response with message', async () => {
             mockUsersService.findByFirebaseUid.mockResolvedValue({
                 message: 'User info fetched successfully',
-                userInfo: {
-                    id: 'user-id-123',
-                    email: 'test@example.com',
-                    address: 'Block 5, Sampaguita St, Brgy Commonwealth, Quezon City',
-                    block: 'Block 5',
-                    street: 'Sampaguita St',
-                    barangay: 'Brgy Commonwealth',
-                    city: 'Quezon City',
-                },
+                userInfo: validUser,
             });
 
             const result = await controller.getUserById(firebaseUid);
@@ -422,15 +372,7 @@ describe('UsersController', () => {
         it('should return response with userInfo', async () => {
             mockUsersService.findByFirebaseUid.mockResolvedValue({
                 message: 'User info fetched successfully',
-                userInfo: {
-                    id: 'user-id-123',
-                    email: 'test@example.com',
-                    address: 'Block 5, Sampaguita St, Brgy Commonwealth, Quezon City',
-                    block: 'Block 5',
-                    street: 'Sampaguita St',
-                    barangay: 'Brgy Commonwealth',
-                    city: 'Quezon City',
-                },
+                userInfo: validUser,
             });
 
             const result = await controller.getUserById(firebaseUid);
@@ -444,15 +386,7 @@ describe('UsersController', () => {
         it('should return userInfo with parsed address components', async () => {
             mockUsersService.findByFirebaseUid.mockResolvedValue({
                 message: 'User info fetched successfully',
-                userInfo: {
-                    id: 'user-id-123',
-                    email: 'test@example.com',
-                    address: 'Block 5, Sampaguita St, Brgy Commonwealth, Quezon City',
-                    block: 'Block 5',
-                    street: 'Sampaguita St',
-                    barangay: 'Brgy Commonwealth',
-                    city: 'Quezon City',
-                },
+                userInfo: validUser,
             });
 
             const result = await controller.getUserById(firebaseUid);
@@ -469,15 +403,7 @@ describe('UsersController', () => {
             for (const uid of uids) {
                 mockUsersService.findByFirebaseUid.mockResolvedValue({
                     message: 'User info fetched successfully',
-                    userInfo: {
-                        id: 'user-id-123',
-                        email: 'test@example.com',
-                        address: 'Block 5, Sampaguita St, Brgy Commonwealth, Quezon City',
-                        block: 'Block 5',
-                        street: 'Sampaguita St',
-                        barangay: 'Brgy Commonwealth',
-                        city: 'Quezon City',
-                    },
+                    userInfo: validUser,
                 });
 
                 await controller.getUserById(uid);
@@ -499,15 +425,7 @@ describe('UsersController', () => {
             });
             mockUsersService.findByFirebaseUid.mockResolvedValue({
                 message: 'User info fetched successfully',
-                userInfo: {
-                    id: 'user-id-123',
-                    email: 'test@example.com',
-                    address: 'Block 5, Sampaguita St, Brgy Commonwealth, Quezon City',
-                    block: 'Block 5',
-                    street: 'Sampaguita St',
-                    barangay: 'Brgy Commonwealth',
-                    city: 'Quezon City',
-                },
+                userInfo: validUser,
             });
 
             await controller.checkEmail({ email: 'test@example.com' });

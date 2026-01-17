@@ -8,6 +8,12 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { type EmailQueryDto } from './dto/email-query.dto';
 import { type ResetPasswordDto } from './dto/reset-password.dto';
+import {
+    expectedOnboardingResponses,
+    expectedProviderResponses,
+    validEmailQueryDto,
+    validResetPasswordDto,
+} from '../../test/fixtures';
 
 describe('AuthController', () => {
     let controller: AuthController;
@@ -43,19 +49,18 @@ describe('AuthController', () => {
     });
 
     describe('getProviders', () => {
-        const dto: EmailQueryDto = { email: 'test@example.com' };
+        const dto: EmailQueryDto = validEmailQueryDto;
 
         it('should return sign-in providers', async () => {
-            const mockProviders = { providers: ['password', 'google.com'] };
-            mockAuthService.getProviders.mockResolvedValue(mockProviders);
+            mockAuthService.getProviders.mockResolvedValue(expectedProviderResponses.multiple);
 
             const result = await controller.getProviders(dto);
 
-            expect(result).toEqual(mockProviders);
+            expect(result).toEqual(expectedProviderResponses.multiple);
         });
 
         it('should call AuthService.getProviders with correct DTO', async () => {
-            mockAuthService.getProviders.mockResolvedValue({ providers: ['password'] });
+            mockAuthService.getProviders.mockResolvedValue(expectedProviderResponses.password);
 
             await controller.getProviders(dto);
 
@@ -63,7 +68,7 @@ describe('AuthController', () => {
         });
 
         it('should call AuthService.getProviders once', async () => {
-            mockAuthService.getProviders.mockResolvedValue({ providers: ['password'] });
+            mockAuthService.getProviders.mockResolvedValue(expectedProviderResponses.password);
 
             await controller.getProviders(dto);
 
@@ -71,7 +76,7 @@ describe('AuthController', () => {
         });
 
         it('should return empty providers array', async () => {
-            mockAuthService.getProviders.mockResolvedValue({ providers: [] });
+            mockAuthService.getProviders.mockResolvedValue(expectedProviderResponses.none);
 
             const result = await controller.getProviders(dto);
 
@@ -123,38 +128,32 @@ describe('AuthController', () => {
     });
 
     describe('getOnboardingStatus', () => {
-        const dto: EmailQueryDto = { email: 'test@example.com' };
+        const dto: EmailQueryDto = validEmailQueryDto;
 
         it('should return needsOnboarding=true', async () => {
-            const mockStatus = {
-                needsOnboarding: true,
-                providers: ['password'],
-                message: 'User exists in Firebase, but no profile found in database',
-            };
-            mockAuthService.getOnboardingStatus.mockResolvedValue(mockStatus);
+            mockAuthService.getOnboardingStatus.mockResolvedValue(
+                expectedOnboardingResponses.needsOnboarding,
+            );
 
             const result = await controller.getOnboardingStatus(dto);
 
-            expect(result).toEqual(mockStatus);
+            expect(result).toEqual(expectedOnboardingResponses.needsOnboarding);
         });
 
         it('should return needsOnboarding=false', async () => {
-            const mockStatus = {
-                needsOnboarding: false,
-                message: 'User profile exists',
-            };
-            mockAuthService.getOnboardingStatus.mockResolvedValue(mockStatus);
+            mockAuthService.getOnboardingStatus.mockResolvedValue(
+                expectedOnboardingResponses.onboardingComplete,
+            );
 
             const result = await controller.getOnboardingStatus(dto);
 
-            expect(result).toEqual(mockStatus);
+            expect(result).toEqual(expectedOnboardingResponses.onboardingComplete);
         });
 
         it('should call AuthService.getOnboardingStatus with correct DTO', async () => {
-            mockAuthService.getOnboardingStatus.mockResolvedValue({
-                needsOnboarding: false,
-                message: 'User profile exists',
-            });
+            mockAuthService.getOnboardingStatus.mockResolvedValue(
+                expectedOnboardingResponses.onboardingComplete,
+            );
 
             await controller.getOnboardingStatus(dto);
 
@@ -162,10 +161,9 @@ describe('AuthController', () => {
         });
 
         it('should call AuthService.getOnboardingStatus once', async () => {
-            mockAuthService.getOnboardingStatus.mockResolvedValue({
-                needsOnboarding: false,
-                message: 'User profile exists',
-            });
+            mockAuthService.getOnboardingStatus.mockResolvedValue(
+                expectedOnboardingResponses.onboardingComplete,
+            );
 
             await controller.getOnboardingStatus(dto);
 
@@ -187,11 +185,9 @@ describe('AuthController', () => {
         });
 
         it('should not include providers when needsOnboarding is false', async () => {
-            const mockStatus = {
-                needsOnboarding: false,
-                message: 'User profile exists',
-            };
-            mockAuthService.getOnboardingStatus.mockResolvedValue(mockStatus);
+            mockAuthService.getOnboardingStatus.mockResolvedValue(
+                expectedOnboardingResponses.onboardingComplete,
+            );
 
             const result = await controller.getOnboardingStatus(dto);
 
@@ -242,10 +238,7 @@ describe('AuthController', () => {
     });
 
     describe('resetPassword', () => {
-        const dto: ResetPasswordDto = {
-            email: 'test@example.com',
-            newPassword: 'NewSecurePass123!',
-        };
+        const dto: ResetPasswordDto = validResetPasswordDto;
 
         it('should reset password successfully', async () => {
             const mockResponse = { message: 'Password updated successfully' };
@@ -346,24 +339,20 @@ describe('AuthController', () => {
 
     describe('response structure', () => {
         it('should return providers array for getProviders', async () => {
-            mockAuthService.getProviders.mockResolvedValue({
-                providers: ['password', 'google.com'],
-            });
+            mockAuthService.getProviders.mockResolvedValue(expectedProviderResponses.multiple);
 
-            const result = await controller.getProviders({ email: 'test@example.com' });
+            const result = await controller.getProviders(validEmailQueryDto);
 
             expect(result).toHaveProperty('providers');
             expect(Array.isArray(result.providers)).toBe(true);
         });
 
         it('should return needsOnboarding boolean for getOnboardingStatus', async () => {
-            mockAuthService.getOnboardingStatus.mockResolvedValue({
-                needsOnboarding: true,
-                providers: ['password'],
-                message: 'User exists in Firebase, but no profile found in database',
-            });
+            mockAuthService.getOnboardingStatus.mockResolvedValue(
+                expectedOnboardingResponses.needsOnboarding,
+            );
 
-            const result = await controller.getOnboardingStatus({ email: 'test@example.com' });
+            const result = await controller.getOnboardingStatus(validEmailQueryDto);
 
             expect(result).toHaveProperty('needsOnboarding');
             expect(typeof result.needsOnboarding).toBe('boolean');
@@ -374,10 +363,7 @@ describe('AuthController', () => {
                 message: 'Password updated successfully',
             });
 
-            const result = await controller.resetPassword({
-                email: 'test@example.com',
-                newPassword: 'NewPass123!',
-            });
+            const result = await controller.resetPassword(validResetPasswordDto);
 
             expect(result).toHaveProperty('message');
             expect(typeof result.message).toBe('string');
@@ -386,21 +372,17 @@ describe('AuthController', () => {
 
     describe('integration with AuthService', () => {
         it('should delegate all logic to AuthService', async () => {
-            mockAuthService.getProviders.mockResolvedValue({ providers: ['password'] });
-            mockAuthService.getOnboardingStatus.mockResolvedValue({
-                needsOnboarding: false,
-                message: 'User profile exists',
-            });
+            mockAuthService.getProviders.mockResolvedValue(expectedProviderResponses.password);
+            mockAuthService.getOnboardingStatus.mockResolvedValue(
+                expectedOnboardingResponses.onboardingComplete,
+            );
             mockAuthService.resetPassword.mockResolvedValue({
                 message: 'Password updated successfully',
             });
 
-            await controller.getProviders({ email: 'test@example.com' });
-            await controller.getOnboardingStatus({ email: 'test@example.com' });
-            await controller.resetPassword({
-                email: 'test@example.com',
-                newPassword: 'NewPass123!',
-            });
+            await controller.getProviders(validEmailQueryDto);
+            await controller.getOnboardingStatus(validEmailQueryDto);
+            await controller.resetPassword(validResetPasswordDto);
 
             expect(mockAuthService.getProviders).toHaveBeenCalled();
             expect(mockAuthService.getOnboardingStatus).toHaveBeenCalled();
@@ -409,22 +391,20 @@ describe('AuthController', () => {
 
         it('should not add additional business logic', async () => {
             // Controller should only wrap service calls
-            mockAuthService.getProviders.mockResolvedValue({ providers: ['password'] });
+            mockAuthService.getProviders.mockResolvedValue(expectedProviderResponses.password);
 
-            const dto: EmailQueryDto = { email: 'test@example.com' };
-            await controller.getProviders(dto);
+            await controller.getProviders(validEmailQueryDto);
 
             // Should pass DTO directly to service without modification
-            expect(mockAuthService.getProviders).toHaveBeenCalledWith(dto);
+            expect(mockAuthService.getProviders).toHaveBeenCalledWith(validEmailQueryDto);
         });
 
         it('should return service responses directly', async () => {
-            const serviceResponse = {
-                providers: ['password', 'google.com'],
-            };
+            const serviceResponse = expectedProviderResponses.multiple;
+
             mockAuthService.getProviders.mockResolvedValue(serviceResponse);
 
-            const result = await controller.getProviders({ email: 'test@example.com' });
+            const result = await controller.getProviders(validEmailQueryDto);
 
             expect(result).toBe(serviceResponse);
         });
@@ -453,38 +433,32 @@ describe('AuthController', () => {
             const serviceError = new InternalServerErrorException('Reset failed');
             mockAuthService.resetPassword.mockRejectedValue(serviceError);
 
-            await expect(
-                controller.resetPassword({
-                    email: 'test@example.com',
-                    newPassword: 'NewPass123!',
-                }),
-            ).rejects.toThrow(InternalServerErrorException);
+            await expect(controller.resetPassword(validResetPasswordDto)).rejects.toThrow(
+                InternalServerErrorException,
+            );
         });
     });
 
     describe('query parameter handling', () => {
         it('should accept email as query parameter in getProviders', async () => {
-            mockAuthService.getProviders.mockResolvedValue({ providers: ['password'] });
+            mockAuthService.getProviders.mockResolvedValue(expectedProviderResponses.password);
 
-            const dto: EmailQueryDto = { email: 'query@example.com' };
-            await controller.getProviders(dto);
+            await controller.getProviders(validEmailQueryDto);
 
             expect(mockAuthService.getProviders).toHaveBeenCalledWith(
-                expect.objectContaining({ email: 'query@example.com' }),
+                expect.objectContaining({ email: 'test@example.com' }),
             );
         });
 
         it('should accept email as query parameter in getOnboardingStatus', async () => {
-            mockAuthService.getOnboardingStatus.mockResolvedValue({
-                needsOnboarding: false,
-                message: 'User profile exists',
-            });
+            mockAuthService.getOnboardingStatus.mockResolvedValue(
+                expectedOnboardingResponses.onboardingComplete,
+            );
 
-            const dto: EmailQueryDto = { email: 'query@example.com' };
-            await controller.getOnboardingStatus(dto);
+            await controller.getOnboardingStatus(validEmailQueryDto);
 
             expect(mockAuthService.getOnboardingStatus).toHaveBeenCalledWith(
-                expect.objectContaining({ email: 'query@example.com' }),
+                expect.objectContaining({ email: 'test@example.com' }),
             );
         });
     });
@@ -495,14 +469,9 @@ describe('AuthController', () => {
                 message: 'Password updated successfully',
             });
 
-            const dto: ResetPasswordDto = {
-                email: 'test@example.com',
-                newPassword: 'NewPass123!',
-            };
+            await controller.resetPassword(validResetPasswordDto);
 
-            await controller.resetPassword(dto);
-
-            expect(mockAuthService.resetPassword).toHaveBeenCalledWith(dto);
+            expect(mockAuthService.resetPassword).toHaveBeenCalledWith(validResetPasswordDto);
         });
 
         it('should pass both email and password from body', async () => {
@@ -510,17 +479,12 @@ describe('AuthController', () => {
                 message: 'Password updated successfully',
             });
 
-            const dto: ResetPasswordDto = {
-                email: 'body@example.com',
-                newPassword: 'BodyPass456!',
-            };
-
-            await controller.resetPassword(dto);
+            await controller.resetPassword(validResetPasswordDto);
 
             expect(mockAuthService.resetPassword).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    email: 'body@example.com',
-                    newPassword: 'BodyPass456!',
+                    email: 'test@example.com',
+                    newPassword: 'NewSecurePass123!',
                 }),
             );
         });
