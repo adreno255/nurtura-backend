@@ -2,7 +2,7 @@
     "moduleFileExtensions": ["js", "json", "ts"],
     "rootDir": "../",
     "testEnvironment": "node",
-    "testRegex": ".*\\.e2e-spec\\.ts$",
+    "testRegex": ".*\\.integration\\.spec\\.ts$",
     "transform": {
         "^.+\\.(t|j)s$": [
             "ts-jest",
@@ -21,8 +21,7 @@
         "!src/**/*.interface.ts",
         "!src/**/*.dto.ts"
     ],
-    "coverageDirectory": "./coverage/e2e",
-    "testTimeout": 60000,
-    "globalSetup": "<rootDir>/test/e2e/setup.ts",
-    "maxWorkers": 1
+    "coverageDirectory": "./coverage/integration",
+    "testTimeout": 30000,
+    "globalSetup": "<rootDir>/test/integration/setup.ts"
 }
