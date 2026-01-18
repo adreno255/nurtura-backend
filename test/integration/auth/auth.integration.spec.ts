@@ -71,7 +71,7 @@ describe('AuthService Integration Tests', () => {
             mockFirebaseService.getAuth().getUserByEmail.mockResolvedValue({
                 uid: 'test-uid',
                 email,
-                providerData: ['password', 'google.com'],
+                providerData: [{ providerId: 'password' }, { providerId: 'google.com' }],
             });
 
             const result = await authService.getProviders({ email });
@@ -102,7 +102,7 @@ describe('AuthService Integration Tests', () => {
             mockFirebaseService.getAuth().getUserByEmail.mockResolvedValue({
                 uid: 'test-uid',
                 email,
-                providerData: ['password'],
+                providerData: [{ providerId: 'password' }],
             });
 
             const result = await authService.getProviders({ email });

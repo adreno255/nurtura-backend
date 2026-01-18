@@ -23,6 +23,7 @@
         "test:e2e": "jest --config ./test/jest-e2e.json",
         "test:e2e:watch": "jest --config ./test/jest-e2e.json --watch",
         "test:e2e:cov": "jest --config ./test/jest-e2e.json --coverage",
+        "test:smoke": "jest --config test/jest-smoke.json",
         "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
         "test:all": "npm run test && npm run test:integration && npm run test:e2e",
         "test:all:cov": "npm run test:cov && npm run test:integration:cov && npm run test:e2e:cov",
@@ -114,7 +115,7 @@
     },
     "lint-staged": {
         "*.{ts,js}": [
-            "eslint --fix --max-warnings=0 --no-warn-ignored",
+            "eslint --fix",
             "prettier --write"
         ],
         "*.{json,md,yml,yaml}": [
