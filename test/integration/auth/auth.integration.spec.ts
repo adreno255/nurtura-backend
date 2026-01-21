@@ -1,60 +1,47 @@
-import { Test, type TestingModule } from '@nestjs/testing';
 import { type INestApplication } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { AuthService } from '../../../src/auth/auth.service';
+import request from 'supertest';
+import { TestDatabaseHelper, TestDataHelper, TestServerHelper } from '../../helpers';
+import {
+    createMockEmailService,
+    createMockFirebaseAuth,
+    createMockFirebaseService,
+    FirebaseAuthErrors,
+} from '../../mocks';
 import { FirebaseService } from '../../../src/firebase/firebase.service';
-import { DatabaseService } from '../../../src/database/database.service';
-import { MyLoggerService } from '../../../src/my-logger/my-logger.service';
-import { TestDatabaseHelper, TestDataHelper } from '../../helpers';
-import { createMockFirebaseService, FirebaseAuthErrors } from '../../mocks/firebase.mock';
-import { envValidationSchema } from '../../../src/config/env.validation';
-import { NotFoundException, BadRequestException } from '@nestjs/common';
+import { EmailService } from '../../../src/email/email.service';
+import { type ExceptionResponse } from '../../../src/common/interfaces';
+import { type Server } from 'http';
 
-describe('AuthService Integration Tests', () => {
+describe('Auth Integration Tests', () => {
     let app: INestApplication;
-    let authService: AuthService;
-    let databaseService: DatabaseService;
     let dbHelper: TestDatabaseHelper;
+    let serverHelper: TestServerHelper;
+    let httpServer: Server;
 
-    // Mock Firebase (external service)
-    const mockFirebaseService = createMockFirebaseService();
+    const mockAuth = createMockFirebaseAuth();
+    const mockFirebaseService = createMockFirebaseService(mockAuth);
+    const mockEmailService = createMockEmailService();
 
     beforeAll(async () => {
         // Initialize database helper
         dbHelper = new TestDatabaseHelper();
         await dbHelper.connect();
 
-        // Create testing module with real database but mocked Firebase
-        const moduleFixture: TestingModule = await Test.createTestingModule({
-            imports: [
-                ConfigModule.forRoot({
-                    isGlobal: true,
-                    envFilePath: '.env.test',
-                    validationSchema: envValidationSchema,
-                }),
-            ],
+        // Create NestJS testing module with mocked external services
+        serverHelper = new TestServerHelper();
+        app = await serverHelper.createTestApp({
             providers: [
-                AuthService,
-                DatabaseService,
-                MyLoggerService,
-                {
-                    provide: FirebaseService,
-                    useValue: mockFirebaseService,
-                },
+                { provide: FirebaseService, useValue: mockFirebaseService },
+                { provide: EmailService, useValue: mockEmailService },
             ],
-        }).compile();
-
-        app = moduleFixture.createNestApplication();
-        await app.init();
-
-        authService = moduleFixture.get<AuthService>(AuthService);
-        databaseService = moduleFixture.get<DatabaseService>(DatabaseService);
+        });
+        httpServer = app.getHttpServer() as Server;
     });
 
     afterAll(async () => {
         await dbHelper.clearDatabase();
         await dbHelper.disconnect();
-        await app.close();
+        await serverHelper.closeApp();
     });
 
     beforeEach(async () => {
@@ -63,93 +50,160 @@ describe('AuthService Integration Tests', () => {
         jest.clearAllMocks();
     });
 
-    describe('getProviders', () => {
+    describe('GET /api/auth/providers', () => {
         it('should return sign-in providers for existing Firebase user', async () => {
             const email = TestDataHelper.generateRandomEmail();
 
-            // Mock Firebase response
-            mockFirebaseService.getAuth().getUserByEmail.mockResolvedValue({
+            mockAuth.getUserByEmail.mockResolvedValueOnce({
                 uid: 'test-uid',
                 email,
                 providerData: [{ providerId: 'password' }, { providerId: 'google.com' }],
-            });
+            } as any);
 
-            const result = await authService.getProviders({ email });
+            const response = await request(httpServer)
+                .get('/api/auth/providers')
+                .query({ email })
+                .expect(200);
 
-            expect(result).toEqual({
+            expect(response.body).toEqual({
                 providers: ['password', 'google.com'],
             });
-            expect(mockFirebaseService.getAuth().getUserByEmail).toHaveBeenCalledWith(email);
+            expect(mockAuth.getUserByEmail).toHaveBeenCalledWith(email);
         });
 
-        it('should throw NotFoundException when Firebase user does not exist', async () => {
+        it('should return empty providers array for user with no providers', async () => {
             const email = TestDataHelper.generateRandomEmail();
 
-            // Mock Firebase user not found error
-            mockFirebaseService
-                .getAuth()
-                .getUserByEmail.mockRejectedValue(FirebaseAuthErrors.userNotFound());
+            mockAuth.getUserByEmail.mockResolvedValueOnce({
+                uid: 'test-uid',
+                email,
+                providerData: [],
+            } as any);
 
-            await expect(authService.getProviders({ email })).rejects.toThrow(NotFoundException);
-            await expect(authService.getProviders({ email })).rejects.toThrow(
-                'No user found for this email',
-            );
+            const response = await request(httpServer)
+                .get('/api/auth/providers')
+                .query({ email })
+                .expect(200);
+
+            expect(response.body).toEqual({
+                providers: [],
+            });
         });
 
-        it('should handle Firebase user with single provider', async () => {
+        it('should return single provider for password-only user', async () => {
             const email = TestDataHelper.generateRandomEmail();
 
-            mockFirebaseService.getAuth().getUserByEmail.mockResolvedValue({
+            mockAuth.getUserByEmail.mockResolvedValueOnce({
                 uid: 'test-uid',
                 email,
                 providerData: [{ providerId: 'password' }],
-            });
+            } as any);
 
-            const result = await authService.getProviders({ email });
+            const response = await request(httpServer)
+                .get('/api/auth/providers')
+                .query({ email })
+                .expect(200);
 
-            expect(result).toEqual({
+            expect(response.body).toEqual({
                 providers: ['password'],
             });
         });
 
-        it('should handle Firebase user with no providers', async () => {
+        it('should throw 404 when Firebase user does not exist', async () => {
             const email = TestDataHelper.generateRandomEmail();
 
-            mockFirebaseService.getAuth().getUserByEmail.mockResolvedValue({
+            mockAuth.getUserByEmail.mockRejectedValueOnce(FirebaseAuthErrors.userNotFound());
+
+            const response = await request(httpServer)
+                .get('/api/auth/providers')
+                .query({ email })
+                .expect(404);
+
+            expect(response.body).toMatchObject({
+                statusCode: 404,
+                message: 'No user found for this email',
+            });
+            expect(response.body).toHaveProperty('timestamp');
+            expect(response.body).toHaveProperty('path');
+        });
+
+        it('should return 400 for invalid email format', async () => {
+            const response = await request(httpServer)
+                .get('/api/auth/providers')
+                .query({ email: 'invalid-email' })
+                .expect(400);
+
+            const body = response.body as ExceptionResponse;
+
+            expect(body.statusCode).toBe(400);
+            expect(body.message).toContain('Invalid email format');
+        });
+
+        it('should return 400 when email query param is missing', async () => {
+            const response = await request(httpServer).get('/api/auth/providers').expect(400);
+
+            const body = response.body as ExceptionResponse;
+
+            expect(body.statusCode).toBe(400);
+        });
+
+        it('should handle multiple providers correctly', async () => {
+            const email = TestDataHelper.generateRandomEmail();
+
+            mockAuth.getUserByEmail.mockResolvedValueOnce({
                 uid: 'test-uid',
                 email,
-                providerData: [],
-            });
+                providerData: [{ providerId: 'password' }, { providerId: 'google.com' }],
+            } as any);
 
-            const result = await authService.getProviders({ email });
+            const response = await request(httpServer)
+                .get('/api/auth/providers')
+                .query({ email })
+                .expect(200);
 
-            expect(result).toEqual({
-                providers: [],
+            expect(response.body).toEqual({
+                providers: ['password', 'google.com'],
             });
+        });
+
+        it('should return proper error response structure', async () => {
+            const email = 'notfound@example.com';
+
+            mockAuth.getUserByEmail.mockRejectedValueOnce(FirebaseAuthErrors.userNotFound());
+
+            const response = await request(httpServer)
+                .get('/api/auth/providers')
+                .query({ email })
+                .expect(404);
+
+            const body = response.body as ExceptionResponse;
+
+            expect(body).toHaveProperty('statusCode', 404);
+            expect(body).toHaveProperty('timestamp');
+            expect(body).toHaveProperty('path');
+            expect(body).toHaveProperty('message');
+            expect(typeof body.timestamp).toBe('string');
+            expect(new Date(body.timestamp)).toBeInstanceOf(Date);
         });
     });
 
-    describe('getOnboardingStatus', () => {
+    describe('GET /api/auth/onboarding-status', () => {
         it('should return needsOnboarding=true when user exists in Firebase but not in database', async () => {
             const email = TestDataHelper.generateRandomEmail();
             const firebaseUid = TestDataHelper.generateFirebaseUid();
 
-            // Mock Firebase response
-            mockFirebaseService.getAuth().getUserByEmail.mockResolvedValue({
+            mockAuth.getUserByEmail.mockResolvedValueOnce({
                 uid: firebaseUid,
                 email,
                 providerData: [{ providerId: 'password' }],
-            });
+            } as any);
 
-            // User does not exist in database (real database check)
-            const dbUser = await databaseService.user.findUnique({
-                where: { firebaseUid },
-            });
-            expect(dbUser).toBeNull();
+            const response = await request(httpServer)
+                .get('/api/auth/onboarding-status')
+                .query({ email })
+                .expect(200);
 
-            const result = await authService.getOnboardingStatus({ email });
-
-            expect(result).toEqual({
+            expect(response.body).toMatchObject({
                 needsOnboarding: true,
                 providers: ['password'],
                 message: 'User exists in Firebase, but no profile found in database',
@@ -160,275 +214,901 @@ describe('AuthService Integration Tests', () => {
             const email = TestDataHelper.generateRandomEmail();
             const firebaseUid = TestDataHelper.generateFirebaseUid();
 
-            // Mock Firebase response
-            mockFirebaseService.getAuth().getUserByEmail.mockResolvedValue({
+            mockAuth.getUserByEmail.mockResolvedValueOnce({
                 uid: firebaseUid,
                 email,
                 providerData: [{ providerId: 'password' }],
-            });
+            } as any);
 
             // Create user in real database
-            await databaseService.user.create({
-                data: {
-                    firebaseUid,
-                    email,
-                    firstName: 'John',
-                    lastName: 'Doe',
-                    address: 'Block 5, Sampaguita St, Brgy Commonwealth, Quezon City',
-                },
+            await dbHelper.seedUser({
+                firebaseUid,
+                email,
+                firstName: 'Test',
+                lastName: 'User',
+                address: 'Test Address',
             });
 
-            const result = await authService.getOnboardingStatus({ email });
+            const response = await request(httpServer)
+                .get('/api/auth/onboarding-status')
+                .query({ email })
+                .expect(200);
 
-            expect(result).toEqual({
+            expect(response.body).toMatchObject({
                 needsOnboarding: false,
                 message: 'User profile exists',
             });
+            expect(response.body).not.toHaveProperty('providers');
         });
 
-        it('should throw BadRequestException when Firebase user has no sign-in methods', async () => {
+        it('should throw 400 when Firebase user has no sign-in methods', async () => {
             const email = TestDataHelper.generateRandomEmail();
             const firebaseUid = TestDataHelper.generateFirebaseUid();
 
-            // Mock Firebase response with no providers
-            mockFirebaseService.getAuth().getUserByEmail.mockResolvedValue({
+            mockAuth.getUserByEmail.mockResolvedValueOnce({
                 uid: firebaseUid,
                 email,
                 providerData: [],
-            });
+            } as any);
 
-            await expect(authService.getOnboardingStatus({ email })).rejects.toThrow(
-                BadRequestException,
-            );
-            await expect(authService.getOnboardingStatus({ email })).rejects.toThrow(
-                'No sign-in methods found for this user',
-            );
+            const response = await request(httpServer)
+                .get('/api/auth/onboarding-status')
+                .query({ email })
+                .expect(400);
+
+            expect(response.body).toMatchObject({
+                statusCode: 400,
+                message: 'No sign-in methods found for this user',
+            });
         });
 
-        it('should throw NotFoundException when Firebase user does not exist', async () => {
+        it('should throw 404 when Firebase user does not exist', async () => {
             const email = TestDataHelper.generateRandomEmail();
 
-            // Mock Firebase user not found error
-            mockFirebaseService
-                .getAuth()
-                .getUserByEmail.mockRejectedValue(FirebaseAuthErrors.userNotFound());
+            mockAuth.getUserByEmail.mockRejectedValueOnce(FirebaseAuthErrors.userNotFound());
 
-            await expect(authService.getOnboardingStatus({ email })).rejects.toThrow(
-                NotFoundException,
-            );
+            const response = await request(httpServer)
+                .get('/api/auth/onboarding-status')
+                .query({ email })
+                .expect(404);
+
+            expect(response.body).toMatchObject({
+                statusCode: 404,
+                message: 'No user found for this email',
+            });
         });
 
-        it('should work with user created with different address format', async () => {
+        it('should return 400 for invalid email format', async () => {
+            const response = await request(httpServer)
+                .get('/api/auth/onboarding-status')
+                .query({ email: 'not-an-email' })
+                .expect(400);
+
+            const body = response.body as ExceptionResponse;
+
+            expect(body.statusCode).toBe(400);
+            expect(body.message).toContain('Invalid email format');
+        });
+
+        it('should include providers array when needsOnboarding is true', async () => {
             const email = TestDataHelper.generateRandomEmail();
             const firebaseUid = TestDataHelper.generateFirebaseUid();
-            const userData = TestDataHelper.generateUserData();
 
-            // Mock Firebase response
-            mockFirebaseService.getAuth().getUserByEmail.mockResolvedValue({
+            mockAuth.getUserByEmail.mockResolvedValueOnce({
                 uid: firebaseUid,
                 email,
-                providerData: [{ providerId: 'google.com' }],
+                providerData: [{ providerId: 'password' }, { providerId: 'google.com' }],
+            } as any);
+
+            const response = await request(httpServer)
+                .get('/api/auth/onboarding-status')
+                .query({ email })
+                .expect(200);
+
+            expect(response.body).toEqual({
+                needsOnboarding: true,
+                providers: ['password', 'google.com'],
+                message: 'User exists in Firebase, but no profile found in database',
+            });
+        });
+
+        it('should handle database integration correctly', async () => {
+            const email = TestDataHelper.generateRandomEmail();
+            const firebaseUid = TestDataHelper.generateFirebaseUid();
+
+            mockAuth.getUserByEmail.mockResolvedValue({
+                uid: firebaseUid,
+                email,
+                providerData: [{ providerId: 'password' }],
+            } as any);
+
+            // First check - user not in database
+            const response1 = await request(httpServer)
+                .get('/api/auth/onboarding-status')
+                .query({ email })
+                .expect(200);
+
+            expect(response1.body).toMatchObject({
+                needsOnboarding: true,
             });
 
-            // Create user with generated data
-            await databaseService.user.create({
-                data: {
-                    firebaseUid,
-                    email,
-                    firstName: userData.firstName,
-                    lastName: userData.lastName,
-                    address: `${userData.block}, ${userData.street}, ${userData.barangay}, ${userData.city}`,
-                },
+            // Create user in database
+            await dbHelper.seedUser({
+                firebaseUid,
+                email,
+                firstName: 'Test',
+                lastName: 'User',
+                address: 'Test Address',
             });
 
-            const result = await authService.getOnboardingStatus({ email });
+            // Second check - user now in database
+            const response2 = await request(httpServer)
+                .get('/api/auth/onboarding-status')
+                .query({ email })
+                .expect(200);
 
-            expect(result.needsOnboarding).toBe(false);
+            expect(response2.body).toMatchObject({
+                needsOnboarding: false,
+            });
         });
     });
 
-    describe('resetPassword', () => {
+    describe('POST /api/auth/reset-password', () => {
         it('should reset password successfully for existing Firebase user', async () => {
             const email = TestDataHelper.generateRandomEmail();
             const firebaseUid = TestDataHelper.generateFirebaseUid();
             const newPassword = TestDataHelper.generateStrongPassword();
 
-            // Mock Firebase getUserByEmail
-            mockFirebaseService.getAuth().getUserByEmail.mockResolvedValue({
+            mockAuth.getUserByEmail.mockResolvedValueOnce({
                 uid: firebaseUid,
                 email,
-            });
+            } as any);
 
-            // Mock Firebase updateUser
-            mockFirebaseService.getAuth().updateUser.mockResolvedValue({
+            mockAuth.updateUser.mockResolvedValueOnce({
                 uid: firebaseUid,
                 email,
-            });
+            } as any);
 
-            const result = await authService.resetPassword({ email, newPassword });
+            const response = await request(httpServer)
+                .post('/api/auth/reset-password')
+                .send({ email, newPassword })
+                .expect(200);
 
-            expect(result).toEqual({
+            expect(response.body).toMatchObject({
                 message: 'Password updated successfully',
             });
-            expect(mockFirebaseService.getAuth().updateUser).toHaveBeenCalledWith(firebaseUid, {
+            expect(mockAuth.updateUser).toHaveBeenCalledWith(firebaseUid, {
                 password: newPassword,
             });
         });
 
-        it('should throw NotFoundException when Firebase user does not exist', async () => {
+        it('should throw 404 when Firebase user does not exist', async () => {
             const email = TestDataHelper.generateRandomEmail();
             const newPassword = TestDataHelper.generateStrongPassword();
 
-            // Mock Firebase user not found error
-            mockFirebaseService
-                .getAuth()
-                .getUserByEmail.mockRejectedValue(FirebaseAuthErrors.userNotFound());
+            mockAuth.getUserByEmail.mockRejectedValueOnce(FirebaseAuthErrors.userNotFound());
 
-            await expect(authService.resetPassword({ email, newPassword })).rejects.toThrow(
-                NotFoundException,
-            );
+            const response = await request(httpServer)
+                .post('/api/auth/reset-password')
+                .send({ email, newPassword })
+                .expect(404);
+
+            expect(response.body).toMatchObject({
+                statusCode: 404,
+                message: 'No user found for this email',
+            });
         });
 
-        it('should handle Firebase updateUser failures gracefully', async () => {
+        it('should return 400 for invalid email format', async () => {
+            const response = await request(httpServer)
+                .post('/api/auth/reset-password')
+                .send({
+                    email: 'invalid-email',
+                    newPassword: 'ValidPass123!',
+                })
+                .expect(400);
+
+            const body = response.body as ExceptionResponse;
+
+            expect(body.statusCode).toBe(400);
+            expect(body.message).toContain('Invalid email format');
+        });
+
+        it('should return 400 for weak password', async () => {
+            const response = await request(httpServer)
+                .post('/api/auth/reset-password')
+                .send({
+                    email: 'user@example.com',
+                    newPassword: 'weak',
+                })
+                .expect(400);
+
+            const body = response.body as ExceptionResponse;
+
+            expect(body.statusCode).toBe(400);
+            expect(body.message).toContain('Password must');
+        });
+
+        it('should return 400 for password without uppercase', async () => {
+            const response = await request(httpServer)
+                .post('/api/auth/reset-password')
+                .send({
+                    email: 'user@example.com',
+                    newPassword: 'lowercase123!',
+                })
+                .expect(400);
+
+            const body = response.body as ExceptionResponse;
+
+            expect(body.statusCode).toBe(400);
+            expect(body.message).toContain('uppercase');
+        });
+
+        it('should return 400 for password without lowercase', async () => {
+            const response = await request(httpServer)
+                .post('/api/auth/reset-password')
+                .send({
+                    email: 'user@example.com',
+                    newPassword: 'UPPERCASE123!',
+                })
+                .expect(400);
+
+            const body = response.body as ExceptionResponse;
+
+            expect(body.statusCode).toBe(400);
+            expect(body.message).toContain('lowercase');
+        });
+
+        it('should return 400 for password without digit', async () => {
+            const response = await request(httpServer)
+                .post('/api/auth/reset-password')
+                .send({
+                    email: 'user@example.com',
+                    newPassword: 'NoDigits!',
+                })
+                .expect(400);
+
+            const body = response.body as ExceptionResponse;
+
+            expect(body.statusCode).toBe(400);
+            expect(body.message).toContain('digit');
+        });
+
+        it('should return 400 for password without symbol', async () => {
+            const response = await request(httpServer)
+                .post('/api/auth/reset-password')
+                .send({
+                    email: 'user@example.com',
+                    newPassword: 'NoSymbols123',
+                })
+                .expect(400);
+
+            const body = response.body as ExceptionResponse;
+
+            expect(body.statusCode).toBe(400);
+            expect(body.message).toContain('symbol');
+        });
+
+        it('should return 400 for password less than 8 characters', async () => {
+            const response = await request(httpServer)
+                .post('/api/auth/reset-password')
+                .send({
+                    email: 'user@example.com',
+                    newPassword: 'Short1!',
+                })
+                .expect(400);
+
+            const body = response.body as ExceptionResponse;
+
+            expect(body.statusCode).toBe(400);
+            expect(body.message).toContain('at least 8 characters');
+        });
+
+        it('should return 400 when email is missing', async () => {
+            const response = await request(httpServer)
+                .post('/api/auth/reset-password')
+                .send({
+                    newPassword: 'ValidPass123!',
+                })
+                .expect(400);
+
+            const body = response.body as ExceptionResponse;
+
+            expect(body.statusCode).toBe(400);
+        });
+
+        it('should return 400 when newPassword is missing', async () => {
+            const response = await request(httpServer)
+                .post('/api/auth/reset-password')
+                .send({
+                    email: 'user@example.com',
+                })
+                .expect(400);
+
+            const body = response.body as ExceptionResponse;
+
+            expect(body.statusCode).toBe(400);
+        });
+
+        it('should return 400 for extra fields (forbidNonWhitelisted)', async () => {
+            const response = await request(httpServer)
+                .post('/api/auth/reset-password')
+                .send({
+                    email: 'user@example.com',
+                    newPassword: 'ValidPass123!',
+                    extraField: 'should-not-be-here',
+                })
+                .expect(400);
+
+            const body = response.body as ExceptionResponse;
+
+            expect(body.statusCode).toBe(400);
+        });
+
+        it('should accept valid password with all requirements', async () => {
+            const validPasswords = ['ValidPass1!', 'Secure@123', 'MyP@ssw0rd', 'C0mpl3x!Pass'];
+            const email = 'user@example.com';
+            const firebaseUid = TestDataHelper.generateFirebaseUid();
+
+            for (const password of validPasswords) {
+                mockAuth.getUserByEmail.mockResolvedValueOnce({
+                    uid: firebaseUid,
+                    email,
+                } as any);
+
+                mockAuth.updateUser.mockResolvedValueOnce({
+                    uid: firebaseUid,
+                    email,
+                } as any);
+
+                await request(httpServer)
+                    .post('/api/auth/reset-password')
+                    .send({
+                        email,
+                        newPassword: password,
+                    })
+                    .expect(200);
+            }
+        });
+
+        it('should handle multiple password resets for same user', async () => {
+            const email = TestDataHelper.generateRandomEmail();
+            const firebaseUid = TestDataHelper.generateFirebaseUid();
+
+            mockAuth.getUserByEmail.mockResolvedValue({
+                uid: firebaseUid,
+                email,
+            } as any);
+
+            mockAuth.updateUser.mockResolvedValue({
+                uid: firebaseUid,
+                email,
+            } as any);
+
+            // Reset password multiple times
+            for (let i = 0; i < 3; i++) {
+                const newPassword = TestDataHelper.generateStrongPassword();
+
+                await request(httpServer)
+                    .post('/api/auth/reset-password')
+                    .send({ email, newPassword })
+                    .expect(200);
+            }
+
+            expect(mockAuth.updateUser).toHaveBeenCalledTimes(3);
+        });
+
+        it('should handle Firebase updateUser failures', async () => {
             const email = TestDataHelper.generateRandomEmail();
             const firebaseUid = TestDataHelper.generateFirebaseUid();
             const newPassword = TestDataHelper.generateStrongPassword();
 
-            // Mock Firebase getUserByEmail success
-            mockFirebaseService.getAuth().getUserByEmail.mockResolvedValue({
+            mockAuth.getUserByEmail.mockResolvedValueOnce({
                 uid: firebaseUid,
                 email,
-            });
+            } as any);
 
-            // Mock Firebase updateUser failure
-            mockFirebaseService
-                .getAuth()
-                .updateUser.mockRejectedValue(new Error('Firebase update failed'));
+            mockAuth.updateUser.mockRejectedValueOnce(new Error('Firebase update failed'));
 
-            await expect(authService.resetPassword({ email, newPassword })).rejects.toThrow(
-                'Failed to reset password',
-            );
-        });
+            const response = await request(httpServer)
+                .post('/api/auth/reset-password')
+                .send({ email, newPassword })
+                .expect(500);
 
-        it('should work with multiple password resets for same user', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-            const firebaseUid = TestDataHelper.generateFirebaseUid();
+            const body = response.body as ExceptionResponse;
 
-            // Mock Firebase responses
-            mockFirebaseService.getAuth().getUserByEmail.mockResolvedValue({
-                uid: firebaseUid,
-                email,
-            });
-            mockFirebaseService.getAuth().updateUser.mockResolvedValue({
-                uid: firebaseUid,
-                email,
-            });
-
-            // First password reset
-            const password1 = TestDataHelper.generateStrongPassword();
-            const result1 = await authService.resetPassword({ email, newPassword: password1 });
-            expect(result1.message).toBe('Password updated successfully');
-
-            // Second password reset
-            const password2 = TestDataHelper.generateStrongPassword();
-            const result2 = await authService.resetPassword({ email, newPassword: password2 });
-            expect(result2.message).toBe('Password updated successfully');
-
-            // Verify updateUser was called twice
-            expect(mockFirebaseService.getAuth().updateUser).toHaveBeenCalledTimes(2);
+            expect(body.message).toContain('Failed to reset password');
         });
     });
 
-    describe('database integration', () => {
-        it('should query real database for user existence', async () => {
+    describe('POST /api/auth/otp/registration', () => {
+        it('should send registration OTP successfully', async () => {
             const email = TestDataHelper.generateRandomEmail();
-            const firebaseUid = TestDataHelper.generateFirebaseUid();
 
-            // Mock Firebase response
-            mockFirebaseService.getAuth().getUserByEmail.mockResolvedValue({
-                uid: firebaseUid,
-                email,
-                providerData: [{ providerId: 'password' }],
+            mockEmailService.sendRegistrationOtp.mockResolvedValueOnce([
+                { statusCode: 200 },
+                {},
+            ] as any);
+
+            const response = await request(httpServer)
+                .post('/api/auth/otp/registration')
+                .send({ email })
+                .expect(200);
+
+            expect(response.body).toMatchObject({
+                message: 'Registration OTP sent successfully. Please check your email.',
             });
-
-            // Initially user should not exist
-            const result1 = await authService.getOnboardingStatus({ email });
-            expect(result1.needsOnboarding).toBe(true);
-
-            // Create user in real database
-            await databaseService.user.create({
-                data: {
-                    firebaseUid,
-                    email,
-                    firstName: 'Test',
-                    lastName: 'User',
-                    address: 'Test Address',
-                },
-            });
-
-            // Now user should exist
-            const result2 = await authService.getOnboardingStatus({ email });
-            expect(result2.needsOnboarding).toBe(false);
+            expect(mockEmailService.sendRegistrationOtp).toHaveBeenCalled();
         });
 
-        it('should handle concurrent database operations correctly', async () => {
-            const users = Array.from({ length: 5 }, () => ({
-                email: TestDataHelper.generateRandomEmail(),
-                firebaseUid: TestDataHelper.generateFirebaseUid(),
-            }));
+        it('should return 400 for invalid email format', async () => {
+            const response = await request(httpServer)
+                .post('/api/auth/otp/registration')
+                .send({ email: 'not-an-email' })
+                .expect(400);
 
-            // Mock Firebase responses for all users
-            users.forEach((user) => {
-                mockFirebaseService.getAuth().getUserByEmail.mockResolvedValueOnce({
-                    uid: user.firebaseUid,
-                    email: user.email,
-                    providerData: [{ providerId: 'password' }],
-                });
+            const body = response.body as ExceptionResponse;
+
+            expect(body.statusCode).toBe(400);
+            expect(body.message).toContain('Invalid email format');
+        });
+
+        it('should return 400 when email is missing', async () => {
+            const response = await request(httpServer)
+                .post('/api/auth/otp/registration')
+                .send({})
+                .expect(400);
+
+            const body = response.body as ExceptionResponse;
+
+            expect(body.statusCode).toBe(400);
+        });
+
+        it('should return 400 for extra fields', async () => {
+            const response = await request(httpServer)
+                .post('/api/auth/otp/registration')
+                .send({
+                    email: 'test@example.com',
+                    extraField: 'should-not-be-here',
+                })
+                .expect(400);
+
+            const body = response.body as ExceptionResponse;
+
+            expect(body.statusCode).toBe(400);
+        });
+
+        it('should allow sending OTP to multiple different emails', async () => {
+            const emails = Array.from({ length: 3 }, () => TestDataHelper.generateRandomEmail());
+
+            mockEmailService.sendRegistrationOtp.mockResolvedValue([
+                { statusCode: 202 },
+                {},
+            ] as any);
+
+            for (const email of emails) {
+                await request(httpServer)
+                    .post('/api/auth/otp/registration')
+                    .send({ email })
+                    .expect(200);
+            }
+
+            expect(mockEmailService.sendRegistrationOtp).toHaveBeenCalledTimes(3);
+        });
+
+        it('should allow resending OTP to same email', async () => {
+            const email = TestDataHelper.generateRandomEmail();
+
+            mockEmailService.sendRegistrationOtp.mockResolvedValue([
+                { statusCode: 202 },
+                {},
+            ] as any);
+
+            // Send first OTP
+            await request(httpServer)
+                .post('/api/auth/otp/registration')
+                .send({ email })
+                .expect(200);
+
+            // Resend OTP
+            await request(httpServer)
+                .post('/api/auth/otp/registration')
+                .send({ email })
+                .expect(200);
+
+            expect(mockEmailService.sendRegistrationOtp).toHaveBeenCalledTimes(2);
+        });
+
+        it('should handle SendGrid failures', async () => {
+            const email = TestDataHelper.generateRandomEmail();
+
+            mockEmailService.sendRegistrationOtp.mockRejectedValueOnce(new Error('SendGrid error'));
+
+            const response = await request(httpServer)
+                .post('/api/auth/otp/registration')
+                .send({ email })
+                .expect(500);
+
+            const body = response.body as ExceptionResponse;
+
+            expect(body.message).toContain('Failed to send registration OTP email');
+        });
+
+        it('should handle various valid email formats', async () => {
+            const validEmails = [
+                'user@example.com',
+                'user.name@example.com',
+                'user+tag@example.co.uk',
+                'user_name@sub.example.com',
+            ];
+
+            mockEmailService.sendRegistrationOtp.mockResolvedValue([
+                { statusCode: 202 },
+                {},
+            ] as any);
+
+            for (const email of validEmails) {
+                await request(httpServer)
+                    .post('/api/auth/otp/registration')
+                    .send({ email })
+                    .expect(200);
+            }
+        });
+    });
+
+    describe('POST /api/auth/otp/forgot-password', () => {
+        it('should send forgot password OTP successfully', async () => {
+            const email = TestDataHelper.generateRandomEmail();
+
+            mockEmailService.sendForgotPasswordOtp.mockResolvedValueOnce([
+                { statusCode: 202 },
+                {},
+            ] as any);
+
+            const response = await request(httpServer)
+                .post('/api/auth/otp/forgot-password')
+                .send({ email })
+                .expect(200);
+
+            expect(response.body).toMatchObject({
+                message: 'Password reset OTP sent successfully. Please check your email.',
             });
+            expect(mockEmailService.sendForgotPasswordOtp).toHaveBeenCalled();
+        });
 
-            // Check onboarding status for all users concurrently
-            const results = await Promise.all(
-                users.map((user) => authService.getOnboardingStatus({ email: user.email })),
+        it('should return 400 for invalid email format', async () => {
+            const response = await request(httpServer)
+                .post('/api/auth/otp/forgot-password')
+                .send({ email: 'invalid-email' })
+                .expect(400);
+
+            const body = response.body as ExceptionResponse;
+
+            expect(body.statusCode).toBe(400);
+            expect(body.message).toContain('Invalid email format');
+        });
+
+        it('should return 400 when email is missing', async () => {
+            const response = await request(httpServer)
+                .post('/api/auth/otp/forgot-password')
+                .send({})
+                .expect(400);
+
+            const body = response.body as ExceptionResponse;
+
+            expect(body.statusCode).toBe(400);
+        });
+
+        it('should handle multiple forgot password requests', async () => {
+            const email = TestDataHelper.generateRandomEmail();
+
+            mockEmailService.sendForgotPasswordOtp.mockResolvedValue([
+                { statusCode: 202 },
+                {},
+            ] as any);
+
+            for (let i = 0; i < 3; i++) {
+                await request(httpServer)
+                    .post('/api/auth/otp/forgot-password')
+                    .send({ email })
+                    .expect(200);
+            }
+
+            expect(mockEmailService.sendForgotPasswordOtp).toHaveBeenCalledTimes(3);
+        });
+
+        it('should handle SendGrid failures', async () => {
+            const email = TestDataHelper.generateRandomEmail();
+
+            mockEmailService.sendForgotPasswordOtp.mockRejectedValueOnce(
+                new Error('SendGrid error'),
             );
 
-            // All should need onboarding (not in database)
-            results.forEach((result) => {
-                expect(result.needsOnboarding).toBe(true);
-            });
+            const response = await request(httpServer)
+                .post('/api/auth/otp/forgot-password')
+                .send({ email })
+                .expect(500);
+
+            const body = response.body as ExceptionResponse;
+
+            expect(body.message).toContain('Failed to send password reset OTP email');
+        });
+    });
+
+    describe('POST /api/auth/otp/verify', () => {
+        it('should return 400 for invalid OTP code format', async () => {
+            const response = await request(httpServer)
+                .post('/api/auth/otp/verify')
+                .send({
+                    email: 'test@example.com',
+                    code: '123', // Too short
+                    purpose: 'registration',
+                })
+                .expect(400);
+
+            const body = response.body as ExceptionResponse;
+
+            expect(body.statusCode).toBe(400);
+            expect(body.message).toContain('5 digits');
         });
 
-        it('should maintain data consistency across operations', async () => {
+        it('should return 400 for invalid purpose', async () => {
+            const response = await request(httpServer)
+                .post('/api/auth/otp/verify')
+                .send({
+                    email: 'test@example.com',
+                    code: '12345',
+                    purpose: 'invalid-purpose',
+                })
+                .expect(400);
+
+            const body = response.body as ExceptionResponse;
+
+            expect(body.statusCode).toBe(400);
+        });
+
+        it('should return 400 when email is missing', async () => {
+            const response = await request(httpServer)
+                .post('/api/auth/otp/verify')
+                .send({
+                    code: '12345',
+                    purpose: 'registration',
+                })
+                .expect(400);
+
+            const body = response.body as ExceptionResponse;
+
+            expect(body.statusCode).toBe(400);
+        });
+
+        it('should return 400 when code is missing', async () => {
+            const response = await request(httpServer)
+                .post('/api/auth/otp/verify')
+                .send({
+                    email: 'test@example.com',
+                    purpose: 'registration',
+                })
+                .expect(400);
+
+            const body = response.body as ExceptionResponse;
+
+            expect(body.statusCode).toBe(400);
+        });
+
+        it('should return 400 when purpose is missing', async () => {
+            const response = await request(httpServer)
+                .post('/api/auth/otp/verify')
+                .send({
+                    email: 'test@example.com',
+                    code: '12345',
+                })
+                .expect(400);
+
+            const body = response.body as ExceptionResponse;
+
+            expect(body.statusCode).toBe(400);
+        });
+
+        it('should return 400 for non-existent OTP', async () => {
             const email = TestDataHelper.generateRandomEmail();
-            const firebaseUid = TestDataHelper.generateFirebaseUid();
 
-            // Mock Firebase response
-            mockFirebaseService.getAuth().getUserByEmail.mockResolvedValue({
-                uid: firebaseUid,
-                email,
-                providerData: [{ providerId: 'password' }],
-            });
-
-            // Create user
-            await databaseService.user.create({
-                data: {
-                    firebaseUid,
+            const response = await request(httpServer)
+                .post('/api/auth/otp/verify')
+                .send({
                     email,
-                    firstName: 'Consistency',
-                    lastName: 'Test',
-                    address: 'Test Address',
+                    code: '12345',
+                    purpose: 'registration',
+                })
+                .expect(400);
+
+            const body = response.body as ExceptionResponse;
+
+            expect(body.message).toContain('No OTP found');
+        });
+
+        it('should validate OTP code is exactly 5 digits', async () => {
+            const invalidCodes = ['1234', '123456', 'abcde', '12.45', '12 45'];
+
+            for (const code of invalidCodes) {
+                await request(httpServer)
+                    .post('/api/auth/otp/verify')
+                    .send({
+                        email: 'test@example.com',
+                        code,
+                        purpose: 'registration',
+                    })
+                    .expect(400);
+            }
+        });
+
+        it('should reject OTP code with letters', async () => {
+            await request(httpServer)
+                .post('/api/auth/otp/verify')
+                .send({
+                    email: 'test@example.com',
+                    code: 'ABCDE',
+                    purpose: 'registration',
+                })
+                .expect(400);
+        });
+
+        it('should reject OTP code with special characters', async () => {
+            await request(httpServer)
+                .post('/api/auth/otp/verify')
+                .send({
+                    email: 'test@example.com',
+                    code: '12!45',
+                    purpose: 'registration',
+                })
+                .expect(400);
+        });
+    });
+
+    describe('Error Response Consistency', () => {
+        it('should return consistent error format for all endpoints', async () => {
+            mockAuth.getUserByEmail.mockRejectedValue(FirebaseAuthErrors.userNotFound());
+
+            const endpoints = [
+                {
+                    method: 'get' as const,
+                    path: '/api/auth/providers',
+                    query: { email: 'notfound@example.com' },
                 },
-            });
+                {
+                    method: 'get' as const,
+                    path: '/api/auth/onboarding-status',
+                    query: { email: 'notfound@example.com' },
+                },
+                {
+                    method: 'post' as const,
+                    path: '/api/auth/reset-password',
+                    body: { email: 'notfound@example.com', newPassword: 'ValidPass123!' },
+                },
+            ];
+            for (const endpoint of endpoints) {
+                let requestBuilder = request(httpServer)[endpoint.method](endpoint.path);
 
-            // Verify user exists
-            const dbUser = await databaseService.user.findUnique({
-                where: { firebaseUid },
-            });
-            expect(dbUser).not.toBeNull();
-            expect(dbUser?.email).toBe(email);
+                if ('query' in endpoint && endpoint.query) {
+                    requestBuilder = requestBuilder.query(endpoint.query);
+                }
 
-            // Verify onboarding status reflects database state
-            const status = await authService.getOnboardingStatus({ email });
-            expect(status.needsOnboarding).toBe(false);
+                if ('body' in endpoint && endpoint.body) {
+                    requestBuilder = requestBuilder.send(endpoint.body);
+                }
+
+                const response = await requestBuilder;
+
+                const body = response.body as ExceptionResponse;
+
+                if (response.status >= 400) {
+                    expect(body).toHaveProperty('statusCode');
+                    expect(body).toHaveProperty('timestamp');
+                    expect(body).toHaveProperty('path');
+                    expect(body).toHaveProperty('message');
+                    expect(typeof body.timestamp).toBe('string');
+                }
+            }
+        });
+
+        it('should include correct HTTP status codes in error responses', async () => {
+            // 400 - Validation error
+            const badRequest = await request(httpServer)
+                .get('/api/auth/providers')
+                .query({ email: 'invalid-email' })
+                .expect(400);
+
+            const badRequestBody = badRequest.body as ExceptionResponse;
+
+            expect(badRequestBody.statusCode).toBe(400);
+
+            // 404 - Not found
+            mockAuth.getUserByEmail.mockRejectedValueOnce(FirebaseAuthErrors.userNotFound());
+
+            const notFound = await request(httpServer)
+                .get('/api/auth/providers')
+                .query({ email: TestDataHelper.generateRandomEmail() })
+                .expect(404);
+
+            const notFoundBody = notFound.body as ExceptionResponse;
+
+            expect(notFoundBody.statusCode).toBe(404);
+        });
+
+        it('should include request path in error responses', async () => {
+            const response = await request(httpServer)
+                .get('/api/auth/providers')
+                .query({ email: 'invalid-email' })
+                .expect(400);
+
+            const body = response.body as ExceptionResponse;
+
+            expect(body.path).toContain('/api/auth/providers');
+        });
+
+        it('should include ISO timestamp in error responses', async () => {
+            const response = await request(httpServer)
+                .get('/api/auth/providers')
+                .query({ email: 'invalid-email' })
+                .expect(400);
+
+            const body = response.body as ExceptionResponse;
+
+            const timestamp = new Date(body.timestamp);
+            expect(timestamp).toBeInstanceOf(Date);
+            expect(timestamp.toString()).not.toBe('Invalid Date');
+        });
+    });
+
+    describe('CORS and Headers', () => {
+        it('should include CORS headers', async () => {
+            mockAuth.getUserByEmail.mockRejectedValueOnce(FirebaseAuthErrors.userNotFound());
+
+            const response = await request(httpServer)
+                .get('/api/auth/providers')
+                .query({ email: 'test@example.com' });
+
+            expect(response.headers).toHaveProperty('access-control-allow-origin');
+        });
+
+        it('should accept JSON content type', async () => {
+            mockAuth.getUserByEmail.mockRejectedValueOnce(FirebaseAuthErrors.userNotFound());
+
+            await request(httpServer)
+                .post('/api/auth/reset-password')
+                .set('Content-Type', 'application/json')
+                .send({
+                    email: 'test@example.com',
+                    newPassword: 'ValidPass123!',
+                })
+                .expect(404);
+        });
+
+        it('should return JSON responses', async () => {
+            mockAuth.getUserByEmail.mockRejectedValueOnce(FirebaseAuthErrors.userNotFound());
+
+            const response = await request(httpServer)
+                .get('/api/auth/providers')
+                .query({ email: 'test@example.com' });
+
+            expect(response.headers['content-type']).toMatch(/json/);
+        });
+    });
+
+    describe('API Prefix', () => {
+        it('should be accessible with /api prefix', async () => {
+            mockAuth.getUserByEmail.mockRejectedValueOnce(FirebaseAuthErrors.userNotFound());
+
+            await request(httpServer)
+                .get('/api/auth/providers')
+                .query({ email: 'test@example.com' })
+                .expect(404);
+        });
+
+        it('should return 404 without /api prefix', async () => {
+            await request(httpServer)
+                .get('/auth/providers')
+                .query({ email: 'test@example.com' })
+                .expect(404);
         });
     });
 });

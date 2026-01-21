@@ -133,6 +133,7 @@ export class UsersService {
 
             const userInfo: UserInfo = {
                 id: user.id,
+                firebaseUid: user.firebaseUid,
                 firstName: user.firstName,
                 middleName: user.middleName,
                 lastName: user.lastName,
@@ -143,6 +144,8 @@ export class UsersService {
                 street: addressParts[1] || '',
                 barangay: addressParts[2] || '',
                 city: addressParts[3] || '',
+                createdAt: user.createdAt,
+                updatedAt: user.updatedAt,
             };
 
             this.logger.log(`User info fetched: ${user.email}`, 'UsersService');
@@ -184,6 +187,7 @@ export class UsersService {
 
             const userInfo: UserInfo = {
                 id: user.id,
+                firebaseUid: user.firebaseUid,
                 firstName: user.firstName,
                 middleName: user.middleName,
                 lastName: user.lastName,
@@ -194,6 +198,8 @@ export class UsersService {
                 street: addressParts[1] || '',
                 barangay: addressParts[2] || '',
                 city: addressParts[3] || '',
+                createdAt: user.createdAt,
+                updatedAt: user.updatedAt,
             };
 
             this.logger.log(`User info fetched by Firebase UID: ${user.email}`, 'UsersService');

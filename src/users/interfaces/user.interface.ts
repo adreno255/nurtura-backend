@@ -13,6 +13,7 @@ export interface User {
 
 export interface UserInfo {
     id: string;
+    firebaseUid: string;
     firstName: string;
     middleName: string | null;
     lastName: string;
@@ -23,6 +24,8 @@ export interface UserInfo {
     street: string;
     barangay: string;
     city: string;
+    createdAt: Date;
+    updatedAt: Date;
 }
 
 export interface EmailAvailabilityResponse {

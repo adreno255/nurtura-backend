@@ -1,100 +1,122 @@
-import { Test, type TestingModule } from '@nestjs/testing';
-import { type INestApplication, NotFoundException, ConflictException } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { UsersService } from '../../../src/users/users.service';
-import { DatabaseService } from '../../../src/database/database.service';
+import { type INestApplication } from '@nestjs/common';
+import request from 'supertest';
+import { TestDatabaseHelper, TestDataHelper, TestServerHelper } from '../../helpers';
+import {
+    createMockFirebaseAuth,
+    createMockFirebaseService,
+    createMockDecodedToken,
+    FirebaseAuthErrors,
+} from '../../mocks';
 import { FirebaseService } from '../../../src/firebase/firebase.service';
-import { MyLoggerService } from '../../../src/my-logger/my-logger.service';
-import { TestDatabaseHelper, TestDataHelper } from '../../helpers';
-import { createMockFirebaseService, FirebaseAuthErrors } from '../../mocks/firebase.mock';
-import { envValidationSchema } from '../../../src/config/env.validation';
 import type { CreateUserDto } from '../../../src/users/dto/create-user.dto';
+import { type Server } from 'http';
+import { type ExceptionResponse } from '../../../src/common/interfaces';
+import {
+    type UserCreatedResponse,
+    type UserInfoResponse,
+} from '../../../src/users/interfaces/user.interface';
 
-describe('UsersService Integration Tests', () => {
+describe('Users Integration Tests (HTTP Endpoints)', () => {
     let app: INestApplication;
-    let usersService: UsersService;
-    let databaseService: DatabaseService;
     let dbHelper: TestDatabaseHelper;
+    let serverHelper: TestServerHelper;
+    let httpServer: Server;
+    let mockFirebaseJWT: ReturnType<typeof createMockDecodedToken>;
 
-    // Mock Firebase (external service)
-    const mockFirebaseService = createMockFirebaseService();
+    const mockAuth = createMockFirebaseAuth();
+    const mockFirebaseService = createMockFirebaseService(mockAuth);
+
+    // Valid auth token for authenticated requests
+    const validAuthToken = 'valid-firebase-jwt-token';
 
     beforeAll(async () => {
         // Initialize database helper
         dbHelper = new TestDatabaseHelper();
         await dbHelper.connect();
 
-        // Create testing module with real database but mocked Firebase
-        const moduleFixture: TestingModule = await Test.createTestingModule({
-            imports: [
-                ConfigModule.forRoot({
-                    isGlobal: true,
-                    envFilePath: '.env.test',
-                    validationSchema: envValidationSchema,
-                }),
-            ],
-            providers: [
-                UsersService,
-                DatabaseService,
-                MyLoggerService,
-                {
-                    provide: FirebaseService,
-                    useValue: mockFirebaseService,
-                },
-            ],
-        }).compile();
+        // Create initial mock Firebase JWT
+        mockFirebaseJWT = createMockDecodedToken();
 
-        app = moduleFixture.createNestApplication();
-        await app.init();
-
-        usersService = moduleFixture.get<UsersService>(UsersService);
-        databaseService = moduleFixture.get<DatabaseService>(DatabaseService);
+        // Create NestJS testing module with mocked external services
+        serverHelper = new TestServerHelper();
+        app = await serverHelper.createTestApp({
+            providers: [{ provide: FirebaseService, useValue: mockFirebaseService }],
+        });
+        httpServer = app.getHttpServer() as Server;
     });
 
     afterAll(async () => {
         await dbHelper.clearDatabase();
         await dbHelper.disconnect();
-        await app.close();
+        await serverHelper.closeApp();
     });
 
     beforeEach(async () => {
         // Clean database before each test
         await dbHelper.clearDatabase();
         jest.clearAllMocks();
+
+        // Reset mock Firebase JWT
+        mockFirebaseJWT = createMockDecodedToken();
     });
 
-    describe('checkEmailAvailability', () => {
-        it('should return available=false when email exists in Firebase', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-
-            // Mock Firebase user exists
-            mockFirebaseService.getAuth().getUserByEmail.mockResolvedValue({
-                uid: TestDataHelper.generateFirebaseUid(),
-                email,
-            });
-
-            const result = await usersService.checkEmailAvailability({ email });
-
-            expect(result).toEqual({
-                available: false,
-                message: 'Email is already registered',
-            });
-            expect(mockFirebaseService.getAuth().getUserByEmail).toHaveBeenCalledWith(email);
-        });
-
+    describe('GET /api/users?email= (Check Email Availability)', () => {
         it('should return available=true when email not found in Firebase', async () => {
             const email = TestDataHelper.generateRandomEmail();
 
-            // Mock Firebase user not found error
+            // Mock Firebase getUserByEmail to throw user-not-found error
             mockFirebaseService
                 .getAuth()
                 .getUserByEmail.mockRejectedValue(FirebaseAuthErrors.userNotFound());
 
-            const result = await usersService.checkEmailAvailability({ email });
+            const response = await request(httpServer)
+                .get('/api/users')
+                .query({ email })
+                .expect(200);
 
-            expect(result).toEqual({
+            expect(response.body).toEqual({
                 available: true,
                 message: 'Email is available',
+            });
+        });
+
+        it('should return available=false when email exists in Firebase', async () => {
+            const email = TestDataHelper.generateRandomEmail();
+
+            // Mock Firebase getUserByEmail to return user
+            mockFirebaseService.getAuth().getUserByEmail.mockResolvedValue({
+                uid: TestDataHelper.generateFirebaseUid(),
+                email,
+            } as any);
+
+            const response = await request(httpServer)
+                .get('/api/users')
+                .query({ email })
+                .expect(200);
+
+            expect(response.body).toEqual({
+                available: false,
+                message: 'Email is already registered',
+            });
+        });
+
+        it('should validate email format', async () => {
+            const response = await request(httpServer)
+                .get('/api/users')
+                .query({ email: 'invalid-email' })
+                .expect(400);
+
+            expect(response.body).toMatchObject({
+                statusCode: 400,
+                message: 'Invalid email format',
+            });
+        });
+
+        it('should require email query parameter', async () => {
+            const response = await request(httpServer).get('/api/users').expect(400);
+
+            expect(response.body).toMatchObject({
+                statusCode: 400,
             });
         });
 
@@ -106,619 +128,148 @@ describe('UsersService Integration Tests', () => {
             mockFirebaseService.getAuth().getUserByEmail.mockResolvedValueOnce({
                 uid: TestDataHelper.generateFirebaseUid(),
                 email: email1,
-            });
+            } as any);
 
             // Email2 does not exist
             mockFirebaseService
                 .getAuth()
                 .getUserByEmail.mockRejectedValueOnce(FirebaseAuthErrors.userNotFound());
 
-            const result1 = await usersService.checkEmailAvailability({ email: email1 });
-            const result2 = await usersService.checkEmailAvailability({ email: email2 });
+            const response1 = await request(httpServer)
+                .get('/api/users')
+                .query({ email: email1 })
+                .expect(200);
 
-            expect(result1.available).toBe(false);
-            expect(result2.available).toBe(true);
+            const response2 = await request(httpServer)
+                .get('/api/users')
+                .query({ email: email2 })
+                .expect(200);
+
+            expect(response1.body).toMatchObject({
+                available: false,
+            });
+            expect(response2.body).toMatchObject({
+                available: true,
+            });
         });
 
         it('should handle concurrent email availability checks', async () => {
             const emails = Array.from({ length: 5 }, () => TestDataHelper.generateRandomEmail());
 
-            // Mock all emails as not found
             emails.forEach(() => {
                 mockFirebaseService
                     .getAuth()
                     .getUserByEmail.mockRejectedValueOnce(FirebaseAuthErrors.userNotFound());
             });
 
-            const results = await Promise.all(
-                emails.map((email) => usersService.checkEmailAvailability({ email })),
+            const responses = await Promise.all(
+                emails.map((email) => request(httpServer).get('/api/users').query({ email })),
             );
 
-            results.forEach((result) => {
-                expect(result.available).toBe(true);
+            responses.forEach((response) => {
+                expect(response.status).toBe(200);
+                expect(response.body).toMatchObject({
+                    available: true,
+                });
+            });
+
+            expect(mockFirebaseService.getAuth().getUserByEmail).toHaveBeenCalledTimes(5);
+        });
+
+        it('should return 500 for Firebase service errors', async () => {
+            const email = TestDataHelper.generateRandomEmail();
+
+            mockFirebaseService
+                .getAuth()
+                .getUserByEmail.mockRejectedValue(new Error('Firebase service unavailable'));
+
+            const response = await request(httpServer)
+                .get('/api/users')
+                .query({ email })
+                .expect(500);
+
+            expect(response.body).toMatchObject({
+                statusCode: 500,
+                message: 'Failed to check email availability',
+            });
+        });
+
+        it('should not require authentication (public endpoint)', async () => {
+            const email = TestDataHelper.generateRandomEmail();
+
+            mockFirebaseService
+                .getAuth()
+                .getUserByEmail.mockRejectedValue(FirebaseAuthErrors.userNotFound());
+
+            // No Authorization header
+            const response = await request(httpServer)
+                .get('/api/users')
+                .query({ email })
+                .expect(200);
+
+            expect(response.body).toMatchObject({
+                available: true,
             });
         });
     });
 
-    describe('create', () => {
-        it('should create user successfully in database', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-            const firebaseUid = TestDataHelper.generateFirebaseUid();
+    describe('POST /api/users (Create User Profile)', () => {
+        it('should require authentication', async () => {
             const userData = TestDataHelper.generateUserData();
 
-            const dto: CreateUserDto = {
-                firstName: userData.firstName,
-                lastName: userData.lastName,
-                block: userData.block,
-                street: userData.street,
-                barangay: userData.barangay,
-                city: userData.city,
-            };
-
-            const result = await usersService.create(firebaseUid, email, dto);
-
-            expect(result).toHaveProperty('message', 'User registered successfully');
-            expect(result).toHaveProperty('userId');
-
-            // Verify user was actually created in database
-            const dbUser = await databaseService.user.findUnique({
-                where: { firebaseUid },
-            });
-
-            expect(dbUser).not.toBeNull();
-            expect(dbUser?.email).toBe(email);
-            expect(dbUser?.firstName).toBe(userData.firstName);
-            expect(dbUser?.lastName).toBe(userData.lastName);
-        });
-
-        it('should format address correctly when creating user', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-            const firebaseUid = TestDataHelper.generateFirebaseUid();
-
-            const dto: CreateUserDto = {
-                firstName: 'John',
-                lastName: 'Doe',
-                block: 'Block 5',
-                street: 'Sampaguita St',
-                barangay: 'Brgy Commonwealth',
-                city: 'Quezon City',
-            };
-
-            await usersService.create(firebaseUid, email, dto);
-
-            const dbUser = await databaseService.user.findUnique({
-                where: { firebaseUid },
-            });
-
-            expect(dbUser?.address).toBe('Block 5, Sampaguita St, Brgy Commonwealth, Quezon City');
-        });
-
-        it('should trim whitespace from user data', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-            const firebaseUid = TestDataHelper.generateFirebaseUid();
-
-            const dto: CreateUserDto = {
-                firstName: '  John  ',
-                middleName: '  Michael  ',
-                lastName: '  Doe  ',
-                suffix: '  Jr.  ',
-                block: '  Block 5  ',
-                street: '  Sampaguita St  ',
-                barangay: '  Brgy Commonwealth  ',
-                city: '  Quezon City  ',
-            };
-
-            await usersService.create(firebaseUid, email, dto);
-
-            const dbUser = await databaseService.user.findUnique({
-                where: { firebaseUid },
-            });
-
-            expect(dbUser?.firstName).toBe('John');
-            expect(dbUser?.middleName).toBe('Michael');
-            expect(dbUser?.lastName).toBe('Doe');
-            expect(dbUser?.suffix).toBe('Jr.');
-            expect(dbUser?.address).toBe('Block 5, Sampaguita St, Brgy Commonwealth, Quezon City');
-        });
-
-        it('should handle null middleName and suffix', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-            const firebaseUid = TestDataHelper.generateFirebaseUid();
-
-            const dto: CreateUserDto = {
-                firstName: 'John',
-                lastName: 'Doe',
-                block: 'Block 5',
-                street: 'Sampaguita St',
-                barangay: 'Brgy Commonwealth',
-                city: 'Quezon City',
-            };
-
-            await usersService.create(firebaseUid, email, dto);
-
-            const dbUser = await databaseService.user.findUnique({
-                where: { firebaseUid },
-            });
-
-            expect(dbUser?.middleName).toBeNull();
-            expect(dbUser?.suffix).toBeNull();
-        });
-
-        it('should throw ConflictException if user already exists', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-            const firebaseUid = TestDataHelper.generateFirebaseUid();
-            const userData = TestDataHelper.generateUserData();
-
-            const dto: CreateUserDto = {
-                firstName: userData.firstName,
-                lastName: userData.lastName,
-                block: userData.block,
-                street: userData.street,
-                barangay: userData.barangay,
-                city: userData.city,
-            };
-
-            // Create user first time
-            await usersService.create(firebaseUid, email, dto);
-
-            // Try to create same user again
-            await expect(usersService.create(firebaseUid, email, dto)).rejects.toThrow(
-                ConflictException,
-            );
-            await expect(usersService.create(firebaseUid, email, dto)).rejects.toThrow(
-                'User profile already exists',
-            );
-        });
-
-        it('should create multiple users successfully', async () => {
-            const users = Array.from({ length: 5 }, () => ({
-                email: TestDataHelper.generateRandomEmail(),
-                firebaseUid: TestDataHelper.generateFirebaseUid(),
-                userData: TestDataHelper.generateUserData(),
-            }));
-
-            for (const user of users) {
-                const dto: CreateUserDto = {
-                    firstName: user.userData.firstName,
-                    lastName: user.userData.lastName,
-                    block: user.userData.block,
-                    street: user.userData.street,
-                    barangay: user.userData.barangay,
-                    city: user.userData.city,
-                };
-
-                await usersService.create(user.firebaseUid, user.email, dto);
-            }
-
-            // Verify all users were created
-            const allUsers = await databaseService.user.findMany();
-            expect(allUsers.length).toBe(5);
-        });
-
-        it('should generate unique CUIDs for each user', async () => {
-            const users = Array.from({ length: 3 }, () => ({
-                email: TestDataHelper.generateRandomEmail(),
-                firebaseUid: TestDataHelper.generateFirebaseUid(),
-                userData: TestDataHelper.generateUserData(),
-            }));
-
-            const userIds: string[] = [];
-
-            for (const user of users) {
-                const dto: CreateUserDto = {
-                    firstName: user.userData.firstName,
-                    lastName: user.userData.lastName,
-                    block: user.userData.block,
-                    street: user.userData.street,
-                    barangay: user.userData.barangay,
-                    city: user.userData.city,
-                };
-
-                const result = await usersService.create(user.firebaseUid, user.email, dto);
-                userIds.push(result.userId);
-            }
-
-            // All IDs should be unique
-            const uniqueIds = new Set(userIds);
-            expect(uniqueIds.size).toBe(3);
-        });
-
-        it('should set createdAt and updatedAt timestamps', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-            const firebaseUid = TestDataHelper.generateFirebaseUid();
-            const userData = TestDataHelper.generateUserData();
-
-            const dto: CreateUserDto = {
-                firstName: userData.firstName,
-                lastName: userData.lastName,
-                block: userData.block,
-                street: userData.street,
-                barangay: userData.barangay,
-                city: userData.city,
-            };
-
-            const beforeCreate = new Date();
-            await usersService.create(firebaseUid, email, dto);
-            const afterCreate = new Date();
-
-            const dbUser = await databaseService.user.findUnique({
-                where: { firebaseUid },
-            });
-
-            expect(dbUser?.createdAt).toBeDefined();
-            expect(dbUser?.updatedAt).toBeDefined();
-            expect(dbUser?.createdAt.getTime()).toBeGreaterThanOrEqual(beforeCreate.getTime());
-            expect(dbUser?.createdAt.getTime()).toBeLessThanOrEqual(afterCreate.getTime());
-        });
-    });
-
-    describe('findById', () => {
-        it('should find user by database ID', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-            const firebaseUid = TestDataHelper.generateFirebaseUid();
-            const userData = TestDataHelper.generateUserData();
-
-            // Create user
-            const dto: CreateUserDto = {
-                firstName: userData.firstName,
-                lastName: userData.lastName,
-                block: userData.block,
-                street: userData.street,
-                barangay: userData.barangay,
-                city: userData.city,
-            };
-
-            const { userId } = await usersService.create(firebaseUid, email, dto);
-
-            // Find user by ID
-            const result = await usersService.findById(userId);
-
-            expect(result.message).toBe('User info fetched successfully');
-            expect(result.userInfo.id).toBe(userId);
-            expect(result.userInfo.email).toBe(email);
-            expect(result.userInfo.firstName).toBe(userData.firstName);
-        });
-
-        it('should parse address into components', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-            const firebaseUid = TestDataHelper.generateFirebaseUid();
-
-            const dto: CreateUserDto = {
-                firstName: 'John',
-                lastName: 'Doe',
-                block: 'Block 5',
-                street: 'Sampaguita St',
-                barangay: 'Brgy Commonwealth',
-                city: 'Quezon City',
-            };
-
-            const { userId } = await usersService.create(firebaseUid, email, dto);
-            const result = await usersService.findById(userId);
-
-            expect(result.userInfo.address).toBe(
-                'Block 5, Sampaguita St, Brgy Commonwealth, Quezon City',
-            );
-            expect(result.userInfo.block).toBe('Block 5');
-            expect(result.userInfo.street).toBe('Sampaguita St');
-            expect(result.userInfo.barangay).toBe('Brgy Commonwealth');
-            expect(result.userInfo.city).toBe('Quezon City');
-        });
-
-        it('should throw NotFoundException when user does not exist', async () => {
-            const nonExistentId = TestDataHelper.generateCuid();
-
-            await expect(usersService.findById(nonExistentId)).rejects.toThrow(NotFoundException);
-            await expect(usersService.findById(nonExistentId)).rejects.toThrow('User not found');
-        });
-
-        it('should handle address with extra spaces', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-            const firebaseUid = TestDataHelper.generateFirebaseUid();
-
-            // Create user directly in database with extra spaces
-            const createdUser = await databaseService.user.create({
-                data: {
-                    firebaseUid,
-                    email,
-                    firstName: 'John',
-                    lastName: 'Doe',
-                    address: 'Block 5,  Sampaguita St  , Brgy Commonwealth,  Quezon City  ',
-                },
-            });
-
-            const result = await usersService.findById(createdUser.id);
-
-            expect(result.userInfo.block).toBe('Block 5');
-            expect(result.userInfo.street).toBe('Sampaguita St');
-            expect(result.userInfo.barangay).toBe('Brgy Commonwealth');
-            expect(result.userInfo.city).toBe('Quezon City');
-        });
-
-        it('should handle incomplete address', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-            const firebaseUid = TestDataHelper.generateFirebaseUid();
-
-            // Create user with minimal address
-            const createdUser = await databaseService.user.create({
-                data: {
-                    firebaseUid,
-                    email,
-                    firstName: 'John',
-                    lastName: 'Doe',
-                    address: 'Block 5',
-                },
-            });
-
-            const result = await usersService.findById(createdUser.id);
-
-            expect(result.userInfo.block).toBe('Block 5');
-            expect(result.userInfo.street).toBe('');
-            expect(result.userInfo.barangay).toBe('');
-            expect(result.userInfo.city).toBe('');
-        });
-    });
-
-    describe('findByFirebaseUid', () => {
-        it('should find user by Firebase UID', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-            const firebaseUid = TestDataHelper.generateFirebaseUid();
-            const userData = TestDataHelper.generateUserData();
-
-            const dto: CreateUserDto = {
-                firstName: userData.firstName,
-                lastName: userData.lastName,
-                block: userData.block,
-                street: userData.street,
-                barangay: userData.barangay,
-                city: userData.city,
-            };
-
-            await usersService.create(firebaseUid, email, dto);
-
-            const result = await usersService.findByFirebaseUid(firebaseUid);
-
-            expect(result.message).toBe('User info fetched successfully');
-            expect(result.userInfo.email).toBe(email);
-            expect(result.userInfo.firstName).toBe(userData.firstName);
-        });
-
-        it('should parse address into components', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-            const firebaseUid = TestDataHelper.generateFirebaseUid();
-
-            const dto: CreateUserDto = {
-                firstName: 'John',
-                lastName: 'Doe',
-                block: 'Block 10',
-                street: 'Main St',
-                barangay: 'Brgy Test',
-                city: 'Manila City',
-            };
-
-            await usersService.create(firebaseUid, email, dto);
-            const result = await usersService.findByFirebaseUid(firebaseUid);
-
-            expect(result.userInfo.block).toBe('Block 10');
-            expect(result.userInfo.street).toBe('Main St');
-            expect(result.userInfo.barangay).toBe('Brgy Test');
-            expect(result.userInfo.city).toBe('Manila City');
-        });
-
-        it('should throw NotFoundException when Firebase UID not found', async () => {
-            const nonExistentUid = TestDataHelper.generateFirebaseUid();
-
-            await expect(usersService.findByFirebaseUid(nonExistentUid)).rejects.toThrow(
-                NotFoundException,
-            );
-            await expect(usersService.findByFirebaseUid(nonExistentUid)).rejects.toThrow(
-                'User profile not found in database',
-            );
-        });
-
-        it('should find different users by their Firebase UIDs', async () => {
-            const users = Array.from({ length: 3 }, () => ({
-                email: TestDataHelper.generateRandomEmail(),
-                firebaseUid: TestDataHelper.generateFirebaseUid(),
-                userData: TestDataHelper.generateUserData(),
-            }));
-
-            // Create all users
-            for (const user of users) {
-                const dto: CreateUserDto = {
-                    firstName: user.userData.firstName,
-                    lastName: user.userData.lastName,
-                    block: user.userData.block,
-                    street: user.userData.street,
-                    barangay: user.userData.barangay,
-                    city: user.userData.city,
-                };
-
-                await usersService.create(user.firebaseUid, user.email, dto);
-            }
-
-            // Find each user by their Firebase UID
-            for (const user of users) {
-                const result = await usersService.findByFirebaseUid(user.firebaseUid);
-                expect(result.userInfo.email).toBe(user.email);
-            }
-        });
-    });
-
-    describe('database constraints and relationships', () => {
-        it('should enforce unique Firebase UID constraint', async () => {
-            const email1 = TestDataHelper.generateRandomEmail();
-            const email2 = TestDataHelper.generateRandomEmail();
-            const firebaseUid = TestDataHelper.generateFirebaseUid(); // Same UID
-            const userData = TestDataHelper.generateUserData();
-
-            const dto: CreateUserDto = {
-                firstName: userData.firstName,
-                lastName: userData.lastName,
-                block: userData.block,
-                street: userData.street,
-                barangay: userData.barangay,
-                city: userData.city,
-            };
-
-            // Create first user
-            await usersService.create(firebaseUid, email1, dto);
-
-            // Try to create second user with same Firebase UID
-            await expect(usersService.create(firebaseUid, email2, dto)).rejects.toThrow();
-        });
-
-        it('should enforce unique email constraint', async () => {
-            const email = TestDataHelper.generateRandomEmail(); // Same email
-            const firebaseUid1 = TestDataHelper.generateFirebaseUid();
-            const firebaseUid2 = TestDataHelper.generateFirebaseUid();
-            const userData = TestDataHelper.generateUserData();
-
-            const dto: CreateUserDto = {
-                firstName: userData.firstName,
-                lastName: userData.lastName,
-                block: userData.block,
-                street: userData.street,
-                barangay: userData.barangay,
-                city: userData.city,
-            };
-
-            // Create first user
-            await usersService.create(firebaseUid1, email, dto);
-
-            // Try to create second user with same email
-            await expect(usersService.create(firebaseUid2, email, dto)).rejects.toThrow();
-        });
-
-        it('should automatically set timestamps on creation', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-            const firebaseUid = TestDataHelper.generateFirebaseUid();
-            const userData = TestDataHelper.generateUserData();
-
-            const dto: CreateUserDto = {
-                firstName: userData.firstName,
-                lastName: userData.lastName,
-                block: userData.block,
-                street: userData.street,
-                barangay: userData.barangay,
-                city: userData.city,
-            };
-
-            const { userId } = await usersService.create(firebaseUid, email, dto);
-            const dbUser = await databaseService.user.findUnique({
-                where: { id: userId },
-            });
-
-            expect(dbUser?.createdAt).toBeInstanceOf(Date);
-            expect(dbUser?.updatedAt).toBeInstanceOf(Date);
-            expect(dbUser?.createdAt.getTime()).toBeLessThanOrEqual(dbUser!.updatedAt.getTime());
-        });
-
-        it('should handle database transaction rollback on error', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-            const firebaseUid = TestDataHelper.generateFirebaseUid();
-
-            // Try to create user with invalid data (very long firstName to trigger error)
-            const invalidDto: CreateUserDto = {
-                firstName: 'A'.repeat(200), // Exceeds max length
-                lastName: 'Doe',
-                block: 'Block 5',
-                street: 'Sampaguita St',
-                barangay: 'Brgy Commonwealth',
-                city: 'Quezon City',
-            };
-
-            await expect(usersService.create(firebaseUid, email, invalidDto)).rejects.toThrow();
-
-            // Verify user was not created
-            const dbUser = await databaseService.user.findUnique({
-                where: { firebaseUid },
-            });
-            expect(dbUser).toBeNull();
-        });
-    });
-
-    describe('data integrity', () => {
-        it('should maintain data consistency across multiple operations', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-            const firebaseUid = TestDataHelper.generateFirebaseUid();
-            const userData = TestDataHelper.generateUserData();
-
-            const dto: CreateUserDto = {
-                firstName: userData.firstName,
-                lastName: userData.lastName,
-                block: userData.block,
-                street: userData.street,
-                barangay: userData.barangay,
-                city: userData.city,
-            };
-
-            // Create user
-            const { userId } = await usersService.create(firebaseUid, email, dto);
-
-            // Find by ID
-            const resultById = await usersService.findById(userId);
-
-            // Find by Firebase UID
-            const resultByFirebaseUid = await usersService.findByFirebaseUid(firebaseUid);
-
-            // Both queries should return same data
-            expect(resultById.userInfo.email).toBe(resultByFirebaseUid.userInfo.email);
-            expect(resultById.userInfo.firstName).toBe(resultByFirebaseUid.userInfo.firstName);
-            expect(resultById.userInfo.address).toBe(resultByFirebaseUid.userInfo.address);
-        });
-
-        it('should handle concurrent user creation for different users', async () => {
-            const users = Array.from({ length: 5 }, () => ({
-                email: TestDataHelper.generateRandomEmail(),
-                firebaseUid: TestDataHelper.generateFirebaseUid(),
-                userData: TestDataHelper.generateUserData(),
-            }));
-
-            const promises = users.map((user) => {
-                const dto: CreateUserDto = {
-                    firstName: user.userData.firstName,
-                    lastName: user.userData.lastName,
-                    block: user.userData.block,
-                    street: user.userData.street,
-                    barangay: user.userData.barangay,
-                    city: user.userData.city,
-                };
-
-                return usersService.create(user.firebaseUid, user.email, dto);
-            });
-
-            const results = await Promise.all(promises);
-
-            // All users should be created successfully
-            expect(results).toHaveLength(5);
-            results.forEach((result) => {
-                expect(result).toHaveProperty('userId');
-                expect(result.message).toBe('User registered successfully');
-            });
-
-            // Verify all users exist in database
-            const allUsers = await databaseService.user.findMany();
-            expect(allUsers).toHaveLength(5);
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValue(mockFirebaseJWT);
+
+            const createResponse = await request(httpServer)
+                .post('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send({
+                    firstName: userData.firstName,
+                    lastName: userData.lastName,
+                    block: userData.block,
+                    street: userData.street,
+                    barangay: userData.barangay,
+                    city: userData.city,
+                })
+                .expect(201);
+
+            const { userId } = createResponse.body as UserCreatedResponse;
+
+            // Get user by Firebase UID
+            const getResponse = await request(httpServer)
+                .get(`/api/users/${mockFirebaseJWT.uid}`)
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .expect(200);
+
+            const body = getResponse.body as UserInfoResponse;
+
+            // Both operations should return consistent data
+            expect(body.userInfo.id).toBe(userId);
+            expect(body.userInfo.email).toBe(mockFirebaseJWT.email);
+            expect(body.userInfo.firstName).toBe(userData.firstName);
         });
 
         it('should preserve data types correctly', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-            const firebaseUid = TestDataHelper.generateFirebaseUid();
+            const userData = TestDataHelper.generateUserData();
 
-            const dto: CreateUserDto = {
-                firstName: 'John',
-                middleName: 'Michael',
-                lastName: 'Doe',
-                suffix: 'Jr.',
-                block: 'Block 5',
-                street: 'Sampaguita St',
-                barangay: 'Brgy Commonwealth',
-                city: 'Quezon City',
-            };
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
 
-            const { userId } = await usersService.create(firebaseUid, email, dto);
-            const dbUser = await databaseService.user.findUnique({
-                where: { id: userId },
+            await request(httpServer)
+                .post('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send({
+                    firstName: 'John',
+                    middleName: 'Michael',
+                    lastName: 'Doe',
+                    suffix: 'Jr.',
+                    block: userData.block,
+                    street: userData.street,
+                    barangay: userData.barangay,
+                    city: userData.city,
+                })
+                .expect(201);
+
+            const dbUser = await dbHelper.user.findUnique({
+                where: { firebaseUid: mockFirebaseJWT.uid },
             });
 
             // Verify data types
@@ -735,66 +286,1078 @@ describe('UsersService Integration Tests', () => {
         });
     });
 
-    describe('edge cases', () => {
+    describe('Edge Cases', () => {
         it('should handle user with very long names', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-            const firebaseUid = TestDataHelper.generateFirebaseUid();
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValue(mockFirebaseJWT);
 
-            const dto: CreateUserDto = {
-                firstName: 'A'.repeat(100), // Max length allowed by DTO
-                lastName: 'B'.repeat(100),
-                block: 'Block 999',
-                street: 'Very Long Street Name That Goes On Forever',
-                barangay: 'Barangay With A Very Long Name',
-                city: 'City With Long Name',
-            };
+            await request(httpServer)
+                .post('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send({
+                    firstName: 'A'.repeat(100),
+                    lastName: 'B'.repeat(100),
+                    block: 'Block 999',
+                    street: 'Very Long Street Name That Goes On Forever',
+                    barangay: 'Barangay With A Very Long Name',
+                    city: 'City With Long Name',
+                })
+                .expect(201);
 
-            const { userId } = await usersService.create(firebaseUid, email, dto);
-            const result = await usersService.findById(userId);
+            const response = await request(httpServer)
+                .get(`/api/users/${mockFirebaseJWT.uid}`)
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .expect(200);
 
-            expect(result.userInfo.firstName).toBe('A'.repeat(100));
-            expect(result.userInfo.lastName).toBe('B'.repeat(100));
+            const body = response.body as UserInfoResponse;
+
+            expect(body.userInfo.firstName).toBe('A'.repeat(100));
+            expect(body.userInfo.lastName).toBe('B'.repeat(100));
         });
 
         it('should handle special characters in names', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-            const firebaseUid = TestDataHelper.generateFirebaseUid();
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValue(mockFirebaseJWT);
 
-            const dto: CreateUserDto = {
-                firstName: "O'Brien",
-                lastName: 'García-López',
-                suffix: 'III',
-                block: 'Block 5-A',
-                street: "St. Mary's Street",
-                barangay: 'Brgy. San José',
-                city: 'Quezon City',
-            };
+            await request(httpServer)
+                .post('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send({
+                    firstName: "O'Brien",
+                    lastName: 'García-López',
+                    suffix: 'III',
+                    block: 'Block 5-A',
+                    street: "St. Mary's Street",
+                    barangay: 'Brgy. San José',
+                    city: 'Quezon City',
+                })
+                .expect(201);
 
-            const { userId } = await usersService.create(firebaseUid, email, dto);
-            const result = await usersService.findById(userId);
+            const response = await request(httpServer)
+                .get(`/api/users/${mockFirebaseJWT.uid}`)
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .expect(200);
 
-            expect(result.userInfo.firstName).toBe("O'Brien");
-            expect(result.userInfo.lastName).toBe('García-López');
+            const body = response.body as UserInfoResponse;
+
+            expect(body.userInfo.firstName).toBe("O'Brien");
+            expect(body.userInfo.lastName).toBe('García-López');
         });
 
         it('should handle empty address components gracefully', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-            const firebaseUid = TestDataHelper.generateFirebaseUid();
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValue(mockFirebaseJWT);
 
+            await request(httpServer)
+                .post('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send({
+                    firstName: 'John',
+                    lastName: 'Doe',
+                    block: '',
+                    street: '',
+                    barangay: '',
+                    city: 'Manila',
+                })
+                .expect(400);
+        });
+    });
+
+    describe('Error Response Consistency', () => {
+        it('should return consistent error format for validation errors', async () => {
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            const response = await request(httpServer)
+                .post('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send({
+                    firstName: 'Test',
+                    // Missing required fields
+                })
+                .expect(400);
+
+            expect(response.body).toHaveProperty('statusCode', 400);
+            expect(response.body).toHaveProperty('timestamp');
+            expect(response.body).toHaveProperty('path', '/api/users');
+            expect(response.body).toHaveProperty('message');
+        });
+
+        it('should return consistent error format for authentication errors', async () => {
+            const response = await request(httpServer)
+                .post('/api/users')
+                .send({
+                    firstName: 'Test',
+                    lastName: 'User',
+                    block: 'Block 1',
+                    street: 'Street',
+                    barangay: 'Barangay',
+                    city: 'City',
+                })
+                .expect(401);
+
+            expect(response.body).toHaveProperty('statusCode', 401);
+            expect(response.body).toHaveProperty('timestamp');
+            expect(response.body).toHaveProperty('path', '/api/users');
+            expect(response.body).toHaveProperty('message');
+        });
+
+        it('should return consistent error format for not found errors', async () => {
+            const nonExistentUid = TestDataHelper.generateFirebaseUid();
+
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            const response = await request(httpServer)
+                .get(`/api/users/${nonExistentUid}`)
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .expect(404);
+
+            expect(response.body).toHaveProperty('statusCode', 404);
+            expect(response.body).toHaveProperty('timestamp');
+            expect(response.body).toHaveProperty('path', `/api/users/${nonExistentUid}`);
+            expect(response.body).toHaveProperty('message');
+        });
+
+        it('should include ISO timestamp in error responses', async () => {
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            const response = await request(httpServer)
+                .post('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send({
+                    firstName: 'Test',
+                    // Missing required fields
+                })
+                .expect(400);
+
+            const body = response.body as ExceptionResponse;
+
+            const timestamp = new Date(body.timestamp);
+            expect(timestamp).toBeInstanceOf(Date);
+            expect(timestamp.toString()).not.toBe('Invalid Date');
+        });
+
+        it('should include request path in error responses', async () => {
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            const response = await request(httpServer)
+                .post('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send({
+                    firstName: 'Test',
+                })
+                .expect(400);
+
+            const body = response.body as ExceptionResponse;
+
+            expect(body.path).toBe('/api/users');
+        });
+    });
+
+    describe('JSON Response Format', () => {
+        it('should return JSON content type for all endpoints', async () => {
+            mockFirebaseService
+                .getAuth()
+                .getUserByEmail.mockRejectedValue(FirebaseAuthErrors.userNotFound());
+
+            const responses = await Promise.all([
+                request(httpServer).get('/api/users').query({ email: 'test@example.com' }),
+                request(httpServer)
+                    .post('/api/users')
+                    .set('Authorization', `Bearer ${validAuthToken}`)
+                    .send({
+                        firstName: 'Test',
+                        lastName: 'User',
+                        block: 'Block 1',
+                        street: 'Street',
+                        barangay: 'Barangay',
+                        city: 'City',
+                    }),
+            ]);
+
+            responses.forEach((response) => {
+                expect(response.headers['content-type']).toMatch(/json/);
+            });
+        });
+
+        it('should return properly formatted JSON', async () => {
+            mockFirebaseService
+                .getAuth()
+                .getUserByEmail.mockRejectedValue(FirebaseAuthErrors.userNotFound());
+
+            const response = await request(httpServer)
+                .get('/api/users')
+                .query({ email: TestDataHelper.generateRandomEmail() })
+                .expect(200);
+
+            expect(() => JSON.stringify(response.body)).not.toThrow();
+            expect(response.body).toBeInstanceOf(Object);
+        });
+    });
+
+    describe('Input Validation Edge Cases', () => {
+        it('should trim whitespace from string fields', async () => {
+            const userData = TestDataHelper.generateUserData();
+
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            await request(httpServer)
+                .post('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send({
+                    firstName: `  ${userData.firstName}  `,
+                    lastName: `  ${userData.lastName}  `,
+                    block: `  ${userData.block}  `,
+                    street: `  ${userData.street}  `,
+                    barangay: `  ${userData.barangay}  `,
+                    city: `  ${userData.city}  `,
+                })
+                .expect(201);
+
+            const dbUser = await dbHelper.user.findUnique({
+                where: { firebaseUid: mockFirebaseJWT.uid },
+            });
+
+            expect(dbUser?.firstName).toBe(userData.firstName);
+            expect(dbUser?.lastName).toBe(userData.lastName);
+        });
+
+        it('should reject null values for required fields', async () => {
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            await request(httpServer)
+                .post('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send({
+                    firstName: null,
+                    lastName: 'Doe',
+                    block: 'Block 1',
+                    street: 'Street',
+                    barangay: 'Barangay',
+                    city: 'City',
+                })
+                .expect(400);
+        });
+
+        it('should reject empty strings for required fields', async () => {
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            await request(httpServer)
+                .post('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send({
+                    firstName: '',
+                    lastName: 'Doe',
+                    block: 'Block 1',
+                    street: 'Street',
+                    barangay: 'Barangay',
+                    city: 'City',
+                })
+                .expect(400);
+        });
+
+        it('should accept empty strings for optional fields', async () => {
+            const userData = TestDataHelper.generateUserData();
+
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            await request(httpServer)
+                .post('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send({
+                    firstName: userData.firstName,
+                    middleName: '',
+                    lastName: userData.lastName,
+                    suffix: '',
+                    block: userData.block,
+                    street: userData.street,
+                    barangay: userData.barangay,
+                    city: userData.city,
+                })
+                .expect(201);
+        });
+
+        it('should handle undefined optional fields', async () => {
+            const userData = TestDataHelper.generateUserData();
+
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            await request(httpServer)
+                .post('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send({
+                    firstName: userData.firstName,
+                    lastName: userData.lastName,
+                    block: userData.block,
+                    street: userData.street,
+                    barangay: userData.barangay,
+                    city: userData.city,
+                    // middleName and suffix intentionally omitted
+                })
+                .expect(201);
+
+            const dbUser = await dbHelper.user.findUnique({
+                where: { firebaseUid: mockFirebaseJWT.uid },
+            });
+
+            expect(dbUser?.middleName).toBeNull();
+            expect(dbUser?.suffix).toBeNull();
+        });
+    });
+
+    describe('HTTP Methods and Status Codes', () => {
+        it('should respond to GET requests on /api/users with query', async () => {
+            mockFirebaseService
+                .getAuth()
+                .getUserByEmail.mockRejectedValue(FirebaseAuthErrors.userNotFound());
+
+            await request(httpServer)
+                .get('/api/users')
+                .query({ email: 'test@example.com' })
+                .expect(200);
+        });
+
+        it('should respond to POST requests on /api/users', async () => {
+            const userData = TestDataHelper.generateUserData();
+
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            await request(httpServer)
+                .post('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send({
+                    firstName: userData.firstName,
+                    lastName: userData.lastName,
+                    block: userData.block,
+                    street: userData.street,
+                    barangay: userData.barangay,
+                    city: userData.city,
+                })
+                .expect(201);
+        });
+
+        it('should respond to GET requests on /api/users/:firebaseUid', async () => {
+            await dbHelper.seedUser({
+                firebaseUid: mockFirebaseJWT.uid,
+                email: mockFirebaseJWT.email,
+                firstName: 'Test',
+                lastName: 'User',
+                address: 'Test Address',
+            });
+
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            await request(httpServer)
+                .get(`/api/users/${mockFirebaseJWT.uid}`)
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .expect(200);
+        });
+
+        it('should return 404 for unsupported HTTP methods', async () => {
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            await request(httpServer)
+                .put('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send({})
+                .expect(404);
+        });
+    });
+
+    describe('Performance and Concurrency', () => {
+        it('should handle multiple concurrent read requests', async () => {
+            // Create a user first
+            await dbHelper.seedUser({
+                firebaseUid: mockFirebaseJWT.uid,
+                email: mockFirebaseJWT.email,
+                firstName: 'Concurrent',
+                lastName: 'Test',
+                address: 'Test Address',
+            });
+
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValue(mockFirebaseJWT);
+
+            // Make 5 concurrent GET requests
+            const requests = Array.from({ length: 5 }, () =>
+                request(httpServer)
+                    .get(`/api/users/${mockFirebaseJWT.uid}`)
+                    .set('Authorization', `Bearer ${validAuthToken}`),
+            );
+
+            const responses = await Promise.all(requests);
+
+            responses.forEach((response) => {
+                expect(response.status).toBe(200);
+                expect((response.body as UserInfoResponse).userInfo.firstName).toBe('Concurrent');
+            });
+        });
+
+        it('should create user successfully with valid data and auth token', async () => {
+            const userData = TestDataHelper.generateUserData();
+
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            const response = await request(httpServer)
+                .post('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send({
+                    firstName: userData.firstName,
+                    lastName: userData.lastName,
+                    block: userData.block,
+                    street: userData.street,
+                    barangay: userData.barangay,
+                    city: userData.city,
+                })
+                .expect(201);
+
+            const { userId } = response.body as UserCreatedResponse;
+
+            expect(response.body).toMatchObject({
+                message: 'User registered successfully',
+                userId,
+            });
+
+            // Verify user was created in database
+            const dbUser = await dbHelper.user.findUnique({
+                where: { firebaseUid: mockFirebaseJWT.uid },
+            });
+
+            expect(dbUser).not.toBeNull();
+            expect(dbUser?.email).toBe(mockFirebaseJWT.email);
+            expect(dbUser?.firstName).toBe(userData.firstName);
+            expect(dbUser?.lastName).toBe(userData.lastName);
+        });
+
+        it('should format address correctly when creating user', async () => {
             const dto: CreateUserDto = {
                 firstName: 'John',
                 lastName: 'Doe',
-                block: '',
-                street: '',
-                barangay: '',
-                city: 'Manila',
+                block: 'Block 5',
+                street: 'Sampaguita St',
+                barangay: 'Brgy Commonwealth',
+                city: 'Quezon City',
             };
 
-            const { userId } = await usersService.create(firebaseUid, email, dto);
-            const result = await usersService.findById(userId);
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
 
-            // Should only have city since other parts are empty
-            expect(result.userInfo.address).toBe('Manila');
+            await request(httpServer)
+                .post('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send(dto)
+                .expect(201);
+
+            const dbUser = await dbHelper.user.findUnique({
+                where: { firebaseUid: mockFirebaseJWT.uid },
+            });
+
+            expect(dbUser?.address).toBe('Block 5, Sampaguita St, Brgy Commonwealth, Quezon City');
+        });
+
+        it('should trim whitespace from user data', async () => {
+            const dto: CreateUserDto = {
+                firstName: '  John  ',
+                middleName: '  Michael  ',
+                lastName: '  Doe  ',
+                suffix: '  Jr.  ',
+                block: '  Block 5  ',
+                street: '  Sampaguita St  ',
+                barangay: '  Brgy Commonwealth  ',
+                city: '  Quezon City  ',
+            };
+
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            await request(httpServer)
+                .post('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send(dto)
+                .expect(201);
+
+            const dbUser = await dbHelper.user.findUnique({
+                where: { firebaseUid: mockFirebaseJWT.uid },
+            });
+
+            expect(dbUser?.firstName).toBe('John');
+            expect(dbUser?.middleName).toBe('Michael');
+            expect(dbUser?.lastName).toBe('Doe');
+            expect(dbUser?.suffix).toBe('Jr.');
+            expect(dbUser?.address).toBe('Block 5, Sampaguita St, Brgy Commonwealth, Quezon City');
+        });
+
+        it('should handle null middleName and suffix', async () => {
+            const dto: CreateUserDto = {
+                firstName: 'John',
+                lastName: 'Doe',
+                block: 'Block 5',
+                street: 'Sampaguita St',
+                barangay: 'Brgy Commonwealth',
+                city: 'Quezon City',
+            };
+
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            await request(httpServer)
+                .post('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send(dto)
+                .expect(201);
+
+            const dbUser = await dbHelper.user.findUnique({
+                where: { firebaseUid: mockFirebaseJWT.uid },
+            });
+
+            expect(dbUser?.middleName).toBeNull();
+            expect(dbUser?.suffix).toBeNull();
+        });
+
+        it('should return 409 if user already exists', async () => {
+            const userData = TestDataHelper.generateUserData();
+
+            const dto: CreateUserDto = {
+                firstName: userData.firstName,
+                lastName: userData.lastName,
+                block: userData.block,
+                street: userData.street,
+                barangay: userData.barangay,
+                city: userData.city,
+            };
+
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValue(mockFirebaseJWT);
+
+            // Create user first time
+            await request(httpServer)
+                .post('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send(dto)
+                .expect(201);
+
+            // Try to create same user again
+            const response = await request(httpServer)
+                .post('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send(dto)
+                .expect(409);
+
+            expect(response.body).toMatchObject({
+                statusCode: 409,
+                message: 'User profile already exists',
+            });
+        });
+
+        it('should validate required fields', async () => {
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            const response = await request(httpServer)
+                .post('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send({
+                    firstName: 'John',
+                    // Missing lastName, block, street, barangay, city
+                })
+                .expect(400);
+
+            expect(response.body).toMatchObject({
+                statusCode: 400,
+            });
+        });
+
+        it('should reject extra fields (forbidNonWhitelisted)', async () => {
+            const userData = TestDataHelper.generateUserData();
+
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            const response = await request(httpServer)
+                .post('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send({
+                    firstName: userData.firstName,
+                    lastName: userData.lastName,
+                    block: userData.block,
+                    street: userData.street,
+                    barangay: userData.barangay,
+                    city: userData.city,
+                    extraField: 'should-not-be-here',
+                })
+                .expect(400);
+
+            const body = response.body as UserCreatedResponse;
+
+            expect(body.message).toContain('extraField');
+        });
+
+        it('should validate firstName max length', async () => {
+            const userData = TestDataHelper.generateUserData();
+
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            const response = await request(httpServer)
+                .post('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send({
+                    firstName: 'A'.repeat(101),
+                    lastName: userData.lastName,
+                    block: userData.block,
+                    street: userData.street,
+                    barangay: userData.barangay,
+                    city: userData.city,
+                })
+                .expect(400);
+
+            const body = response.body as UserCreatedResponse;
+
+            expect(body.message).toContain('firstName');
+        });
+
+        it('should validate lastName max length', async () => {
+            const userData = TestDataHelper.generateUserData();
+
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            const response = await request(httpServer)
+                .post('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send({
+                    firstName: userData.firstName,
+                    lastName: 'B'.repeat(101),
+                    block: userData.block,
+                    street: userData.street,
+                    barangay: userData.barangay,
+                    city: userData.city,
+                })
+                .expect(400);
+
+            const body = response.body as UserCreatedResponse;
+
+            expect(body.message).toContain('lastName');
+        });
+
+        it('should accept names with special characters', async () => {
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            await request(httpServer)
+                .post('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send({
+                    firstName: "O'Brien",
+                    lastName: 'García-López',
+                    suffix: 'III',
+                    block: 'Block 5-A',
+                    street: "St. Mary's Street",
+                    barangay: 'Brgy. San José',
+                    city: 'Quezon City',
+                })
+                .expect(201);
+        });
+
+        it('should set createdAt and updatedAt timestamps', async () => {
+            const userData = TestDataHelper.generateUserData();
+
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            const beforeCreate = new Date();
+            await request(httpServer)
+                .post('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send({
+                    firstName: userData.firstName,
+                    lastName: userData.lastName,
+                    block: userData.block,
+                    street: userData.street,
+                    barangay: userData.barangay,
+                    city: userData.city,
+                })
+                .expect(201);
+            const afterCreate = new Date();
+
+            const dbUser = await dbHelper.user.findUnique({
+                where: { firebaseUid: mockFirebaseJWT.uid },
+            });
+
+            expect(dbUser?.createdAt).toBeDefined();
+            expect(dbUser?.updatedAt).toBeDefined();
+            expect(dbUser?.createdAt.getTime()).toBeGreaterThanOrEqual(beforeCreate.getTime());
+            expect(dbUser?.createdAt.getTime()).toBeLessThanOrEqual(afterCreate.getTime());
+        });
+
+        it('should generate unique CUIDs for each user', async () => {
+            const userIds: string[] = [];
+
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValue(mockFirebaseJWT);
+
+            // Create 3 users with different auth tokens (simulating different users)
+            for (let i = 0; i < 3; i++) {
+                const userData = TestDataHelper.generateUserData();
+
+                // Temporarily override the guard to use different user for each request
+                const response = await request(httpServer)
+                    .post('/api/users')
+                    .set('Authorization', `Bearer ${validAuthToken}`)
+                    .send({
+                        firstName: userData.firstName,
+                        lastName: userData.lastName,
+                        block: userData.block,
+                        street: userData.street,
+                        barangay: userData.barangay,
+                        city: userData.city,
+                    });
+
+                // Only check if user was created successfully
+                if (response.status === 201) {
+                    userIds.push((response.body as UserCreatedResponse).userId);
+                }
+
+                // Clean up for next iteration
+                await dbHelper.clearDatabase();
+            }
+
+            // Verify all successfully created users have unique IDs
+            if (userIds.length > 1) {
+                const uniqueIds = new Set(userIds);
+                expect(uniqueIds.size).toBe(userIds.length);
+            }
+        });
+
+        it('should reject invalid auth token format', async () => {
+            const userData = TestDataHelper.generateUserData();
+
+            await request(httpServer)
+                .post('/api/users')
+                .set('Authorization', 'InvalidTokenFormat')
+                .send({
+                    firstName: userData.firstName,
+                    lastName: userData.lastName,
+                    block: userData.block,
+                    street: userData.street,
+                    barangay: userData.barangay,
+                    city: userData.city,
+                })
+                .expect(401);
+        });
+
+        it('should reject empty Bearer token', async () => {
+            const userData = TestDataHelper.generateUserData();
+
+            await request(httpServer)
+                .post('/api/users')
+                .set('Authorization', 'Bearer ')
+                .send({
+                    firstName: userData.firstName,
+                    lastName: userData.lastName,
+                    block: userData.block,
+                    street: userData.street,
+                    barangay: userData.barangay,
+                    city: userData.city,
+                })
+                .expect(401);
+        });
+    });
+
+    describe('GET /api/users/:firebaseUid (Get User by Firebase UID)', () => {
+        it('should require authentication', async () => {
+            const firebaseUid = TestDataHelper.generateFirebaseUid();
+
+            const response = await request(httpServer).get(`/api/users/${firebaseUid}`).expect(401);
+
+            expect(response.body).toMatchObject({
+                statusCode: 401,
+                message: 'Authentication required',
+            });
+        });
+
+        it('should get user by Firebase UID with valid auth', async () => {
+            const userData = TestDataHelper.generateUserData();
+
+            // Create user in database
+            const createdUser = await dbHelper.seedUser({
+                firebaseUid: mockFirebaseJWT.uid,
+                email: mockFirebaseJWT.email,
+                firstName: userData.firstName,
+                lastName: userData.lastName,
+                address: `${userData.block}, ${userData.street}, ${userData.barangay}, ${userData.city}`,
+            });
+
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            const response = await request(httpServer)
+                .get(`/api/users/${mockFirebaseJWT.uid}`)
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .expect(200);
+
+            expect(response.body).toMatchObject({
+                message: 'User info fetched successfully',
+                userInfo: {
+                    id: createdUser.id,
+                    email: mockFirebaseJWT.email,
+                    firstName: userData.firstName,
+                    lastName: userData.lastName,
+                },
+            });
+        });
+
+        it('should parse address into components', async () => {
+            await dbHelper.seedUser({
+                firebaseUid: mockFirebaseJWT.uid,
+                email: mockFirebaseJWT.email,
+                firstName: 'John',
+                lastName: 'Doe',
+                address: 'Block 5, Sampaguita St, Brgy Commonwealth, Quezon City',
+            });
+
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            const response = await request(httpServer)
+                .get(`/api/users/${mockFirebaseJWT.uid}`)
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .expect(200);
+
+            const body = response.body as UserInfoResponse;
+
+            expect(body.userInfo).toMatchObject({
+                address: 'Block 5, Sampaguita St, Brgy Commonwealth, Quezon City',
+                block: 'Block 5',
+                street: 'Sampaguita St',
+                barangay: 'Brgy Commonwealth',
+                city: 'Quezon City',
+            });
+        });
+
+        it('should return 404 when user not found', async () => {
+            const nonExistentUid = TestDataHelper.generateFirebaseUid();
+
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            const response = await request(httpServer)
+                .get(`/api/users/${nonExistentUid}`)
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .expect(404);
+
+            expect(response.body).toMatchObject({
+                statusCode: 404,
+                message: 'User profile not found in database',
+            });
+        });
+
+        it('should handle address with extra spaces', async () => {
+            await dbHelper.seedUser({
+                firebaseUid: mockFirebaseJWT.uid,
+                email: mockFirebaseJWT.email,
+                firstName: 'John',
+                lastName: 'Doe',
+                address: 'Block 5,  Sampaguita St  , Brgy Commonwealth,  Quezon City  ',
+            });
+
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            const response = await request(httpServer)
+                .get(`/api/users/${mockFirebaseJWT.uid}`)
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .expect(200);
+
+            const body = response.body as UserInfoResponse;
+
+            expect(body.userInfo.block).toBe('Block 5');
+            expect(body.userInfo.street).toBe('Sampaguita St');
+            expect(body.userInfo.barangay).toBe('Brgy Commonwealth');
+            expect(body.userInfo.city).toBe('Quezon City');
+        });
+
+        it('should handle incomplete address', async () => {
+            await dbHelper.seedUser({
+                firebaseUid: mockFirebaseJWT.uid,
+                email: mockFirebaseJWT.email,
+                firstName: 'John',
+                lastName: 'Doe',
+                address: 'Block 5',
+            });
+
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            const response = await request(httpServer)
+                .get(`/api/users/${mockFirebaseJWT.uid}`)
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .expect(200);
+
+            const body = response.body as UserInfoResponse;
+
+            expect(body.userInfo.block).toBe('Block 5');
+            expect(body.userInfo.street).toBe('');
+            expect(body.userInfo.barangay).toBe('');
+            expect(body.userInfo.city).toBe('');
+        });
+
+        it('should handle user with middleName and suffix', async () => {
+            await dbHelper.seedUser({
+                firebaseUid: mockFirebaseJWT.uid,
+                email: mockFirebaseJWT.email,
+                firstName: 'John',
+                middleName: 'Michael',
+                lastName: 'Doe',
+                suffix: 'Jr.',
+                address: 'Test Address',
+            });
+
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            const response = await request(httpServer)
+                .get(`/api/users/${mockFirebaseJWT.uid}`)
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .expect(200);
+
+            const body = response.body as UserInfoResponse;
+
+            expect(body.userInfo).toMatchObject({
+                firstName: 'John',
+                middleName: 'Michael',
+                lastName: 'Doe',
+                suffix: 'Jr.',
+            });
+        });
+
+        it('should handle user without middleName and suffix', async () => {
+            await dbHelper.seedUser({
+                firebaseUid: mockFirebaseJWT.uid,
+                email: mockFirebaseJWT.email,
+                firstName: 'Jane',
+                lastName: 'Smith',
+                address: 'Test Address',
+            });
+
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            const response = await request(httpServer)
+                .get(`/api/users/${mockFirebaseJWT.uid}`)
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .expect(200);
+
+            const body = response.body as UserInfoResponse;
+
+            expect(body.userInfo).toMatchObject({
+                firstName: 'Jane',
+                lastName: 'Smith',
+                middleName: null,
+                suffix: null,
+            });
+        });
+    });
+
+    describe('Database Constraints and Relationships', () => {
+        it('should enforce unique Firebase UID constraint', async () => {
+            const firebaseUid = TestDataHelper.generateFirebaseUid();
+
+            // Create first user
+            await dbHelper.seedUser({
+                firebaseUid,
+                email: 'user1@example.com',
+                firstName: 'User',
+                lastName: 'One',
+                address: 'Address 1',
+            });
+
+            // Try to create second user with same Firebase UID - should fail at database level
+            await expect(
+                dbHelper.seedUser({
+                    firebaseUid, // Same UID
+                    email: 'user2@example.com',
+                    firstName: 'User',
+                    lastName: 'Two',
+                    address: 'Address 2',
+                }),
+            ).rejects.toThrow();
+        });
+
+        it('should enforce unique email constraint', async () => {
+            const email = 'duplicate@example.com';
+
+            // Create first user
+            await dbHelper.seedUser({
+                firebaseUid: TestDataHelper.generateFirebaseUid(),
+                email,
+                firstName: 'User',
+                lastName: 'One',
+                address: 'Address 1',
+            });
+
+            // Try to create second user with same email - should fail at database level
+            await expect(
+                dbHelper.seedUser({
+                    firebaseUid: TestDataHelper.generateFirebaseUid(),
+                    email, // Same email
+                    firstName: 'User',
+                    lastName: 'Two',
+                    address: 'Address 2',
+                }),
+            ).rejects.toThrow();
+        });
+    });
+
+    describe('Data Integrity', () => {
+        it('should maintain data consistency across multiple operations', async () => {
+            const userData = TestDataHelper.generateUserData();
+
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValue(mockFirebaseJWT);
+
+            // Create user via API
+            const createResponse = await request(httpServer)
+                .post('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send({
+                    firstName: userData.firstName,
+                    lastName: userData.lastName,
+                    block: userData.block,
+                    street: userData.street,
+                    barangay: userData.barangay,
+                    city: userData.city,
+                })
+                .expect(201);
+
+            const { userId } = createResponse.body as UserCreatedResponse;
+
+            // Get user by Firebase UID
+            const getResponse = await request(httpServer)
+                .get(`/api/users/${mockFirebaseJWT.uid}`)
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .expect(200);
+
+            const body = getResponse.body as UserInfoResponse;
+
+            // Both operations should return consistent data
+            expect(body.userInfo.id).toBe(userId);
+            expect(body.userInfo.email).toBe(mockFirebaseJWT.email);
+            expect(body.userInfo.firstName).toBe(userData.firstName);
+            expect(body.userInfo.lastName).toBe(userData.lastName);
+        });
+
+        it('should preserve data types correctly', async () => {
+            const userData = TestDataHelper.generateUserData();
+
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            await request(httpServer)
+                .post('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send({
+                    firstName: 'John',
+                    middleName: 'Michael',
+                    lastName: 'Doe',
+                    suffix: 'Jr.',
+                    block: userData.block,
+                    street: userData.street,
+                    barangay: userData.barangay,
+                    city: userData.city,
+                })
+                .expect(201);
+
+            const dbUser = await dbHelper.user.findUnique({
+                where: { firebaseUid: mockFirebaseJWT.uid },
+            });
+
+            // Verify data types
+            expect(typeof dbUser?.id).toBe('string');
+            expect(typeof dbUser?.firebaseUid).toBe('string');
+            expect(typeof dbUser?.email).toBe('string');
+            expect(typeof dbUser?.firstName).toBe('string');
+            expect(typeof dbUser?.middleName).toBe('string');
+            expect(typeof dbUser?.lastName).toBe('string');
+            expect(typeof dbUser?.suffix).toBe('string');
+            expect(typeof dbUser?.address).toBe('string');
+            expect(dbUser?.createdAt).toBeInstanceOf(Date);
+            expect(dbUser?.updatedAt).toBeInstanceOf(Date);
         });
     });
 });

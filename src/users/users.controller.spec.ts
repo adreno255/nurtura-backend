@@ -7,6 +7,7 @@ import { type CreateUserDto } from './dto/create-user.dto';
 import { type CurrentUserPayload } from '../common/interfaces';
 import {
     minimalCreateUserDto,
+    parsedUser,
     testEmails,
     testFirebaseUids,
     validCreateUserDto,
@@ -386,7 +387,7 @@ describe('UsersController', () => {
         it('should return userInfo with parsed address components', async () => {
             mockUsersService.findByFirebaseUid.mockResolvedValue({
                 message: 'User info fetched successfully',
-                userInfo: validUser,
+                userInfo: parsedUser,
             });
 
             const result = await controller.getUserById(firebaseUid);

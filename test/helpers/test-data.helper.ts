@@ -1,10 +1,97 @@
+import * as admin from 'firebase-admin';
+
 /**
  * Test Data Helper
  * Utilities for generating test data
  * Can be used in unit, integration, and E2E tests
  */
-
 export class TestDataHelper {
+    private static firebaseInitialized = false;
+
+    /**
+     * Initialize Firebase Admin SDK for testing
+     * @private
+     */
+    private static initializeFirebase(): void {
+        if (this.firebaseInitialized) {
+            return;
+        }
+
+        try {
+            const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT;
+            if (!serviceAccountJson) {
+                throw new Error('FIREBASE_SERVICE_ACCOUNT environment variable not set');
+            }
+
+            const serviceAccount = JSON.parse(serviceAccountJson) as admin.ServiceAccount;
+
+            admin.initializeApp({
+                credential: admin.credential.cert(serviceAccount),
+            });
+
+            this.firebaseInitialized = true;
+        } catch (error) {
+            console.error('Failed to initialize Firebase for testing:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Create a Firebase test user and return authentication token
+     * Used for E2E tests that require real Firebase authentication
+     */
+    static async createFirebaseTestUser(): Promise<{
+        uid: string;
+        email: string;
+        token: string;
+    }> {
+        this.initializeFirebase();
+
+        const email = this.generateRandomEmail();
+        const password = this.generateStrongPassword();
+
+        try {
+            // Create user in Firebase
+            const userRecord = await admin.auth().createUser({
+                email,
+                password,
+                emailVerified: true,
+            });
+
+            // Generate custom token for the user
+            const customToken = await admin.auth().createCustomToken(userRecord.uid);
+
+            // In a real test, you'd exchange this for an ID token
+            // For E2E tests, we'll use the custom token as-is
+            // Note: In production tests, you should exchange this via Firebase Client SDK
+            return {
+                uid: userRecord.uid,
+                email: userRecord.email!,
+                token: customToken,
+            };
+        } catch (error) {
+            console.error('Failed to create Firebase test user:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Delete a Firebase test user
+     * Used to clean up after E2E tests
+     */
+    static async deleteFirebaseTestUser(uid: string): Promise<void> {
+        this.initializeFirebase();
+
+        try {
+            await admin.auth().deleteUser(uid);
+        } catch (error) {
+            // Ignore errors if user doesn't exist
+            if (error instanceof Error && !error.message.includes('NOT_FOUND')) {
+                console.error('Failed to delete Firebase test user:', error);
+            }
+        }
+    }
+
     /**
      * Generate a random email address
      */
@@ -94,14 +181,28 @@ export class TestDataHelper {
      */
     static generateUserData() {
         const firstNames = ['John', 'Jane', 'Alice', 'Bob', 'Charlie', 'Diana'];
+        const middleNames = ['Michael', 'Marie', 'James', 'Ann', 'Lee', 'Rose'];
         const lastNames = ['Doe', 'Smith', 'Johnson', 'Williams', 'Brown', 'Garcia'];
+        const suffixes = ['Jr.', 'Sr.', 'III', 'IV'];
         const streets = ['Main St', 'Oak Ave', 'Pine Rd', 'Maple Dr', 'Cedar Ln'];
         const barangays = ['Brgy Commonwealth', 'Brgy Test', 'Brgy Sample', 'Brgy Example'];
         const cities = ['Quezon City', 'Manila', 'Makati', 'Pasig', 'Taguig'];
 
+        // 30% chance to have middleName
+        const middleName =
+            Math.random() > 0.7
+                ? middleNames[Math.floor(Math.random() * middleNames.length)]
+                : undefined;
+
+        // 20% chance to have suffix
+        const suffix =
+            Math.random() > 0.8 ? suffixes[Math.floor(Math.random() * suffixes.length)] : undefined;
+
         return {
             firstName: firstNames[Math.floor(Math.random() * firstNames.length)],
+            middleName,
             lastName: lastNames[Math.floor(Math.random() * lastNames.length)],
+            suffix,
             block: `Block ${Math.floor(Math.random() * 20) + 1}`,
             street: streets[Math.floor(Math.random() * streets.length)],
             barangay: barangays[Math.floor(Math.random() * barangays.length)],
