@@ -1,6 +1,5 @@
 import { config } from 'dotenv';
 import { TestDatabaseHelper } from '../helpers/test-database.helper';
-import { inputUser } from '../fixtures';
 
 /**
  * Global setup for integration tests
@@ -38,9 +37,6 @@ export default async function globalSetup() {
         // Reset database to clean state
         await dbHelper.clearDatabase();
         console.log('Test database reset to clean state');
-
-        await dbHelper.seedUser(inputUser);
-        console.log('Test database seeded');
     } catch (error) {
         console.error('Failed to initialize test database:', error);
         throw error;

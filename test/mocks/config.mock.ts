@@ -8,8 +8,9 @@
  */
 export const defaultTestConfig = {
     NODE_ENV: 'test',
+    HOST: 'localhost',
     PORT: 3001,
-    DATABASE_URL: 'postgresql://test:test@localhost:5432/nurtura_test',
+    DATABASE_URL: 'postgresql://postgres:postgres@localhost:5433/nurtura_test',
     SENDGRID_API_KEY: 'SG.test-api-key',
     SENDGRID_FROM_EMAIL: 'noreply@nurtura.test',
     SENDGRID_FROM_NAME: 'Nurtura Test',

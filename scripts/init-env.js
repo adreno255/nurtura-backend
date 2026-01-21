@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const envPath = path.resolve(process.cwd(), '.env');
+const envPath = path.resolve(process.cwd(), '.env.staging');
 const examplePath = path.resolve(process.cwd(), '.env.example');
 
 if (fs.existsSync(envPath)) {

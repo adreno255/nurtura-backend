@@ -1,35 +1,45 @@
 {
     "name": "nurtura-api-server",
-    "version": "0.0.1",
+    "version": "0.0.0-development",
     "description": "The API server for the Nurtura Android application.",
     "author": "",
     "private": true,
     "license": "UNLICENSED",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/adreno255/nurtura-backend.git"
+    },
     "scripts": {
         "build": "nest build",
         "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
-        "start": "nest start",
-        "start:dev": "nest start --watch",
-        "start:debug": "nest start --debug --watch",
-        "start:prod": "node dist/main",
+        "start": "cross-env NODE_ENV=development nest start",
+        "start:dev": "cross-env NODE_ENV=development nest start --watch",
+        "start:staging": "cross-env NODE_ENV=staging nest start --watch",
+        "start:debug": "cross-env NODE_ENV=development nest start --debug --watch",
+        "start:prod": "cross-env NODE_ENV=production node dist/main",
         "lint:check": "eslint \"{src,apps,libs,test}/**/*.ts\"",
         "lint:fix": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
-        "test": "jest",
-        "test:watch": "jest --watch",
-        "test:cov": "jest --coverage",
-        "test:integration": "jest --config ./test/jest-integration.json",
-        "test:integration:watch": "jest --config ./test/jest-integration.json --watch",
-        "test:integration:cov": "jest --config ./test/jest-integration.json --coverage",
-        "test:e2e": "jest --config ./test/jest-e2e.json",
-        "test:e2e:watch": "jest --config ./test/jest-e2e.json --watch",
-        "test:e2e:cov": "jest --config ./test/jest-e2e.json --coverage",
-        "test:smoke": "jest --config test/jest-smoke.json",
-        "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
+        "test": "cross-env NODE_ENV=test jest",
+        "test:watch": "cross-env NODE_ENV=test jest --watch",
+        "test:cov": "cross-env NODE_ENV=test jest --coverage",
+        "test:integration": "cross-env NODE_ENV=test jest --config ./test/jest-integration.json",
+        "test:integration:watch": "cross-env NODE_ENV=test jest --config ./test/jest-integration.json --watch",
+        "test:integration:cov": "cross-env NODE_ENV=test jest --config ./test/jest-integration.json --coverage",
+        "test:e2e": "cross-env NODE_ENV=development jest --config ./test/jest-e2e.json",
+        "test:e2e:watch": "cross-env NODE_ENV=development jest --config ./test/jest-e2e.json --watch",
+        "test:e2e:cov": "cross-env NODE_ENV=development jest --config ./test/jest-e2e.json --coverage",
+        "test:debug": "cross-env NODE_ENV=test node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
         "test:all": "npm run test && npm run test:integration && npm run test:e2e",
         "test:all:cov": "npm run test:cov && npm run test:integration:cov && npm run test:e2e:cov",
         "prepare": "husky",
         "init:dev": "npm install && node scripts/init-env.js && prisma generate",
-        "deploy:prod": "npm install && prisma generate && nest build"
+        "deploy:prod": "npm install && prisma generate && nest build",
+        "docker:db:up": "docker-compose up -d postgres && sleep 2 && dotenv -e .env.test -- npx prisma db push",
+        "docker:db:down": "docker-compose down postgres",
+        "docker:pgadmin:up": "docker-compose up -d pgadmin",
+        "docker:pgadmin:down": "docker-compose stop pgadmin",
+        "docker:down": "docker-compose down",
+        "semantic-release": "semantic-release"
     },
     "dependencies": {
         "@nestjs/common": "^11.0.1",
@@ -67,6 +77,8 @@
         "@types/passport-jwt": "^4.0.1",
         "@types/pg": "^8.16.0",
         "@types/supertest": "^6.0.2",
+        "cross-env": "^10.1.0",
+        "dotenv-cli": "^11.0.0",
         "eslint": "^9.18.0",
         "eslint-config-prettier": "^10.0.1",
         "eslint-plugin-prettier": "^5.2.2",
@@ -84,6 +96,9 @@
         "tsconfig-paths": "^4.2.0",
         "typescript": "^5.7.3",
         "typescript-eslint": "^8.20.0"
+    },
+    "overrides": {
+        "hono": "^4.11.4"
     },
     "jest": {
         "moduleFileExtensions": [
@@ -115,7 +130,7 @@
     },
     "lint-staged": {
         "*.{ts,js}": [
-            "eslint --fix",
+            "eslint --fix --max-warnings=0 --no-warn-ignored",
             "prettier --write"
         ],
         "*.{json,md,yml,yaml}": [

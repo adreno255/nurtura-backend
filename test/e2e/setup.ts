@@ -9,7 +9,7 @@ import { TestDatabaseHelper } from '../helpers/test-database.helper';
 export default async function globalSetup() {
     console.log('\nStarting E2E test setup...\n');
 
-    config({ path: '.env.test' });
+    config({ path: '.env.development' });
 
     const requiredEnvVars = [
         'DATABASE_URL',

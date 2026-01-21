@@ -19,6 +19,8 @@ import { MqttModule } from './mqtt/mqtt.module';
     imports: [
         ConfigModule.forRoot({
             isGlobal: true,
+            ignoreEnvFile: process.env.NODE_ENV === 'production',
+            envFilePath: `.env.${process.env.NODE_ENV || 'development'}`,
             validationSchema: envValidationSchema,
             validationOptions: {
                 abortEarly: false,
