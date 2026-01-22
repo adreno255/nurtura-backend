@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { type DecodedIdToken } from 'firebase-admin/auth';
 
 /**
  * Test Data Helper
@@ -37,17 +38,15 @@ export class TestDataHelper {
     }
 
     /**
-     * Create a Firebase test user and return authentication token
+     * Create a Firebase test user
      * Used for E2E tests that require real Firebase authentication
      */
-    static async createFirebaseTestUser(): Promise<{
-        uid: string;
+    static async createFirebaseTestUser(email: string): Promise<{
+        firebaseUid: string;
         email: string;
-        token: string;
     }> {
         this.initializeFirebase();
 
-        const email = this.generateRandomEmail();
         const password = this.generateStrongPassword();
 
         try {
@@ -58,21 +57,34 @@ export class TestDataHelper {
                 emailVerified: true,
             });
 
-            // Generate custom token for the user
-            const customToken = await admin.auth().createCustomToken(userRecord.uid);
-
-            // In a real test, you'd exchange this for an ID token
-            // For E2E tests, we'll use the custom token as-is
-            // Note: In production tests, you should exchange this via Firebase Client SDK
             return {
-                uid: userRecord.uid,
+                firebaseUid: userRecord.uid,
                 email: userRecord.email!,
-                token: customToken,
             };
         } catch (error) {
             console.error('Failed to create Firebase test user:', error);
             throw error;
         }
+    }
+
+    /**
+     * Create mock authentication token
+     * Used for E2E tests that require authentication
+     */
+    static createMockDecodedToken(overrides: Partial<DecodedIdToken>): DecodedIdToken {
+        return {
+            uid: 'default-uid',
+            email: 'test@example.com',
+            email_verified: true,
+            iss: 'https://securetoken.google.com/your-project',
+            aud: 'your-project',
+            auth_time: 123,
+            iat: 123,
+            exp: 456,
+            sub: 'default-uid',
+            firebase: { identities: {}, sign_in_provider: 'password' },
+            ...overrides,
+        } as DecodedIdToken;
     }
 
     /**

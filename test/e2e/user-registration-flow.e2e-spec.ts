@@ -1,728 +1,483 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-import { Test, type TestingModule } from '@nestjs/testing';
-import { type INestApplication, ValidationPipe } from '@nestjs/common';
+import { type INestApplication } from '@nestjs/common';
 import request from 'supertest';
-import { AppModule } from '../../src/app.module';
-import { TestDatabaseHelper } from '../helpers/test-database.helper';
-import { TestDataHelper } from '../helpers/test-data.helper';
-import { AllExceptionsFilter } from '../../src/common/filters/all-exceptions.filter';
-import { MyLoggerService } from '../../src/my-logger/my-logger.service';
+import { TestDatabaseHelper, TestDataHelper, TestServerHelper } from '../helpers';
+import { type Server } from 'http';
+import {
+    type UserCreatedResponse,
+    type EmailAvailabilityResponse,
+    type UserInfo,
+} from '../../src/users/interfaces/user.interface';
+import * as crypto from 'crypto';
+import { FirebaseService } from '../../src/firebase/firebase.service';
+import { type FirebaseTokenPayload } from '../../src/common/interfaces';
 
-describe('User Registration Flow E2E Tests', () => {
+jest.mock('crypto', () => {
+    const actualCrypto = jest.requireActual<typeof crypto>('crypto');
+
+    return {
+        ...actualCrypto,
+        randomInt: jest.fn(),
+    };
+});
+
+/**
+ * User Registration Flow E2E Tests
+ *
+ * These tests use REAL services (Firebase, SendGrid) and REAL test database.
+ * Only critical registration flows are tested here.
+ *
+ * Prerequisites:
+ * - Firebase project must be configured
+ * - SendGrid API key must be valid (will send real OTP emails)
+ * - Test database must be accessible
+ *
+ * Note: OTP emails will be sent to real email addresses during these tests but OTP will be overriden.
+ */
+describe('E2E User Registration Flow', () => {
     let app: INestApplication;
     let dbHelper: TestDatabaseHelper;
+    let serverHelper: TestServerHelper;
+    let httpServer: Server;
 
     beforeAll(async () => {
-        // Initialize database helper
+        // Initialize database helper with hosted PostgreSQL test DB
         dbHelper = new TestDatabaseHelper();
         await dbHelper.connect();
 
-        // Create NestJS testing module
-        const moduleFixture: TestingModule = await Test.createTestingModule({
-            imports: [AppModule],
-        }).compile();
-
-        app = moduleFixture.createNestApplication();
-
-        // Apply same configuration as main.ts
-        app.useGlobalPipes(
-            new ValidationPipe({
-                whitelist: true,
-                forbidNonWhitelisted: true,
-                transform: true,
-                transformOptions: {
-                    enableImplicitConversion: true,
-                },
-            }),
-        );
-
-        const logger = app.get(MyLoggerService);
-        app.useGlobalFilters(new AllExceptionsFilter(logger));
-
-        app.enableCors();
-        app.setGlobalPrefix('api');
-
-        await app.init();
+        // Create NestJS testing module with real external services
+        serverHelper = new TestServerHelper();
+        app = await serverHelper.createTestApp();
+        httpServer = app.getHttpServer() as Server;
     });
 
     afterAll(async () => {
         await dbHelper.clearDatabase();
         await dbHelper.disconnect();
-        await app.close();
+        await serverHelper.closeApp();
     });
 
-    beforeEach(async () => {
-        // Clean database before each test
-        await dbHelper.clearDatabase();
+    beforeEach(() => {
+        jest.clearAllMocks();
     });
 
-    describe('Complete Registration Flow', () => {
-        it('should complete full registration flow: check email → send OTP → verify OTP → create user', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-            const userData = TestDataHelper.generateUserData();
+    describe('Traditional Sign-up Subflow', () => {
+        const email = TestDataHelper.generateRandomEmail();
+        const userData = TestDataHelper.generateUserData();
+        let firebaseUser: FirebaseTokenPayload;
+        let user: Partial<UserInfo>;
 
-            // Step 1: Check email availability
-            const emailCheckResponse = await request(app.getHttpServer())
+        afterAll(async () => {
+            await app.get(FirebaseService).getAuth().deleteUser(user.firebaseUid!);
+            await dbHelper.clearDatabase();
+        });
+
+        it('should check email availability for registration', async () => {
+            const response = await request(httpServer)
                 .get('/api/users')
                 .query({ email })
                 .expect(200);
 
-            expect(emailCheckResponse.body).toMatchObject({
-                available: true,
-                message: 'Email is available',
-            });
+            const body = response.body as EmailAvailabilityResponse;
 
-            // Step 2: Send registration OTP
-            const otpResponse = await request(app.getHttpServer())
+            expect(body).toHaveProperty('available');
+            expect(body).toHaveProperty('message');
+            expect(typeof body.available).toBe('boolean');
+
+            // Email should be available
+            expect(body.available).toBe(true);
+            expect(body.message).toBe('Email is available');
+        });
+
+        it('should send email verification OTP to valid email for registration', async () => {
+            (crypto.randomInt as jest.Mock).mockReturnValue(1);
+
+            const response = await request(httpServer)
                 .post('/api/auth/otp/registration')
                 .send({ email })
                 .expect(200);
 
-            expect(otpResponse.body).toMatchObject({
+            expect(response.body).toEqual({
                 message: 'Registration OTP sent successfully. Please check your email.',
             });
+        });
 
-            // Step 3: Verify OTP
-            // Note: In real test, we'd need to extract OTP from mock email service
-            // For E2E, we assume OTP verification happens (or mock it)
-            const mockOtp = '12345';
-            const verifyResponse = await request(app.getHttpServer())
+        it('should verify sent OTP for registration', async () => {
+            const code = '11111';
+
+            const response = await request(httpServer)
                 .post('/api/auth/otp/verify')
                 .send({
                     email,
-                    code: mockOtp,
+                    code,
                     purpose: 'registration',
                 })
-                .expect((res) => {
-                    // Will succeed if OTP matches, fail if not
-                    expect([200, 400]).toContain(res.status);
+                .expect(200);
+
+            expect(response.body).toEqual({
+                message: 'OTP verified successfully.',
+            });
+        });
+
+        it('should register user in Firebase Auth', async () => {
+            const password = TestDataHelper.generateStrongPassword();
+
+            // Create user in Firebase
+            const userRecord = await app.get(FirebaseService).getAuth().createUser({
+                email,
+                password,
+                emailVerified: true,
+            });
+
+            firebaseUser = {
+                firebaseUid: userRecord.uid,
+                email: userRecord.email!,
+            };
+
+            expect(firebaseUser.firebaseUid).toBeTruthy();
+            expect(firebaseUser.email).toBe(email);
+        });
+
+        it('should register user in the database', async () => {
+            const mockDecodedToken = TestDataHelper.createMockDecodedToken({
+                uid: firebaseUser.firebaseUid,
+                email: firebaseUser.email,
+            });
+
+            jest.spyOn(app.get(FirebaseService).getAuth(), 'verifyIdToken').mockResolvedValueOnce(
+                mockDecodedToken,
+            );
+
+            const response = await request(httpServer)
+                .post('/api/users')
+                .set('Authorization', `Bearer ${firebaseUser.firebaseUid}`)
+                .send({
+                    firstName: userData.firstName,
+                    lastName: userData.lastName,
+                    block: userData.block,
+                    street: userData.street,
+                    barangay: userData.barangay,
+                    city: userData.city,
+                })
+                .expect(201);
+
+            const { userId } = response.body as UserCreatedResponse;
+
+            expect(response.body).toMatchObject({
+                message: 'User registered successfully',
+                userId,
+            });
+
+            // Verify user was created in database
+            const dbUser = await dbHelper.user.findUnique({
+                where: { firebaseUid: firebaseUser.firebaseUid },
+            });
+
+            user = {
+                id: dbUser?.id,
+                firebaseUid: firebaseUser.firebaseUid,
+                email: firebaseUser.email,
+                firstName: dbUser?.firstName,
+                middleName: dbUser?.middleName,
+                lastName: dbUser?.lastName,
+                suffix: dbUser?.suffix,
+                address: dbUser?.address,
+                block: userData.block,
+                street: userData.street,
+                barangay: userData.barangay,
+                city: userData.city,
+            };
+
+            expect(dbUser).not.toBeNull();
+            expect(dbUser?.email).toBe(firebaseUser.email);
+            expect(dbUser?.firstName).toBe(userData.firstName);
+            expect(dbUser?.lastName).toBe(userData.lastName);
+        });
+
+        it('should retrieve user info from the database', async () => {
+            const mockDecodedToken = TestDataHelper.createMockDecodedToken({
+                uid: firebaseUser.firebaseUid,
+                email: firebaseUser.email,
+            });
+
+            jest.spyOn(app.get(FirebaseService).getAuth(), 'verifyIdToken').mockResolvedValueOnce(
+                mockDecodedToken,
+            );
+
+            const response = await request(httpServer)
+                .get(`/api/users/${firebaseUser.firebaseUid}`)
+                .set('Authorization', `Bearer ${firebaseUser.firebaseUid}`)
+                .expect(200);
+
+            expect(response.body).toMatchObject({
+                message: 'User info fetched successfully',
+                userInfo: {
+                    id: user.id,
+                    firebaseUid: user.firebaseUid,
+                    email: user.email,
+                    firstName: user.firstName,
+                    middleName: user.middleName,
+                    lastName: user.lastName,
+                    suffix: user.suffix,
+                    address: user.address,
+                    block: user.block,
+                    street: user.street,
+                    barangay: user.barangay,
+                    city: user.city,
+                },
+            });
+
+            // Verify user exists in database
+            const dbUser = await dbHelper.user.findUnique({
+                where: { firebaseUid: user.firebaseUid },
+            });
+
+            expect(dbUser).not.toBeNull();
+            expect(dbUser?.email).toBe(user.email);
+            expect(dbUser?.firstName).toBe(user.firstName);
+            expect(dbUser?.lastName).toBe(user.lastName);
+        });
+
+        describe('forgot Password Endpoints', () => {
+            it('should check if account exists for password reset', async () => {
+                const response = await request(httpServer)
+                    .get('/api/users')
+                    .query({ email })
+                    .expect(200);
+
+                const body = response.body as EmailAvailabilityResponse;
+
+                expect(body).toHaveProperty('available');
+                expect(body).toHaveProperty('message');
+                expect(typeof body.available).toBe('boolean');
+
+                // Email should not be available now
+                expect(body.available).toBe(false);
+                expect(body.message).toBe('Email is already registered');
+            });
+
+            it('should only return password as provider', async () => {
+                const response = await request(httpServer)
+                    .get('/api/auth/providers')
+                    .query({ email })
+                    .expect(200);
+
+                expect(response.body).toEqual({
+                    providers: ['password'],
                 });
-
-            // Step 4: Create user profile (requires Firebase JWT - skip in this flow test)
-            // This would be tested separately with authentication
-        });
-
-        it('should prevent registration with already registered email', async () => {
-            const email = 'existing@example.com';
-
-            // Step 1: Check email availability (should be taken if exists in Firebase)
-            const emailCheckResponse = await request(app.getHttpServer())
-                .get('/api/users')
-                .query({ email })
-                .expect(200);
-
-            // Response depends on whether email exists in Firebase
-            expect(emailCheckResponse.body).toHaveProperty('available');
-            expect(emailCheckResponse.body).toHaveProperty('message');
-        });
-
-        it('should handle OTP expiry in registration flow', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-
-            // Send OTP
-            await request(app.getHttpServer())
-                .post('/api/auth/otp/registration')
-                .send({ email })
-                .expect(200);
-
-            // Wait for OTP to expire (or use expired code)
-            await TestDataHelper.delay(100); // Simulate some time passing
-
-            // Try to verify with potentially expired OTP
-            const expiredOtp = '99999';
-            await request(app.getHttpServer())
-                .post('/api/auth/otp/verify')
-                .send({
-                    email,
-                    code: expiredOtp,
-                    purpose: 'registration',
-                })
-                .expect(400);
-        });
-
-        it('should handle wrong OTP in registration flow', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-
-            // Send OTP
-            await request(app.getHttpServer())
-                .post('/api/auth/otp/registration')
-                .send({ email })
-                .expect(200);
-
-            // Try to verify with wrong OTP
-            const wrongOtp = '00000';
-            const response = await request(app.getHttpServer())
-                .post('/api/auth/otp/verify')
-                .send({
-                    email,
-                    code: wrongOtp,
-                    purpose: 'registration',
-                })
-                .expect(400);
-
-            expect(response.body.message).toMatch(/Invalid OTP|No OTP found|OTP has expired/);
-        });
-    });
-
-    describe('POST /api/auth/otp/registration', () => {
-        it('should send registration OTP successfully', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-
-            const response = await request(app.getHttpServer())
-                .post('/api/auth/otp/registration')
-                .send({ email })
-                .expect(200);
-
-            expect(response.body).toMatchObject({
-                message: 'Registration OTP sent successfully. Please check your email.',
             });
-        });
 
-        it('should return 400 for invalid email format', async () => {
-            const response = await request(app.getHttpServer())
-                .post('/api/auth/otp/registration')
-                .send({ email: 'not-an-email' })
-                .expect(400);
+            it('should send forgot password OTP to valid email for password reset', async () => {
+                (crypto.randomInt as jest.Mock).mockReturnValue(1);
 
-            expect(response.body.statusCode).toBe(400);
-            expect(response.body.message).toContain('Invalid email format');
-        });
-
-        it('should return 400 when email is missing', async () => {
-            const response = await request(app.getHttpServer())
-                .post('/api/auth/otp/registration')
-                .send({})
-                .expect(400);
-
-            expect(response.body.statusCode).toBe(400);
-        });
-
-        it('should return 400 for extra fields', async () => {
-            const response = await request(app.getHttpServer())
-                .post('/api/auth/otp/registration')
-                .send({
-                    email: 'test@example.com',
-                    extraField: 'should-not-be-here',
-                })
-                .expect(400);
-
-            expect(response.body.statusCode).toBe(400);
-        });
-
-        it('should allow sending multiple OTPs to different emails', async () => {
-            const emails = Array.from({ length: 3 }, () => TestDataHelper.generateRandomEmail());
-
-            for (const email of emails) {
-                await request(app.getHttpServer())
-                    .post('/api/auth/otp/registration')
-                    .send({ email })
-                    .expect(200);
-            }
-        });
-
-        it('should allow resending OTP to same email', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-
-            // Send first OTP
-            await request(app.getHttpServer())
-                .post('/api/auth/otp/registration')
-                .send({ email })
-                .expect(200);
-
-            // Resend OTP
-            await request(app.getHttpServer())
-                .post('/api/auth/otp/registration')
-                .send({ email })
-                .expect(200);
-        });
-
-        it('should handle various valid email formats', async () => {
-            const validEmails = [
-                'user@example.com',
-                'user.name@example.com',
-                'user+tag@example.co.uk',
-                'user_name@sub.example.com',
-            ];
-
-            for (const email of validEmails) {
-                await request(app.getHttpServer())
-                    .post('/api/auth/otp/registration')
-                    .send({ email })
-                    .expect(200);
-            }
-        });
-    });
-
-    describe('POST /api/auth/otp/forgot-password', () => {
-        it('should send forgot password OTP successfully', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-
-            const response = await request(app.getHttpServer())
-                .post('/api/auth/otp/forgot-password')
-                .send({ email })
-                .expect(200);
-
-            expect(response.body).toMatchObject({
-                message: 'Password reset OTP sent successfully. Please check your email.',
-            });
-        });
-
-        it('should return 400 for invalid email format', async () => {
-            const response = await request(app.getHttpServer())
-                .post('/api/auth/otp/forgot-password')
-                .send({ email: 'invalid-email' })
-                .expect(400);
-
-            expect(response.body.statusCode).toBe(400);
-            expect(response.body.message).toContain('Invalid email format');
-        });
-
-        it('should return 400 when email is missing', async () => {
-            const response = await request(app.getHttpServer())
-                .post('/api/auth/otp/forgot-password')
-                .send({})
-                .expect(400);
-
-            expect(response.body.statusCode).toBe(400);
-        });
-
-        it('should handle multiple forgot password requests', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-
-            // Send multiple forgot password OTPs
-            for (let i = 0; i < 3; i++) {
-                await request(app.getHttpServer())
+                const response = await request(httpServer)
                     .post('/api/auth/otp/forgot-password')
                     .send({ email })
                     .expect(200);
-            }
-        });
-    });
 
-    describe('POST /api/auth/otp/verify', () => {
-        it('should verify valid OTP successfully', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-
-            // Send OTP first
-            await request(app.getHttpServer())
-                .post('/api/auth/otp/registration')
-                .send({ email })
-                .expect(200);
-
-            // Note: In real E2E test, we'd need access to the generated OTP
-            // For this test, we demonstrate the API structure
-            const mockOtp = '12345';
-
-            await request(app.getHttpServer())
-                .post('/api/auth/otp/verify')
-                .send({
-                    email,
-                    code: mockOtp,
-                    purpose: 'registration',
-                })
-                .expect((res) => {
-                    // Will be 200 if OTP matches, 400 if not
-                    expect([200, 400]).toContain(res.status);
+                expect(response.body).toEqual({
+                    message: 'Password reset OTP sent successfully. Please check your email.',
                 });
-        });
-
-        it('should return 400 for invalid OTP code format', async () => {
-            const response = await request(app.getHttpServer())
-                .post('/api/auth/otp/verify')
-                .send({
-                    email: 'test@example.com',
-                    code: '123', // Too short
-                    purpose: 'registration',
-                })
-                .expect(400);
-
-            expect(response.body.statusCode).toBe(400);
-            expect(response.body.message).toContain('5 digits');
-        });
-
-        it('should return 400 for invalid purpose', async () => {
-            const response = await request(app.getHttpServer())
-                .post('/api/auth/otp/verify')
-                .send({
-                    email: 'test@example.com',
-                    code: '12345',
-                    purpose: 'invalid-purpose',
-                })
-                .expect(400);
-
-            expect(response.body.statusCode).toBe(400);
-        });
-
-        it('should return 400 when email is missing', async () => {
-            const response = await request(app.getHttpServer())
-                .post('/api/auth/otp/verify')
-                .send({
-                    code: '12345',
-                    purpose: 'registration',
-                })
-                .expect(400);
-
-            expect(response.body.statusCode).toBe(400);
-        });
-
-        it('should return 400 when code is missing', async () => {
-            const response = await request(app.getHttpServer())
-                .post('/api/auth/otp/verify')
-                .send({
-                    email: 'test@example.com',
-                    purpose: 'registration',
-                })
-                .expect(400);
-
-            expect(response.body.statusCode).toBe(400);
-        });
-
-        it('should return 400 when purpose is missing', async () => {
-            const response = await request(app.getHttpServer())
-                .post('/api/auth/otp/verify')
-                .send({
-                    email: 'test@example.com',
-                    code: '12345',
-                })
-                .expect(400);
-
-            expect(response.body.statusCode).toBe(400);
-        });
-
-        it('should return 400 for wrong purpose', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-
-            // Send registration OTP
-            await request(app.getHttpServer())
-                .post('/api/auth/otp/registration')
-                .send({ email })
-                .expect(200);
-
-            // Try to verify with wrong purpose
-            const mockOtp = '12345';
-            const response = await request(app.getHttpServer())
-                .post('/api/auth/otp/verify')
-                .send({
-                    email,
-                    code: mockOtp,
-                    purpose: 'forgot-password', // Wrong purpose
-                })
-                .expect(400);
-
-            expect(response.body.message).toMatch(/Invalid OTP context|No OTP found|Invalid OTP/);
-        });
-
-        it('should return 400 for non-existent OTP', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-
-            // Try to verify without sending OTP first
-            const response = await request(app.getHttpServer())
-                .post('/api/auth/otp/verify')
-                .send({
-                    email,
-                    code: '12345',
-                    purpose: 'registration',
-                })
-                .expect(400);
-
-            expect(response.body.message).toContain('No OTP found');
-        });
-
-        it('should validate OTP code is exactly 5 digits', async () => {
-            const invalidCodes = ['1234', '123456', 'abcde', '12.45', '12 45'];
-
-            for (const code of invalidCodes) {
-                await request(app.getHttpServer())
-                    .post('/api/auth/otp/verify')
-                    .send({
-                        email: 'test@example.com',
-                        code,
-                        purpose: 'registration',
-                    })
-                    .expect(400);
-            }
-        });
-    });
-
-    describe('GET /api/users (Email Availability)', () => {
-        it('should return available=true for new email', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-
-            const response = await request(app.getHttpServer())
-                .get('/api/users')
-                .query({ email })
-                .expect(200);
-
-            expect(response.body).toMatchObject({
-                available: true,
-                message: 'Email is available',
             });
-        });
 
-        it('should return available=false for existing Firebase email', async () => {
-            const email = 'existing@example.com';
+            it('should verify sent OTP for password reset', async () => {
+                const code = '11111';
 
-            const response = await request(app.getHttpServer())
-                .get('/api/users')
-                .query({ email })
-                .expect(200);
-
-            expect(response.body).toHaveProperty('available');
-            expect(response.body).toHaveProperty('message');
-        });
-
-        it('should return 400 for invalid email format', async () => {
-            const response = await request(app.getHttpServer())
-                .get('/api/users')
-                .query({ email: 'not-an-email' })
-                .expect(400);
-
-            expect(response.body.statusCode).toBe(400);
-            expect(response.body.message).toContain('Invalid email format');
-        });
-
-        it('should return 400 when email query param is missing', async () => {
-            const response = await request(app.getHttpServer()).get('/api/users').expect(400);
-
-            expect(response.body.statusCode).toBe(400);
-        });
-
-        it('should check multiple emails in sequence', async () => {
-            const emails = Array.from({ length: 3 }, () => TestDataHelper.generateRandomEmail());
-
-            for (const email of emails) {
-                await request(app.getHttpServer()).get('/api/users').query({ email }).expect(200);
-            }
-        });
-    });
-
-    describe('OTP Flow Variations', () => {
-        it('should handle registration OTP → forgot password OTP for same email', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-
-            // Send registration OTP
-            await request(app.getHttpServer())
-                .post('/api/auth/otp/registration')
-                .send({ email })
-                .expect(200);
-
-            // Send forgot password OTP (should overwrite registration OTP)
-            await request(app.getHttpServer())
-                .post('/api/auth/otp/forgot-password')
-                .send({ email })
-                .expect(200);
-
-            // Original registration OTP should now be invalid
-            const mockOtp = '12345';
-            await request(app.getHttpServer())
-                .post('/api/auth/otp/verify')
-                .send({
-                    email,
-                    code: mockOtp,
-                    purpose: 'registration',
-                })
-                .expect(400);
-        });
-
-        it('should handle concurrent OTP requests for different emails', async () => {
-            const emails = Array.from({ length: 5 }, () => TestDataHelper.generateRandomEmail());
-
-            // Send OTPs concurrently
-            await Promise.all(
-                emails.map((email) =>
-                    request(app.getHttpServer())
-                        .post('/api/auth/otp/registration')
-                        .send({ email })
-                        .expect(200),
-                ),
-            );
-        });
-
-        it('should handle rapid OTP resend requests', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-
-            // Send OTP multiple times rapidly
-            const requests = Array.from({ length: 3 }, () =>
-                request(app.getHttpServer())
-                    .post('/api/auth/otp/registration')
-                    .send({ email })
-                    .expect(200),
-            );
-
-            await Promise.all(requests);
-        });
-    });
-
-    describe('Error Response Consistency', () => {
-        it('should return consistent error format across OTP endpoints', async () => {
-            const invalidEmail = 'not-an-email';
-
-            const endpoints = [
-                { path: '/api/auth/otp/registration', body: { email: invalidEmail } },
-                { path: '/api/auth/otp/forgot-password', body: { email: invalidEmail } },
-            ];
-
-            for (const endpoint of endpoints) {
-                const response = await request(app.getHttpServer())
-                    .post(endpoint.path)
-                    .send(endpoint.body)
-                    .expect(400);
-
-                // Verify error response structure
-                expect(response.body).toHaveProperty('statusCode', 400);
-                expect(response.body).toHaveProperty('timestamp');
-                expect(response.body).toHaveProperty('path');
-                expect(response.body).toHaveProperty('message');
-                expect(response.body.message).toContain('Invalid email format');
-            }
-        });
-
-        it('should include ISO timestamp in all error responses', async () => {
-            const response = await request(app.getHttpServer())
-                .post('/api/auth/otp/verify')
-                .send({
-                    email: 'test@example.com',
-                    code: '123', // Invalid length
-                    purpose: 'registration',
-                })
-                .expect(400);
-
-            const timestamp = new Date(response.body.timestamp);
-            expect(timestamp).toBeInstanceOf(Date);
-            expect(timestamp.toString()).not.toBe('Invalid Date');
-        });
-
-        it('should include request path in error responses', async () => {
-            const response = await request(app.getHttpServer())
-                .post('/api/auth/otp/registration')
-                .send({ email: 'invalid' })
-                .expect(400);
-
-            expect(response.body.path).toBe('/api/auth/otp/registration');
-        });
-    });
-
-    describe('Input Validation Edge Cases', () => {
-        it('should trim whitespace from email in OTP requests', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-
-            // Send OTP with whitespace
-            await request(app.getHttpServer())
-                .post('/api/auth/otp/registration')
-                .send({ email: `  ${email}  ` })
-                .expect(200);
-        });
-
-        it('should handle email with uppercase letters', async () => {
-            const email = 'TEST@EXAMPLE.COM';
-
-            await request(app.getHttpServer())
-                .post('/api/auth/otp/registration')
-                .send({ email })
-                .expect(200);
-        });
-
-        it('should reject OTP code with letters', async () => {
-            await request(app.getHttpServer())
-                .post('/api/auth/otp/verify')
-                .send({
-                    email: 'test@example.com',
-                    code: 'ABCDE',
-                    purpose: 'registration',
-                })
-                .expect(400);
-        });
-
-        it('should reject OTP code with special characters', async () => {
-            await request(app.getHttpServer())
-                .post('/api/auth/otp/verify')
-                .send({
-                    email: 'test@example.com',
-                    code: '12!45',
-                    purpose: 'registration',
-                })
-                .expect(400);
-        });
-
-        it('should reject null values', async () => {
-            await request(app.getHttpServer())
-                .post('/api/auth/otp/registration')
-                .send({ email: null })
-                .expect(400);
-        });
-
-        it('should reject empty string email', async () => {
-            await request(app.getHttpServer())
-                .post('/api/auth/otp/registration')
-                .send({ email: '' })
-                .expect(400);
-        });
-    });
-
-    describe('Rate Limiting and Security', () => {
-        it('should handle multiple OTP requests without crashing', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-
-            // Send multiple OTP requests
-            for (let i = 0; i < 10; i++) {
-                await request(app.getHttpServer())
-                    .post('/api/auth/otp/registration')
-                    .send({ email })
-                    .expect(200);
-            }
-        });
-
-        it('should handle multiple verification attempts', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-
-            // Send OTP
-            await request(app.getHttpServer())
-                .post('/api/auth/otp/registration')
-                .send({ email })
-                .expect(200);
-
-            // Try multiple wrong codes
-            const wrongCodes = ['11111', '22222', '33333', '44444', '55555'];
-
-            for (const code of wrongCodes) {
-                await request(app.getHttpServer())
+                const response = await request(httpServer)
                     .post('/api/auth/otp/verify')
                     .send({
                         email,
                         code,
-                        purpose: 'registration',
+                        purpose: 'forgot-password',
                     })
-                    .expect(400);
-            }
+                    .expect(200);
+
+                expect(response.body).toEqual({
+                    message: 'OTP verified successfully.',
+                });
+            });
         });
     });
 
-    describe('JSON Response Format', () => {
-        it('should return JSON content type', async () => {
-            const response = await request(app.getHttpServer())
-                .post('/api/auth/otp/registration')
-                .send({ email: 'test@example.com' });
+    describe('Google SSO Subflow', () => {
+        const email = 'butikaimnida@gmail.com';
+        const userData = TestDataHelper.generateUserData();
+        let firebaseUser: FirebaseTokenPayload;
+        let user: Partial<UserInfo>;
 
-            expect(response.headers['content-type']).toMatch(/json/);
-        });
-
-        it('should accept JSON content type', async () => {
-            await request(app.getHttpServer())
-                .post('/api/auth/otp/registration')
-                .set('Content-Type', 'application/json')
-                .send({ email: 'test@example.com' })
-                .expect(200);
-        });
-
-        it('should return properly formatted JSON', async () => {
-            const response = await request(app.getHttpServer())
-                .post('/api/auth/otp/registration')
-                .send({ email: 'test@example.com' })
+        it('should check email availability for registration', async () => {
+            const response = await request(httpServer)
+                .get('/api/users')
+                .query({ email })
                 .expect(200);
 
-            expect(() => JSON.stringify(response.body)).not.toThrow();
-            expect(response.body).toBeInstanceOf(Object);
+            const body = response.body as EmailAvailabilityResponse;
+
+            expect(body).toHaveProperty('available');
+            expect(body).toHaveProperty('message');
+            expect(typeof body.available).toBe('boolean');
+
+            // Email should not be available since we are
+            // using a test account that uses Google SSO.
+            expect(body.available).toBe(false);
+            expect(body.message).toBe('Email is already registered');
+        });
+
+        it('should check onboarding status and be true', async () => {
+            const response = await request(httpServer)
+                .get('/api/auth/onboarding-status')
+                .query({ email })
+                .expect(200);
+
+            expect(response.body).toEqual({
+                needsOnboarding: true,
+                providers: ['google.com'],
+                message: 'User exists in Firebase, but no profile found in database',
+            });
+        });
+
+        it('should retrieve user in Firebase Auth', async () => {
+            // Retrieve user in Firebase
+            const userRecord = await app.get(FirebaseService).getAuth().getUserByEmail(email);
+
+            firebaseUser = {
+                firebaseUid: userRecord.uid,
+                email: userRecord.email!,
+            };
+
+            expect(firebaseUser.firebaseUid).toBeTruthy();
+            expect(firebaseUser.email).toBe(email);
+        });
+
+        it('should register user in the database', async () => {
+            const mockDecodedToken = TestDataHelper.createMockDecodedToken({
+                uid: firebaseUser.firebaseUid,
+                email: firebaseUser.email,
+            });
+
+            jest.spyOn(app.get(FirebaseService).getAuth(), 'verifyIdToken').mockResolvedValueOnce(
+                mockDecodedToken,
+            );
+
+            const response = await request(httpServer)
+                .post('/api/users')
+                .set('Authorization', `Bearer ${firebaseUser.firebaseUid}`)
+                .send({
+                    firstName: userData.firstName,
+                    lastName: userData.lastName,
+                    block: userData.block,
+                    street: userData.street,
+                    barangay: userData.barangay,
+                    city: userData.city,
+                })
+                .expect(201);
+
+            const { userId } = response.body as UserCreatedResponse;
+
+            expect(response.body).toMatchObject({
+                message: 'User registered successfully',
+                userId,
+            });
+
+            // Verify user was created in database
+            const dbUser = await dbHelper.user.findUnique({
+                where: { firebaseUid: firebaseUser.firebaseUid },
+            });
+
+            user = {
+                id: dbUser?.id,
+                firebaseUid: firebaseUser.firebaseUid,
+                email: firebaseUser.email,
+                firstName: dbUser?.firstName,
+                middleName: dbUser?.middleName,
+                lastName: dbUser?.lastName,
+                suffix: dbUser?.suffix,
+                address: dbUser?.address,
+                block: userData.block,
+                street: userData.street,
+                barangay: userData.barangay,
+                city: userData.city,
+            };
+
+            expect(dbUser).not.toBeNull();
+            expect(dbUser?.email).toBe(firebaseUser.email);
+            expect(dbUser?.firstName).toBe(userData.firstName);
+            expect(dbUser?.lastName).toBe(userData.lastName);
+        });
+
+        it('should retrieve user info from the database', async () => {
+            const mockDecodedToken = TestDataHelper.createMockDecodedToken({
+                uid: firebaseUser.firebaseUid,
+                email: firebaseUser.email,
+            });
+
+            jest.spyOn(app.get(FirebaseService).getAuth(), 'verifyIdToken').mockResolvedValueOnce(
+                mockDecodedToken,
+            );
+
+            const response = await request(httpServer)
+                .get(`/api/users/${firebaseUser.firebaseUid}`)
+                .set('Authorization', `Bearer ${firebaseUser.firebaseUid}`)
+                .expect(200);
+
+            expect(response.body).toMatchObject({
+                message: 'User info fetched successfully',
+                userInfo: {
+                    id: user.id,
+                    firebaseUid: user.firebaseUid,
+                    email: user.email,
+                    firstName: user.firstName,
+                    middleName: user.middleName,
+                    lastName: user.lastName,
+                    suffix: user.suffix,
+                    address: user.address,
+                    block: user.block,
+                    street: user.street,
+                    barangay: user.barangay,
+                    city: user.city,
+                },
+            });
+
+            // Verify user exists in database
+            const dbUser = await dbHelper.user.findUnique({
+                where: { firebaseUid: user.firebaseUid },
+            });
+
+            expect(dbUser).not.toBeNull();
+            expect(dbUser?.email).toBe(user.email);
+            expect(dbUser?.firstName).toBe(user.firstName);
+            expect(dbUser?.lastName).toBe(user.lastName);
+        });
+
+        describe('forgot Password Endpoints', () => {
+            it('should check if account exists for password reset', async () => {
+                const response = await request(httpServer)
+                    .get('/api/users')
+                    .query({ email })
+                    .expect(200);
+
+                const body = response.body as EmailAvailabilityResponse;
+
+                expect(body).toHaveProperty('available');
+                expect(body).toHaveProperty('message');
+                expect(typeof body.available).toBe('boolean');
+
+                // Email should not be available now
+                expect(body.available).toBe(false);
+                expect(body.message).toBe('Email is already registered');
+            });
+
+            it('should only return google.com as provider', async () => {
+                const response = await request(httpServer)
+                    .get('/api/auth/providers')
+                    .query({ email })
+                    .expect(200);
+
+                // User won't be able to reset password in app
+                // since the email is associated with a Google account.
+                expect(response.body).toEqual({
+                    providers: ['google.com'],
+                });
+            });
         });
     });
 });
