@@ -36,9 +36,40 @@
         {
             "type": "node",
             "request": "launch",
-            "name": "Debug Current Test File",
+            "name": "Debug Current Unit Test File",
             "program": "${workspaceFolder}/node_modules/jest/bin/jest",
-            "args": ["${relativeFile}", "--runInBand"],
+            "args": [
+                "${file}",
+                "--config",
+                "package.json",
+                "--runInBand",
+                "--no-cache",
+                "--testPathIgnorePatterns='(\\.integration\\.spec\\.ts$|\\.e2e-spec\\.ts$)'"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Debug Current Integration Test File",
+            "program": "${workspaceFolder}/node_modules/jest/bin/jest",
+            "args": [
+                "${file}",
+                "--config",
+                "test/jest-integration.json",
+                "--runInBand",
+                "--no-cache"
+            ],
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Debug Current E2E Test File",
+            "program": "${workspaceFolder}/node_modules/jest/bin/jest",
+            "args": ["${file}", "--config", "test/jest-e2e.json", "--runInBand", "--no-cache"],
             "console": "integratedTerminal",
             "cwd": "${workspaceFolder}"
         }

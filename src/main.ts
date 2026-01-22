@@ -63,9 +63,7 @@ async function bootstrap(): Promise<void> {
     const configService = app.get<ConfigService>(ConfigService);
     const port = configService.get<number>('PORT') ?? 3000;
     const env = configService.get<string>('NODE_ENV') ?? 'development';
-
-    // 0.0.0.0 for production/Docker, localhost for development
-    const host = env === 'production' ? '0.0.0.0' : 'localhost';
+    const host = configService.get<string>('HOST') ?? 'localhost';
 
     await app.listen(port, host);
 

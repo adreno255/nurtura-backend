@@ -2,7 +2,7 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-    provider = "prisma-client"
+    provider = "prisma-client-js"
     output   = "../src/generated/prisma"
     moduleFormat = "cjs"
 }
@@ -44,8 +44,8 @@ enum ActivityEventType {
   SENSORS_OFF
   SYSTEM_START
   SYSTEM_STOP
-  SENSOR_READING  // For logging sensor readings
-  AUTOMATION_TRIGGERED  // For automation events
+  SENSOR_READING
+  AUTOMATION_TRIGGERED
   DEVICE_ONLINE
   DEVICE_OFFLINE
   
@@ -84,14 +84,19 @@ enum DeviceStatus {
 // ============================================
 
 model User {
+  // Primary fields
   id          String   @id @default(cuid())
-  firebaseUid String   @unique @map("firebase_uid")
-  email       String   @unique
-  firstName   String   @map("first_name")
-  middleName  String?  @map("middle_name")
-  lastName    String   @map("last_name")
-  suffix      String?
-  address     String
+  firebaseUid String   @unique @map("firebase_uid") @db.VarChar(128)
+  email       String   @unique @db.VarChar(255)
+  
+  // Personal information
+  firstName   String   @map("first_name") @db.VarChar(100)
+  middleName  String?  @map("middle_name") @db.VarChar(100)
+  lastName    String   @map("last_name") @db.VarChar(100)
+  suffix      String?  @db.VarChar(20)
+  address     String   @db.VarChar(500)
+  
+  // Timestamps
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
@@ -103,26 +108,33 @@ model User {
 }
 
 model Rack {
+  // Primary fields
   id             String       @id @default(cuid())
   userId         String       @map("user_id")
-  name           String
-  macAddress     String       @unique @map("mac_address") // ESP32 MAC address
-  mqttTopic      String?      @map("mqtt_topic") // Custom MQTT topic for this rack
-  description    String?
+  
+  // Device information
+  name           String       @db.VarChar(200)
+  macAddress     String       @unique @map("mac_address") @db.VarChar(17)
+  mqttTopic      String?      @map("mqtt_topic") @db.VarChar(255)
+  description    String?      @db.VarChar(1000)
+  
+  // Status fields
   isActive       Boolean      @default(true) @map("is_active")
   status         DeviceStatus @default(OFFLINE)
   lastActivityAt DateTime?    @map("last_activity_at")
-  lastSeenAt     DateTime?    @map("last_seen_at") // Last MQTT message received
+  lastSeenAt     DateTime?    @map("last_seen_at")
+  
+  // Timestamps
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
 
   // Relations
-  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  plants            Plant[]
-  activities        Activity[]
-  notifications     Notification[]
-  sensorReadings    SensorReading[]
-  automationRules   AutomationRule[]
+  user               User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plants             Plant[]
+  activities         Activity[]
+  notifications      Notification[]
+  sensorReadings     SensorReading[]
+  automationRules    AutomationRule[]
   aggregatedReadings AggregatedSensorReading[]
 
   @@index([userId])
@@ -133,18 +145,27 @@ model Rack {
 }
 
 model Plant {
+  // Primary fields
   id              String     @id @default(cuid())
   rackId          String     @map("rack_id")
-  name            String
+  
+  // Plant information
+  name            String     @db.VarChar(200)
   type            PlantType?
   quantity        Int        @default(1)
   recommendedSoil SoilType?  @map("recommended_soil")
+  
+  // Tracking dates
   plantedAt       DateTime   @default(now()) @map("planted_at")
   harvestAt       DateTime?  @map("harvest_at")
   lastWateredAt   DateTime?  @map("last_watered_at")
   lastLightOnAt   DateTime?  @map("last_light_on_at")
-  notes           String?
+  
+  // Additional information
+  notes           String?    @db.Text
   isActive        Boolean    @default(true) @map("is_active")
+  
+  // Timestamps
   createdAt       DateTime   @default(now()) @map("created_at")
   updatedAt       DateTime   @updatedAt @map("updated_at")
 
@@ -157,15 +178,18 @@ model Plant {
 }
 
 model SensorReading {
+  // Primary fields
   id          String   @id @default(cuid())
   rackId      String   @map("rack_id")
+  
+  // Sensor data
   temperature Float    // Celsius
   humidity    Float    // Percentage (0-100)
   moisture    Float    // Percentage (0-100)
   lightLevel  Float    @map("light_level") // Lux or raw LDR value
-  timestamp   DateTime @default(now())
   
-  // Optional: Store raw sensor values for debugging
+  // Metadata
+  timestamp   DateTime @default(now())
   rawData     Json?    @map("raw_data")
 
   // Relations
@@ -177,20 +201,26 @@ model SensorReading {
   @@map("sensor_readings")
 }
 
-// Aggregated data for analytics (hourly averages)
 model AggregatedSensorReading {
+  // Primary fields
   id             String   @id @default(cuid())
   rackId         String   @map("rack_id")
-  hour           DateTime // Start of the hour
+  hour           DateTime
+  
+  // Average values
   avgTemperature Float    @map("avg_temperature")
   avgHumidity    Float    @map("avg_humidity")
   avgMoisture    Float    @map("avg_moisture")
   avgLightLevel  Float    @map("avg_light_level")
+  
+  // Min/Max values
   minTemperature Float    @map("min_temperature")
   maxTemperature Float    @map("max_temperature")
   minMoisture    Float    @map("min_moisture")
   maxMoisture    Float    @map("max_moisture")
-  readingCount   Int      @map("reading_count") // Number of readings aggregated
+  
+  // Metadata
+  readingCount   Int      @map("reading_count")
   createdAt      DateTime @default(now()) @map("created_at")
 
   // Relations
@@ -202,27 +232,26 @@ model AggregatedSensorReading {
   @@map("aggregated_sensor_readings")
 }
 
-// Automation rules for watering and lighting
 model AutomationRule {
+  // Primary fields
   id          String   @id @default(cuid())
   rackId      String   @map("rack_id")
-  name        String
-  description String?
+  
+  // Rule information
+  name        String   @db.VarChar(200)
+  description String?  @db.VarChar(1000)
   isEnabled   Boolean  @default(true) @map("is_enabled")
   
-  // Trigger conditions (JSON for flexibility)
-  // Example: { "moisture": { "lessThan": 30 }, "lightLevel": { "lessThan": 500 } }
+  // Rule configuration (JSON)
   conditions  Json
-  
-  // Actions to perform (JSON for flexibility)
-  // Example: { "watering": { "duration": 5000 }, "growLight": { "action": "on" } }
   actions     Json
   
-  // Execution settings
-  cooldownMinutes Int?     @map("cooldown_minutes") // Prevent rapid re-triggering
+  // Execution tracking
+  cooldownMinutes Int?      @map("cooldown_minutes")
   lastTriggeredAt DateTime? @map("last_triggered_at")
-  triggerCount    Int      @default(0) @map("trigger_count")
+  triggerCount    Int       @default(0) @map("trigger_count")
   
+  // Timestamps
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
@@ -235,11 +264,14 @@ model AutomationRule {
 }
 
 model Activity {
+  // Primary fields
   id        String            @id @default(cuid())
   rackId    String            @map("rack_id")
+  
+  // Activity information
   eventType ActivityEventType @map("event_type")
-  details   String?
-  metadata  Json?             // Store additional data as JSON
+  details   String?           @db.VarChar(1000)
+  metadata  Json?
   timestamp DateTime          @default(now())
 
   // Relations
@@ -253,15 +285,22 @@ model Activity {
 }
 
 model Notification {
+  // Primary fields
   id        String              @id @default(cuid())
   userId    String              @map("user_id")
   rackId    String?             @map("rack_id")
+  
+  // Notification information
   type      NotificationType    @default(INFO)
   status    NotificationStatus  @default(UNREAD)
-  title     String
-  message   String
-  metadata  Json?               // Store additional context as JSON
+  title     String              @db.VarChar(255)
+  message   String              @db.VarChar(1000)
+  metadata  Json?
+  
+  // Tracking
   readAt    DateTime?           @map("read_at")
+  
+  // Timestamps
   createdAt DateTime            @default(now()) @map("created_at")
   updatedAt DateTime            @updatedAt @map("updated_at")
 

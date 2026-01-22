@@ -273,7 +273,7 @@ describe('FirebaseService', () => {
         it('should require project_id field', () => {
             expect(admin.credential.cert).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    project_id: 'test-project',
+                    project_id: 'nurtura-api-test',
                 }),
             );
         });

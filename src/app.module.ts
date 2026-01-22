@@ -10,7 +10,7 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { AuthModule } from './auth/auth.module';
 import { EmailModule } from './email/email.module';
 import { FirebaseModule } from './firebase/firebase.module';
-import { CommonModule } from 'src/common/common.module';
+import { CommonModule } from './common/common.module';
 import { FirebaseAuthGuard } from './common/guards/firebase-auth.guard';
 import { UsersModule } from './users/users.module';
 import { MqttModule } from './mqtt/mqtt.module';
@@ -19,6 +19,8 @@ import { MqttModule } from './mqtt/mqtt.module';
     imports: [
         ConfigModule.forRoot({
             isGlobal: true,
+            ignoreEnvFile: process.env.NODE_ENV === 'production',
+            envFilePath: `.env.${process.env.NODE_ENV || 'development'}`,
             validationSchema: envValidationSchema,
             validationOptions: {
                 abortEarly: false,

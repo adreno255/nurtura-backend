@@ -1,0 +1,41 @@
+services:
+    # PostgreSQL instance for all integration testing
+    postgres:
+        image: postgres:16-alpine
+        container_name: nurtura-postgres
+        restart: unless-stopped
+        environment:
+            POSTGRES_USER: postgres
+            POSTGRES_PASSWORD: postgres
+            POSTGRES_DB: nurtura_local
+        ports:
+            - '5432:5432'
+        volumes:
+            - postgres-data:/var/lib/postgresql/data
+        networks:
+            - nurtura-network
+
+    # pgAdmin Service
+    pgadmin:
+        image: dpage/pgadmin4
+        container_name: nurtura-pgadmin
+        restart: unless-stopped
+        environment:
+            PGADMIN_DEFAULT_EMAIL: admin@admin.com
+            PGADMIN_DEFAULT_PASSWORD: admin
+        ports:
+            - '5050:80'
+        volumes:
+            - pgadmin-data:/var/lib/pgadmin
+        networks:
+            - nurtura-network
+        depends_on:
+            - postgres
+
+networks:
+    nurtura-network:
+        driver: bridge
+
+volumes:
+    postgres-data:
+    pgadmin-data:

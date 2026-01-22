@@ -4,7 +4,7 @@
  */
 
 import { type CreateUserDto } from '../../src/users/dto/create-user.dto';
-import { type User } from '../../src/users/interfaces/user.interface';
+import { type UserInfo, type User } from '../../src/users/interfaces/user.interface';
 
 /**
  * Valid CreateUserDto with all fields
@@ -104,6 +104,23 @@ export const alternativeUser: User = {
     address: 'Block 10, Orchid Ave, Brgy Greenfield, Makati',
     createdAt: new Date('2025-01-03T00:00:00.000Z'),
     updatedAt: new Date('2025-01-03T00:00:00.000Z'),
+};
+
+export const parsedUser: UserInfo = {
+    id: 'user-id-123',
+    firebaseUid: 'firebase-uid-789',
+    email: 'test@example.com',
+    firstName: 'John',
+    middleName: 'Michael',
+    lastName: 'Doe',
+    suffix: 'Jr.',
+    address: 'Block 5, Sampaguita St, Brgy Commonwealth, Quezon City',
+    block: 'Block 5',
+    street: 'Sampaguita St',
+    barangay: 'Brgy Commonwealth',
+    city: 'Quezon City',
+    createdAt: new Date('2025-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2025-01-01T00:00:00.000Z'),
 };
 
 /**
