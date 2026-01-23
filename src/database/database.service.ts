@@ -6,7 +6,7 @@ import { Pool } from 'pg';
 
 @Injectable()
 export class DatabaseService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
-    private readonly pool: Pool; // Store the pool reference
+    private readonly pool: Pool;
 
     constructor(private readonly configService: ConfigService) {
         const connectionString = configService.get<string>('DATABASE_URL');
@@ -21,7 +21,7 @@ export class DatabaseService extends PrismaClient implements OnModuleInit, OnMod
             adapter,
         });
 
-        this.pool = pool; // Assign the pool to the class property
+        this.pool = pool;
     }
 
     async onModuleInit(): Promise<void> {

@@ -2,7 +2,9 @@ import * as Joi from 'joi';
 
 export const envValidationSchema = Joi.object({
     // Server Configuration
-    NODE_ENV: Joi.string().valid('staging', 'development', 'test').default('development'),
+    NODE_ENV: Joi.string()
+        .valid('development', 'test', 'staging', 'production')
+        .default('development'),
     HOST: Joi.string().valid('localhost', '0.0.0.0').default('localhost'),
     PORT: Joi.number().default(3000),
 
