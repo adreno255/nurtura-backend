@@ -10,6 +10,7 @@ import { OtpService } from './otp.service';
 import { SendOtpRequestDto } from './dto/send-otp-request.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { Public } from '../../common/decorators';
+import { Throttle } from '@nestjs/throttler';
 
 @Public()
 @ApiTags('Authentication - OTP')
@@ -18,6 +19,7 @@ export class OtpController {
     constructor(private readonly otpService: OtpService) {}
 
     @Post('registration')
+    @Throttle({ default: { limit: 3, ttl: 60000 } })
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
         summary: 'Send registration OTP',
@@ -72,6 +74,7 @@ export class OtpController {
     }
 
     @Post('forgot-password')
+    @Throttle({ default: { limit: 3, ttl: 60000 } })
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
         summary: 'Send forgot password OTP',
