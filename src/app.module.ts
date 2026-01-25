@@ -30,7 +30,8 @@ import { MqttModule } from './mqtt/mqtt.module';
         ThrottlerModule.forRoot([
             {
                 ttl: 60000,
-                limit: 120,
+                limit: 30,
+                blockDuration: 60000, // If they hit 30/min, they are banned for 1 minute
             },
         ]),
         MyLoggerModule,
