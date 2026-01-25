@@ -1,0 +1,52 @@
+# Dependencies
+node_modules
+npm-debug.log
+yarn-error.log
+
+# Scripts
+scripts/
+.husky
+
+# Build & Testing
+dist
+coverage
+*.spec.ts
+test
+
+# Dev-only configs
+.prettierrc
+.prettierignore
+eslint.config.mjs
+commitlint.config.mjs
+
+# Development files
+.env
+.env.*
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+
+# CI/CD
+.github
+
+# Logs
+logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation
+README.md
+docs
+
+# Docker
+Dockerfile
+docker-compose*
+.dockerignore

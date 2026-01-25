@@ -24,7 +24,7 @@ export class EmailService {
         sgMail.setApiKey(apiKey);
 
         // Load images and convert to base64 once during initialization
-        const assetsPath = path.join(process.cwd(), 'src', 'assets', 'email');
+        const assetsPath = path.join(__dirname, '..', 'assets', 'email');
 
         try {
             this.logoBase64 = fs
@@ -43,7 +43,8 @@ export class EmailService {
                 'EmailService',
             );
             throw new Error(
-                'Failed to load email assets. Please ensure images exist in src/assets/email/',
+                'Failed to load email assets. Please ensure images exist in src/assets/email/ ' +
+                    assetsPath,
             );
         }
 

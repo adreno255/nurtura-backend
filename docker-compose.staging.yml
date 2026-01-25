@@ -1,0 +1,30 @@
+services:
+    api-staging:
+        image: nurtura-api:staging
+        build:
+            context: .
+            dockerfile: Dockerfile
+            target: production
+        container_name: nurtura-api-staging
+
+        env_file:
+            - .env.staging
+
+        environment:
+            - NODE_ENV=staging
+
+        ports:
+            - '3000:3000'
+
+        volumes:
+            - nurtura_staging_logs:/app/logs
+
+        networks:
+            - nurtura-staging-net
+
+networks:
+    nurtura-staging-net:
+        driver: bridge
+
+volumes:
+    nurtura_staging_logs:
