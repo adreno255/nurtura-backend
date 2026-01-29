@@ -1,0 +1,125 @@
+name: Parse Commits
+
+on:
+    workflow_call:
+        outputs:
+            commit-type:
+                description: 'Type of the most recent commit'
+                value: ${{ jobs.parse.outputs.commit-type }}
+            has-breaking-change:
+                description: 'Whether breaking change detected'
+                value: ${{ jobs.parse.outputs.has-breaking-change }}
+            skip-tests:
+                description: 'Whether to skip tests'
+                value: ${{ jobs.parse.outputs.skip-tests }}
+            release-type:
+                description: 'Release type from semantic-release'
+                value: ${{ jobs.parse.outputs.release-type }}
+
+jobs:
+    parse:
+        runs-on: ubuntu-latest
+        outputs:
+            commit-type: ${{ steps.parse.outputs.type }}
+            has-breaking-change: ${{ steps.parse.outputs.breaking }}
+            skip-tests: ${{ steps.parse.outputs.skip }}
+            release-type: ${{ steps.analyze.outputs.release-type }}
+
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '25'
+                  cache: 'npm'
+
+            - name: Install semantic-release
+              run: |
+                  npm install --no-save \
+                    semantic-release \
+                    @semantic-release/commit-analyzer \
+                    @semantic-release/release-notes-generator \
+                    @semantic-release/github \
+                    @semantic-release/npm \
+                    conventional-changelog-conventionalcommits
+
+            - name: Analyze commits with semantic-release
+              id: analyze
+              run: |
+                  cat > .releaserc.json << 'EOF'
+                  {
+                    "branches": ["main"],
+                    "plugins": [
+                      ["@semantic-release/commit-analyzer", {
+                        "preset": "conventionalcommits",
+                        "releaseRules": [
+                          {"type": "feat", "release": "minor"},
+                          {"type": "fix", "release": "patch"},
+                          {"type": "perf", "release": "patch"},
+                          {"type": "revert", "release": "patch"},
+                          {"type": "docs", "release": false},
+                          {"type": "style", "release": false},
+                          {"type": "chore", "release": false},
+                          {"type": "refactor", "release": "patch"},
+                          {"type": "test", "release": false},
+                          {"type": "build", "release": false},
+                          {"type": "ci", "release": false},
+                          {"breaking": true, "release": "major"}
+                        ]
+                      }]
+                    ]
+                  }
+                  EOF
+
+                  npx semantic-release --dry-run > release-output.txt 2>&1 || true
+
+                  if grep -q "The next release version is" release-output.txt; then
+                    RELEASE_TYPE=$(grep "The next release version is" release-output.txt | sed -n 's/.*Analysis of .* commits complete: \([a-z]*\) release/\1/p')
+                    echo "release-type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
+                    echo "Release type detected: $RELEASE_TYPE"
+                  else
+                    echo "release-type=none" >> $GITHUB_OUTPUT
+                    echo "No release needed"
+                  fi
+
+                  cat release-output.txt
+
+            - name: Parse commit messages
+              id: parse
+              run: |
+                  if [ "${{ github.event_name }}" = "pull_request" ]; then
+                    COMMITS=$(git log --format=%s origin/${{ github.base_ref }}..HEAD)
+                  else
+                    COMMITS=$(git log --format=%s -1)
+                  fi
+
+                  echo "Commits to analyze:"
+                  echo "$COMMITS"
+
+                  if echo "$COMMITS" | grep -qE '(feat|fix|refactor|perf|revert)!(\([^)]+\))?:'; then
+                    echo "breaking=true" >> $GITHUB_OUTPUT
+                    echo "Breaking change detected (! symbol)"
+                  elif echo "$COMMITS" | grep -qE 'BREAKING CHANGE:|BREAKING-CHANGE:'; then
+                    echo "breaking=true" >> $GITHUB_OUTPUT
+                    echo "Breaking change detected (footer)"
+                  else
+                    echo "breaking=false" >> $GITHUB_OUTPUT
+                    echo "No breaking changes"
+                  fi
+
+                  COMMIT_MSG=$(echo "$COMMITS" | head -n 1)
+                  TYPE=$(echo "$COMMIT_MSG" | sed -n 's/^\([a-z]*\)!*(\?.*$/\1/p')
+
+                  echo "type=$TYPE" >> $GITHUB_OUTPUT
+                  echo "Commit type: $TYPE"
+
+                  if [[ "$TYPE" =~ ^(chore|docs|test|style|build|ci)$ ]]; then
+                    echo "skip=true" >> $GITHUB_OUTPUT
+                    echo "Skipping tests for $TYPE commit"
+                  else
+                    echo "skip=false" >> $GITHUB_OUTPUT
+                    echo "Tests will run"
+                  fi

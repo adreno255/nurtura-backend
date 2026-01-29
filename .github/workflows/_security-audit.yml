@@ -1,0 +1,19 @@
+name: Security Audit
+
+on:
+    workflow_call:
+
+jobs:
+    audit:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '25'
+                  cache: 'npm'
+
+            - name: Run npm audit (high+ only)
+              run: npm audit --audit-level=high
