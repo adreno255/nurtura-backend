@@ -182,7 +182,9 @@ jobs:
                   else
                       # Fallback: get type from first non-merge commit
                       FIRST_COMMIT=$(echo "$COMMITS" | grep -vE '^Merge [0-9a-f]+ into [0-9a-f]+' | head -n 1)
-                      if [[ "$FIRST_COMMIT" =~ ^([a-z]+)(!|\([^)]+\)!?)?:.*$ ]]; then
+
+                      RE_FALLBACK='^([a-z]+)(!|\([^)]+\)!?)?:.*$'
+                      if [[ "$FIRST_COMMIT" =~ $RE_FALLBACK ]]; then
                       FALLBACK_TYPE="${BASH_REMATCH[1]}"
                       else
                       FALLBACK_TYPE=$(echo "$FIRST_COMMIT" | grep -oE '^[a-z]+' | head -n 1)
