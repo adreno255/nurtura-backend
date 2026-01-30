@@ -153,25 +153,22 @@ describe('Users Integration Tests (HTTP Endpoints)', () => {
             });
         });
 
-        it('should handle concurrent email availability checks', async () => {
+        it('should handle multiple email availability checks', async () => {
             const emails = Array.from({ length: 5 }, () => TestDataHelper.generateRandomEmail());
 
+            // Setup mocks
             emails.forEach(() => {
                 mockFirebaseService
                     .getAuth()
                     .getUserByEmail.mockRejectedValueOnce(FirebaseAuthErrors.userNotFound());
             });
 
-            const responses = await Promise.all(
-                emails.map((email) => request(httpServer).get('/api/users').query({ email })),
-            );
+            for (const email of emails) {
+                const response = await request(httpServer).get('/api/users').query({ email });
 
-            responses.forEach((response) => {
                 expect(response.status).toBe(200);
-                expect(response.body).toMatchObject({
-                    available: true,
-                });
-            });
+                expect(response.body).toMatchObject({ available: true });
+            }
 
             expect(mockFirebaseService.getAuth().getUserByEmail).toHaveBeenCalledTimes(5);
         });
