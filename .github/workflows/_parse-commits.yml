@@ -91,49 +91,116 @@ jobs:
               id: parse
               run: |
                   if [ "${{ github.event_name }}" = "pull_request" ]; then
-                    COMMITS=$(git log --format=%s origin/${{ github.base_ref }}..HEAD)
+                      COMMITS=$(git log --format=%s origin/${{ github.base_ref }}..HEAD)
                   else
-                    COMMITS=$(git log --format=%s -1)
+                      COMMITS=$(git log --format=%s -1)
                   fi
 
-                  echo "Commits to analyze:"
+                  echo "===================="
+                  echo "All commits to analyze:"
                   echo "$COMMITS"
+                  echo "===================="
+                  echo ""
 
-                  if echo "$COMMITS" | grep -qE '(feat|fix|refactor|perf|revert)!(\([^)]+\))?:'; then
-                    echo "breaking=true" >> $GITHUB_OUTPUT
-                    echo "Breaking change detected (! symbol)"
-                  elif echo "$COMMITS" | grep -qE 'BREAKING CHANGE:|BREAKING-CHANGE:'; then
-                    echo "breaking=true" >> $GITHUB_OUTPUT
-                    echo "Breaking change detected (footer)"
+                  # Initialize tracking variables
+                  HAS_BREAKING=false
+                  HAS_FEAT_FIX=false
+                  HAS_ANY_RELEASE=false
+                  HIGHEST_PRIORITY_TYPE=""
+
+                  # Analyze ALL commits
+                  while IFS= read -r commit; do
+                      # Skip empty lines
+                      [ -z "$commit" ] && continue
+                      
+                      # Skip merge commits
+                      if echo "$commit" | grep -qE '^Merge [0-9a-f]+ into [0-9a-f]+'; then
+                      echo "Skipping merge commit"
+                      continue
+                      fi
+                      echo "Analyzing: $commit"
+                      
+                      # Extract type from this commit
+                      COMMIT_TYPE=""
+                      RE='^([a-z]+)(!|\([^)]+\)!?)?:.*$'
+                      if [[ "$commit" =~ $RE ]]; then
+                      COMMIT_TYPE="${BASH_REMATCH[1]}"
+                      HAS_EXCLAMATION="${BASH_REMATCH[2]}"
+                      else
+                      COMMIT_TYPE=$(echo "$commit" | grep -oE '^[a-z]+' | head -n 1)
+                      fi
+                      
+                      echo "Type: ${COMMIT_TYPE:-unknown}"
+                      
+                      # Check for breaking change (! or footer)
+                      if [[ "$commit" =~ ^(feat|fix|refactor|perf|revert)!(\([^)]+\))?:.*$ ]]; then
+                      HAS_BREAKING=true
+                      HIGHEST_PRIORITY_TYPE="$COMMIT_TYPE"
+                      echo "Breaking change detected via !"
+                      elif echo "$commit" | grep -qi 'BREAKING[- ]CHANGE:'; then
+                      HAS_BREAKING=true
+                      [ -z "$HIGHEST_PRIORITY_TYPE" ] && HIGHEST_PRIORITY_TYPE="$COMMIT_TYPE"
+                      echo "Breaking change detected via footer"
+                      fi
+                      
+                      # Check for release-triggering types
+                      if [[ "$COMMIT_TYPE" =~ ^(feat|fix|refactor|perf|revert)$ ]]; then
+                      HAS_FEAT_FIX=true
+                      # Only update if we don't have a higher priority type
+                      if [ -z "$HIGHEST_PRIORITY_TYPE" ]; then
+                          HIGHEST_PRIORITY_TYPE="$COMMIT_TYPE"
+                      fi
+                      echo "Release-triggering type"
+                      fi
+                      
+                      # Track any commit that could trigger a release
+                      if [[ "$COMMIT_TYPE" =~ ^(feat|fix|refactor|perf|revert)$ ]] || [ "$HAS_BREAKING" = true ]; then
+                      HAS_ANY_RELEASE=true
+                      fi
+                      
+                      echo ""
+                  done <<< "$COMMITS"
+
+                  echo "===================="
+                  echo "Analysis Summary:"
+                  echo "===================="
+
+                  # Set breaking change output
+                  if [ "$HAS_BREAKING" = true ]; then
+                      echo "breaking=true" >> $GITHUB_OUTPUT
+                      echo "Breaking changes detected"
                   else
-                    echo "breaking=false" >> $GITHUB_OUTPUT
-                    echo "No breaking changes"
+                      echo "breaking=false" >> $GITHUB_OUTPUT
+                      echo "No breaking changes"
                   fi
 
-                  COMMIT_MSG=$(echo "$COMMITS" | head -n 1)
-
-                  if echo "$COMMIT_MSG" | grep -qE '^Merge [0-9a-f]+ into [0-9a-f]+'; then
-                    echo "Merge commit detected, using second commit"
-                    COMMIT_MSG=$(echo "$COMMITS" | sed -n '2p')
-                  fi
-
-                  TYPE=""
-
-                  RE='^([a-z]+)(!|\([^)]+\)!?)?:.*$'
-                  if [[ "$COMMIT_MSG" =~ $RE ]]; then
-                    TYPE="${BASH_REMATCH[1]}"
-                  fi
-                  echo "type=${TYPE:-unknown}" >> $GITHUB_OUTPUT
-                  echo "Commit type: ${TYPE:-unknown}"
-
-                  if [ -z "$TYPE" ]; then
-                    echo "Could not determine commit type, running tests to be safe"
-                    echo "skip=false" >> $GITHUB_OUTPUT
-                    echo "Tests will run (unknown type)"
-                  elif [[ "$TYPE" =~ ^(chore|docs|test|style|build|ci)$ ]]; then
-                    echo "skip=true" >> $GITHUB_OUTPUT
-                    echo "Skipping tests for $TYPE commit"
+                  # Set commit type (highest priority)
+                  if [ -n "$HIGHEST_PRIORITY_TYPE" ]; then
+                      echo "type=$HIGHEST_PRIORITY_TYPE" >> $GITHUB_OUTPUT
+                      echo "Highest priority type: $HIGHEST_PRIORITY_TYPE"
                   else
-                    echo "skip=false" >> $GITHUB_OUTPUT
-                    echo "Tests will run for $TYPE commit"
+                      # Fallback: get type from first non-merge commit
+                      FIRST_COMMIT=$(echo "$COMMITS" | grep -vE '^Merge [0-9a-f]+ into [0-9a-f]+' | head -n 1)
+                      if [[ "$FIRST_COMMIT" =~ ^([a-z]+)(!|\([^)]+\)!?)?:.*$ ]]; then
+                      FALLBACK_TYPE="${BASH_REMATCH[1]}"
+                      else
+                      FALLBACK_TYPE=$(echo "$FIRST_COMMIT" | grep -oE '^[a-z]+' | head -n 1)
+                      fi
+                      echo "type=${FALLBACK_TYPE:-unknown}" >> $GITHUB_OUTPUT
+                      echo "Type (fallback): ${FALLBACK_TYPE:-unknown}"
                   fi
+
+                  # Determine if tests should be skipped
+                  # Skip ONLY if:
+                  # 1. No breaking changes AND
+                  # 2. No feat/fix/refactor/perf/revert commits AND
+                  # 3. All commits are chore/docs/test/ci/style
+                  if [ "$HAS_BREAKING" = true ] || [ "$HAS_FEAT_FIX" = true ]; then
+                      echo "skip=false" >> $GITHUB_OUTPUT
+                      echo "Tests will run (breaking changes or release-triggering commits detected)"
+                  else
+                      echo "skip=true" >> $GITHUB_OUTPUT
+                      echo "Skipping tests (only non-release commits)"
+                  fi
+
+                  echo "===================="
