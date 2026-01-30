@@ -48,7 +48,7 @@ jobs:
                   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nurtura_test
                   NODE_ENV: test
                   PORT: 3001
-                  SENDGRID_API_KEY: SG.test_key
-                  SENDGRID_FROM_EMAIL: noreply@nurtura.com
-                  SENDGRID_FROM_NAME: Nurtura Test
+                  SENDGRID_API_KEY: SG.api_key_test
+                  SENDGRID_FROM_EMAIL: noreply@yourdomain.com
+                  SENDGRID_FROM_NAME: LoamTech Solutions
                   FIREBASE_SERVICE_ACCOUNT: '{"type":"service_account","project_id":"test","private_key":"test","client_email":"test@test.com"}'

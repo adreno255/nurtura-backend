@@ -23,10 +23,3 @@ jobs:
 
             - name: Run unit tests with coverage
               run: npm test -- --coverage --maxWorkers=2
-
-            - name: Upload coverage to Codecov
-              uses: codecov/codecov-action@v3
-              with:
-                  files: ./coverage/coverage-final.json
-                  flags: unit
-                  name: unit-tests

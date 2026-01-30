@@ -1,13 +1,13 @@
 import { Controller, Get, HttpCode, HttpStatus } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public } from './common/decorators';
+import { AppService } from './app.service';
 
 @Public()
 @ApiTags('System')
 @Controller()
 export class AppController {
-    constructor(private readonly config: ConfigService) {}
+    constructor(private readonly appService: AppService) {}
 
     @Get()
     @HttpCode(HttpStatus.OK)
@@ -28,11 +28,6 @@ export class AppController {
         },
     })
     getStatus() {
-        return {
-            name: 'Nurtura API Server',
-            status: 'ok',
-            environment: this.config.get<string>('NODE_ENV') ?? 'development',
-            version: '0.0.1',
-        };
+        return this.appService.getStatus();
     }
 }
