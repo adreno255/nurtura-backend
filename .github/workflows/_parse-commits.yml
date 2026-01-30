@@ -1,0 +1,211 @@
+name: Parse Commits
+
+on:
+    workflow_call:
+        outputs:
+            commit-type:
+                description: 'Type of the most recent commit'
+                value: ${{ jobs.parse.outputs.commit-type }}
+            has-breaking-change:
+                description: 'Whether breaking change detected'
+                value: ${{ jobs.parse.outputs.has-breaking-change }}
+            skip-tests:
+                description: 'Whether to skip tests'
+                value: ${{ jobs.parse.outputs.skip-tests }}
+            release-type:
+                description: 'Release type from semantic-release'
+                value: ${{ jobs.parse.outputs.release-type }}
+
+jobs:
+    parse:
+        runs-on: ubuntu-latest
+        outputs:
+            commit-type: ${{ steps.parse.outputs.type }}
+            has-breaking-change: ${{ steps.parse.outputs.breaking }}
+            skip-tests: ${{ steps.parse.outputs.skip }}
+            release-type: ${{ steps.analyze.outputs.release-type }}
+
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '25'
+                  cache: 'npm'
+
+            - name: Install semantic-release
+              run: |
+                  npm install --no-save \
+                    semantic-release \
+                    @semantic-release/commit-analyzer \
+                    @semantic-release/release-notes-generator \
+                    @semantic-release/github \
+                    @semantic-release/npm \
+                    conventional-changelog-conventionalcommits
+
+            - name: Analyze commits with semantic-release
+              id: analyze
+              run: |
+                  cat > .releaserc.json << 'EOF'
+                  {
+                    "branches": ["main"],
+                    "plugins": [
+                      ["@semantic-release/commit-analyzer", {
+                        "preset": "conventionalcommits",
+                        "releaseRules": [
+                          {"type": "feat", "release": "minor"},
+                          {"type": "fix", "release": "patch"},
+                          {"type": "perf", "release": "patch"},
+                          {"type": "revert", "release": "patch"},
+                          {"type": "docs", "release": false},
+                          {"type": "style", "release": false},
+                          {"type": "chore", "release": false},
+                          {"type": "refactor", "release": "patch"},
+                          {"type": "test", "release": false},
+                          {"type": "build", "release": false},
+                          {"type": "ci", "release": false},
+                          {"breaking": true, "release": "major"}
+                        ]
+                      }]
+                    ]
+                  }
+                  EOF
+
+                  npx semantic-release --dry-run > release-output.txt 2>&1 || true
+
+                  if grep -q "The next release version is" release-output.txt; then
+                    RELEASE_TYPE=$(grep "The next release version is" release-output.txt | sed -n 's/.*Analysis of .* commits complete: \([a-z]*\) release/\1/p')
+                    echo "release-type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
+                    echo "Release type detected: $RELEASE_TYPE"
+                  else
+                    echo "release-type=none" >> $GITHUB_OUTPUT
+                    echo "No release needed"
+                  fi
+
+                  cat release-output.txt
+
+            - name: Parse commit messages
+              id: parse
+              run: |
+                  if [ "${{ github.event_name }}" = "pull_request" ]; then
+                    COMMITS=$(git log --format=%s origin/${{ github.base_ref }}..HEAD)
+                  elif [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+                    COMMITS=$(git log --format=%s ${{ github.event.before }}..${{ github.event.after }})
+                  else
+                    COMMITS=$(git log --format=%s -1)
+                  fi
+
+                  echo "===================="
+                  echo "All commits to analyze:"
+                  echo "$COMMITS"
+                  echo "===================="
+                  echo ""
+
+                  # Initialize tracking variables
+                  HAS_BREAKING=false
+                  HAS_FEAT_FIX=false
+                  HAS_ANY_RELEASE=false
+                  HIGHEST_PRIORITY_TYPE=""
+
+                  # Analyze ALL commits
+                  while IFS= read -r commit; do
+                      # Skip empty lines
+                      [ -z "$commit" ] && continue
+                      
+                      # Skip merge commits
+                      if echo "$commit" | grep -qE '^Merge [0-9a-f]+ into [0-9a-f]+'; then
+                      echo "Skipping merge commit"
+                      continue
+                      fi
+                      echo "Analyzing: $commit"
+                      
+                      # Extract type from this commit
+                      COMMIT_TYPE=""
+                      RE_TYPE='^([a-z]+)(!|\([^)]+\)!?)?:.*$'
+                      if [[ "$commit" =~ $RE_TYPE ]]; then
+                      COMMIT_TYPE="${BASH_REMATCH[1]}"
+                      HAS_EXCLAMATION="${BASH_REMATCH[2]}"
+                      else
+                      COMMIT_TYPE=$(echo "$commit" | grep -oE '^[a-z]+' | head -n 1)
+                      fi
+                      
+                      echo "Type: ${COMMIT_TYPE:-unknown}"
+                      
+                      # Check for breaking change (! or footer)
+                      RE_BREAKING='^(feat|fix|refactor|perf|revert)!(\([^)]+\))?:.*$'
+                      if [[ "$commit" =~ $RE_BREAKING ]]; then
+                      HAS_BREAKING=true
+                      HIGHEST_PRIORITY_TYPE="$COMMIT_TYPE"
+                      echo "Breaking change detected via !"
+                      elif echo "$commit" | grep -qi 'BREAKING[- ]CHANGE:'; then
+                      HAS_BREAKING=true
+                      [ -z "$HIGHEST_PRIORITY_TYPE" ] && HIGHEST_PRIORITY_TYPE="$COMMIT_TYPE"
+                      echo "Breaking change detected via footer"
+                      fi
+                      
+                      # Check for release-triggering types
+                      if [[ "$COMMIT_TYPE" =~ ^(feat|fix|refactor|perf|revert)$ ]]; then
+                      HAS_FEAT_FIX=true
+                      # Only update if we don't have a higher priority type
+                      if [ -z "$HIGHEST_PRIORITY_TYPE" ]; then
+                          HIGHEST_PRIORITY_TYPE="$COMMIT_TYPE"
+                      fi
+                      echo "Release-triggering type"
+                      fi
+                      
+                      # Track any commit that could trigger a release
+                      if [[ "$COMMIT_TYPE" =~ ^(feat|fix|refactor|perf|revert)$ ]] || [ "$HAS_BREAKING" = true ]; then
+                      HAS_ANY_RELEASE=true
+                      fi
+                      
+                      echo ""
+                  done <<< "$COMMITS"
+
+                  echo "===================="
+                  echo "Analysis Summary:"
+                  echo "===================="
+
+                  # Set breaking change output
+                  if [ "$HAS_BREAKING" = true ]; then
+                      echo "breaking=true" >> $GITHUB_OUTPUT
+                      echo "Breaking changes detected"
+                  else
+                      echo "breaking=false" >> $GITHUB_OUTPUT
+                      echo "No breaking changes"
+                  fi
+
+                  # Set commit type (highest priority)
+                  if [ -n "$HIGHEST_PRIORITY_TYPE" ]; then
+                      echo "type=$HIGHEST_PRIORITY_TYPE" >> $GITHUB_OUTPUT
+                      echo "Highest priority type: $HIGHEST_PRIORITY_TYPE"
+                  else
+                      # Fallback: get type from first non-merge commit
+                      FIRST_COMMIT=$(echo "$COMMITS" | grep -vE '^Merge [0-9a-f]+ into [0-9a-f]+' | head -n 1)
+
+                      RE_FALLBACK='^([a-z]+)(!|\([^)]+\)!?)?:.*$'
+                      if [[ "$FIRST_COMMIT" =~ $RE_FALLBACK ]]; then
+                      FALLBACK_TYPE="${BASH_REMATCH[1]}"
+                      else
+                      FALLBACK_TYPE=$(echo "$FIRST_COMMIT" | grep -oE '^[a-z]+' | head -n 1)
+                      fi
+                      echo "type=${FALLBACK_TYPE:-unknown}" >> $GITHUB_OUTPUT
+                      echo "Type (fallback): ${FALLBACK_TYPE:-unknown}"
+                  fi
+
+                  # Determine if tests should be skipped
+                  # Skip ONLY if:
+                  # 1. No breaking changes AND
+                  # 2. No feat/fix/refactor/perf/revert commits AND
+                  # 3. All commits are chore/docs/test/ci/style
+                  if [ "$HAS_BREAKING" = true ] || [ "$HAS_FEAT_FIX" = true ]; then
+                      echo "skip=false" >> $GITHUB_OUTPUT
+                      echo "Tests will run (breaking changes or release-triggering commits detected)"
+                  else
+                      echo "skip=true" >> $GITHUB_OUTPUT
+                      echo "Skipping tests (only non-release commits)"
+                  fi
+
+                  echo "===================="

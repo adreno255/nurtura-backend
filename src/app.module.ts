@@ -14,6 +14,7 @@ import { CommonModule } from './common/common.module';
 import { FirebaseAuthGuard } from './common/guards/firebase-auth.guard';
 import { UsersModule } from './users/users.module';
 import { MqttModule } from './mqtt/mqtt.module';
+import { AppService } from './app.service';
 
 @Module({
     imports: [
@@ -30,7 +31,7 @@ import { MqttModule } from './mqtt/mqtt.module';
         ThrottlerModule.forRoot([
             {
                 ttl: 60000,
-                limit: 30,
+                limit: process.env.NODE_ENV === 'test' ? 120 : 30,
                 blockDuration: 60000, // If they hit 30/min, they are banned for 1 minute
             },
         ]),
@@ -45,6 +46,7 @@ import { MqttModule } from './mqtt/mqtt.module';
     ],
     controllers: [AppController],
     providers: [
+        AppService,
         AllExceptionsFilter,
         {
             provide: APP_GUARD,

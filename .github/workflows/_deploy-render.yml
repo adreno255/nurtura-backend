@@ -1,0 +1,77 @@
+name: Deploy to Render
+
+on:
+    workflow_call:
+        inputs:
+            new-release-version:
+                description: 'Release version being deployed'
+                required: false
+                type: string
+                default: 'unknown'
+        secrets:
+            RENDER_DEPLOY_HOOK_URL:
+                description: 'Render deploy hook URL'
+                required: true
+            RENDER_SERVICE_ID:
+                description: 'Render service ID'
+                required: true
+            RENDER_SERVICE_URL:
+                description: 'Render service URL'
+                required: true
+
+jobs:
+    deploy:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Trigger Render Deploy
+              id: trigger
+              run: |
+                  RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" \
+                  -H "Content-Type: application/json" \
+                  -d '{
+                  "clearCache": true,
+                  "serviceId": "${{ secrets.RENDER_SERVICE_ID }}"
+                  }')
+
+                  HTTP_CODE=$(echo "$RESPONSE" | tail -n 1)
+                  BODY=$(echo "$RESPONSE" | head -n -1)
+
+                  echo "Response code: $HTTP_CODE"
+                  echo "Response body: $BODY"
+
+                  if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+                      echo "Deploy triggered successfully"
+                      exit 0
+                  else
+                      echo "::error::Deploy trigger failed with HTTP $HTTP_CODE"
+                      exit 1
+                  fi
+
+            - name: Wait for deployment
+              if: steps.trigger.outcome == 'success'
+              run: |
+                  echo "Waiting 60s for Render deployment to start..."
+                  sleep 60
+
+            - name: Verify deployment
+              run: |
+                  HEALTH_URL="${{ secrets.RENDER_SERVICE_URL }}/api"
+                  MAX_RETRIES=10
+                  RETRY_COUNT=0
+
+                  while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+                    if curl -f -s "$HEALTH_URL" > /dev/null; then
+                      echo "Deployment successful! API is healthy."
+                      if [ "${{ inputs.new-release-version }}" != "unknown" ]; then
+                        echo "Version ${{ inputs.new-release-version }} deployed!"
+                      fi
+                      exit 0
+                    fi
+                    
+                    RETRY_COUNT=$((RETRY_COUNT + 1))
+                    echo "Attempt $RETRY_COUNT/$MAX_RETRIES - API not ready yet, waiting..."
+                    sleep 30
+                  done
+
+                  echo "Deployment verification failed after $MAX_RETRIES attempts"
+                  exit 1
