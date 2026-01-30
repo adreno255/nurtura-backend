@@ -15,5 +15,5 @@ jobs:
                   node-version: '25'
                   cache: 'npm'
 
-            - name: Run npm audit (high+ only)
-              run: npm audit --audit-level=high
+            - name: Run npm audit (production dependencies only)
+              run: npm audit --omit=dev --audit-level=moderate
