@@ -122,8 +122,8 @@ jobs:
                       
                       # Extract type from this commit
                       COMMIT_TYPE=""
-                      RE='^([a-z]+)(!|\([^)]+\)!?)?:.*$'
-                      if [[ "$commit" =~ $RE ]]; then
+                      RE_TYPE='^([a-z]+)(!|\([^)]+\)!?)?:.*$'
+                      if [[ "$commit" =~ $RE_TYPE ]]; then
                       COMMIT_TYPE="${BASH_REMATCH[1]}"
                       HAS_EXCLAMATION="${BASH_REMATCH[2]}"
                       else
@@ -133,7 +133,8 @@ jobs:
                       echo "Type: ${COMMIT_TYPE:-unknown}"
                       
                       # Check for breaking change (! or footer)
-                      if [[ "$commit" =~ ^(feat|fix|refactor|perf|revert)!(\([^)]+\))?:.*$ ]]; then
+                      RE_BREAKING='^(feat|fix|refactor|perf|revert)!(\([^)]+\))?:.*$'
+                      if [[ "$commit" =~ $RE_BREAKING ]]; then
                       HAS_BREAKING=true
                       HIGHEST_PRIORITY_TYPE="$COMMIT_TYPE"
                       echo "Breaking change detected via !"
