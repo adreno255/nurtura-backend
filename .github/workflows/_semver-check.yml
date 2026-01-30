@@ -1,0 +1,40 @@
+name: SemVer Check
+
+on:
+    workflow_call:
+
+jobs:
+    check:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  fetch-depth: 0
+
+            - name: Check commit message format
+              run: |
+                  if [ "${{ github.event_name }}" = "pull_request" ]; then
+                    COMMITS=$(git log --format=%s origin/${{ github.base_ref }}..HEAD)
+                  else
+                    COMMITS=$(git log --format=%s -1)
+                  fi
+
+                  VALID=true
+                  while IFS= read -r commit; do
+                    if echo "$commit" | grep -qE '^Merge [0-9a-f]+ into [0-9a-f]+'; then
+                      echo "Skipping merge commit: $commit"
+                      continue
+                    fi
+                    
+                    if ! echo "$commit" | grep -qE '^(feat|fix|docs|style|refactor|perf|test|chore|revert|build|ci)(\(.*\))?!?:'; then
+                      echo "Invalid commit: $commit"
+                      VALID=false
+                    else
+                      echo "Valid commit: $commit"
+                    fi
+                  done <<< "$COMMITS"
+
+                  if [ "$VALID" = false ]; then
+                    echo "::error::Some commits do not follow Conventional Commits format"
+                    exit 1
+                  fi

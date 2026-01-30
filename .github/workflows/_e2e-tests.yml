@@ -1,0 +1,49 @@
+name: E2E Tests
+
+on:
+    workflow_call:
+        secrets:
+            DATABASE_URL_E2E:
+                description: 'Neon PostgreSQL connection URL for E2E tests'
+                required: true
+            SENDGRID_API_KEY_E2E:
+                description: 'SendGrid API key for testing'
+                required: true
+            FIREBASE_SERVICE_ACCOUNT_E2E:
+                description: 'Firebase service account JSON for testing'
+                required: true
+
+jobs:
+    e2e:
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: '25'
+                  cache: 'npm'
+
+            - name: Install dependencies
+              run: npm ci
+
+            - name: Generate Prisma Client
+              run: npx prisma generate
+
+            - name: Sync database schema
+              run: npx prisma db push
+              env:
+                  DATABASE_URL: ${{ secrets.DATABASE_URL_E2E }}
+
+            - name: Run E2E tests
+              run: npm run test:e2e
+              env:
+                  DATABASE_URL: ${{ secrets.DATABASE_URL_E2E }}
+                  NODE_ENV: staging
+                  PORT: 3002
+                  SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY_E2E }}
+                  SENDGRID_FROM_EMAIL: lots.loamtechsolutions@gmail.com
+                  SENDGRID_FROM_NAME: LoamTech Solutions
+                  FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_E2E }}
