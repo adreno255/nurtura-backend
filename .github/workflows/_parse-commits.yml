@@ -111,15 +111,29 @@ jobs:
                   fi
 
                   COMMIT_MSG=$(echo "$COMMITS" | head -n 1)
-                  TYPE=$(echo "$COMMIT_MSG" | sed -n 's/^\([a-z]*\)!*(\?.*$/\1/p')
 
-                  echo "type=$TYPE" >> $GITHUB_OUTPUT
-                  echo "Commit type: $TYPE"
+                  if echo "$COMMIT_MSG" | grep -qE '^Merge [0-9a-f]+ into [0-9a-f]+'; then
+                    echo "Merge commit detected, using second commit"
+                    COMMIT_MSG=$(echo "$COMMITS" | sed -n '2p')
+                  fi
 
-                  if [[ "$TYPE" =~ ^(chore|docs|test|style|build|ci)$ ]]; then
+                  TYPE=""
+
+                  RE='^([a-z]+)(!|\([^)]+\)!?)?:.*$'
+                  if [[ "$COMMIT_MSG" =~ $RE ]]; then
+                    TYPE="${BASH_REMATCH[1]}"
+                  fi
+                  echo "type=${TYPE:-unknown}" >> $GITHUB_OUTPUT
+                  echo "Commit type: ${TYPE:-unknown}"
+
+                  if [ -z "$TYPE" ]; then
+                    echo "Could not determine commit type, running tests to be safe"
+                    echo "skip=false" >> $GITHUB_OUTPUT
+                    echo "Tests will run (unknown type)"
+                  elif [[ "$TYPE" =~ ^(chore|docs|test|style|build|ci)$ ]]; then
                     echo "skip=true" >> $GITHUB_OUTPUT
                     echo "Skipping tests for $TYPE commit"
                   else
                     echo "skip=false" >> $GITHUB_OUTPUT
-                    echo "Tests will run"
+                    echo "Tests will run for $TYPE commit"
                   fi
