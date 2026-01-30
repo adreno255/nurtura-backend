@@ -106,7 +106,8 @@
     },
     "overrides": {
         "hono": "^4.11.7",
-        "lodash": "^4.17.23"
+        "lodash": "^4.17.23",
+        "tar": "^7.5.7"
     },
     "jest": {
         "moduleFileExtensions": [

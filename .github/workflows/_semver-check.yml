@@ -21,7 +21,12 @@ jobs:
 
                   VALID=true
                   while IFS= read -r commit; do
-                    if ! echo "$commit" | grep -qE '^(feat|fix|docs|style|refactor|perf|test|chore|revert)(\(.*\))?!?:'; then
+                    if echo "$commit" | grep -qE '^Merge [0-9a-f]+ into [0-9a-f]+'; then
+                      echo "Skipping merge commit: $commit"
+                      continue
+                    fi
+                    
+                    if ! echo "$commit" | grep -qE '^(feat|fix|docs|style|refactor|perf|test|chore|revert|build|ci)(\(.*\))?!?:'; then
                       echo "Invalid commit: $commit"
                       VALID=false
                     else
