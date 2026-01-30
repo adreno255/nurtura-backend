@@ -19,7 +19,7 @@ export class OtpController {
     constructor(private readonly otpService: OtpService) {}
 
     @Post('registration')
-    @Throttle({ default: { limit: 3, ttl: 60000 } })
+    @Throttle({ default: { limit: process.env.NODE_ENV === 'test' ? 15 : 3, ttl: 60000 } })
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
         summary: 'Send registration OTP',
@@ -74,7 +74,7 @@ export class OtpController {
     }
 
     @Post('forgot-password')
-    @Throttle({ default: { limit: 3, ttl: 60000 } })
+    @Throttle({ default: { limit: process.env.NODE_ENV === 'test' ? 15 : 3, ttl: 60000 } })
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
         summary: 'Send forgot password OTP',

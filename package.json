@@ -33,7 +33,7 @@
         "test:all:cov": "npm run test:cov && npm run test:integration:cov && npm run test:e2e:cov",
         "prepare": "husky",
         "init:dev": "npm install && node scripts/init-env.js && prisma generate",
-        "docker:db:up": "docker-compose up -d postgres && sleep 2 && dotenv -e .env.test -- npx prisma db push",
+        "docker:db:up": "docker-compose up -d postgres && dotenv -e .env.test -- npx prisma db push",
         "docker:db:down": "docker-compose down postgres",
         "docker:pgadmin:up": "docker-compose up -d pgadmin",
         "docker:pgadmin:down": "docker-compose stop pgadmin",
