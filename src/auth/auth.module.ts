@@ -6,10 +6,9 @@ import { OtpService } from './otp/otp.service';
 import { FirebaseModule } from '../firebase/firebase.module';
 import { DatabaseModule } from '../database/database.module';
 import { EmailModule } from '../email/email.module';
-import { MyLoggerModule } from '../my-logger/my-logger.module';
 
 @Module({
-    imports: [FirebaseModule, DatabaseModule, EmailModule, MyLoggerModule],
+    imports: [FirebaseModule, DatabaseModule, EmailModule],
     controllers: [AuthController, OtpController],
     providers: [AuthService, OtpService],
     exports: [AuthService, OtpService],
