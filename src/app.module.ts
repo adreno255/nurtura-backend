@@ -15,6 +15,8 @@ import { FirebaseAuthGuard } from './common/guards/firebase-auth.guard';
 import { UsersModule } from './users/users.module';
 import { MqttModule } from './mqtt/mqtt.module';
 import { AppService } from './app.service';
+import { SensorsModule } from './sensors/sensors.module';
+import { GatewayModule } from './gateway/gateway.module';
 
 @Module({
     imports: [
@@ -43,6 +45,8 @@ import { AppService } from './app.service';
         AuthModule,
         UsersModule,
         MqttModule,
+        SensorsModule,
+        GatewayModule,
     ],
     controllers: [AppController],
     providers: [
