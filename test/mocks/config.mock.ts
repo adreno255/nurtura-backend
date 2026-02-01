@@ -29,6 +29,10 @@ export const defaultTestConfig = {
             'https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk%40nurtura-api-test.iam.gserviceaccount.com',
         universe_domain: 'googleapis.com',
     }),
+    MQTT_HOST: '123a456bc789.s1.eu.hivemq.cloud',
+    MQTT_PORT: 8883,
+    MQTT_USERNAME: 'NurturaMQTT',
+    MQTT_PASSWORD: 'NurturaSecurePass123!',
 };
 
 /**
