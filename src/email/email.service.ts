@@ -43,8 +43,7 @@ export class EmailService {
                 'EmailService',
             );
             throw new Error(
-                'Failed to load email assets. Please ensure images exist in src/assets/email/ ' +
-                    assetsPath,
+                `Failed to load email assets. Please ensure images exist in src/assets/email/\nCurrent Path: ${assetsPath}`,
             );
         }
 

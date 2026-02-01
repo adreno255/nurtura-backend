@@ -1,11 +1,12 @@
-import * as admin from 'firebase-admin';
-import { type DecodedIdToken } from 'firebase-admin/auth';
-
 /**
  * Test Data Helper
  * Utilities for generating test data
  * Can be used in unit, integration, and E2E tests
  */
+
+import * as admin from 'firebase-admin';
+import { type DecodedIdToken } from 'firebase-admin/auth';
+
 export class TestDataHelper {
     private static firebaseInitialized = false;
 
