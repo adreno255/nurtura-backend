@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { MyLoggerService } from '../my-logger/my-logger.service';
 
@@ -117,31 +117,6 @@ export class SensorsService {
         } catch (error) {
             this.logger.error(
                 `Error calculating statistics for rack: ${rackId}`,
-                error instanceof Error ? error.message : String(error),
-                'SensorsService',
-            );
-            throw error;
-        }
-    }
-
-    // Verify user owns the rack
-    async verifyRackOwnership(rackId: string, userId: string): Promise<boolean> {
-        try {
-            const rack = await this.databaseService.rack.findFirst({
-                where: {
-                    id: rackId,
-                    userId,
-                },
-            });
-
-            if (!rack) {
-                throw new NotFoundException('Rack not found or access denied');
-            }
-
-            return true;
-        } catch (error) {
-            this.logger.error(
-                `Error verifying rack ownership: ${rackId} for user: ${userId}`,
                 error instanceof Error ? error.message : String(error),
                 'SensorsService',
             );

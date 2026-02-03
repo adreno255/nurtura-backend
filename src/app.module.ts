@@ -17,6 +17,7 @@ import { MqttModule } from './mqtt/mqtt.module';
 import { AppService } from './app.service';
 import { SensorsModule } from './sensors/sensors.module';
 import { WebsocketModule } from './websocket/websocket.module';
+import { RacksModule } from './racks/racks.module';
 
 @Module({
     imports: [
@@ -47,6 +48,7 @@ import { WebsocketModule } from './websocket/websocket.module';
         MqttModule,
         SensorsModule,
         WebsocketModule,
+        RacksModule,
     ],
     controllers: [AppController],
     providers: [
