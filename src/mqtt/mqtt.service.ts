@@ -5,7 +5,7 @@ import { MqttClient, IClientSubscribeOptions } from 'mqtt';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { MyLoggerService } from '../my-logger/my-logger.service';
-import { SensorGateway } from '../gateway/sensors.gateway';
+import { WebsocketGateway } from '../websocket/websocket.gateway';
 import { DatabaseService } from '../database/database.service';
 import { SensorDataDto, DeviceStatusDto, DeviceErrorDto } from './dto';
 
@@ -19,7 +19,7 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
     constructor(
         private readonly configService: ConfigService,
         private readonly logger: MyLoggerService,
-        private readonly sensorGateway: SensorGateway,
+        private readonly websocketGateway: WebsocketGateway,
         private readonly databaseService: DatabaseService,
     ) {}
 
@@ -301,7 +301,7 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
             });
 
             // Broadcast to WebSocket clients
-            this.sensorGateway.broadcastSensorData(rack.id, sensorReading);
+            this.websocketGateway.broadcastSensorData(rack.id, sensorReading);
 
             // Check automation rules
             // await this.checkAutomationRules(rack.id, sensorReading);
@@ -370,7 +370,7 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
             });
 
             // Broadcast to WebSocket clients
-            this.sensorGateway.broadcastDeviceStatus(rack.id, rack.status);
+            this.websocketGateway.broadcastDeviceStatus(rack.id, rack.status);
         } catch (error) {
             this.logger.error(
                 `Error handling device status from: ${deviceId}`,
@@ -431,7 +431,7 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
             });
 
             // Broadcast to WebSocket clients
-            this.sensorGateway.broadcastAlert(rack.id, alert);
+            this.websocketGateway.broadcastAlert(rack.id, alert);
         } catch (error) {
             this.logger.error(
                 `Error handling device error from: ${deviceId}`,

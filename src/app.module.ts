@@ -16,7 +16,7 @@ import { UsersModule } from './users/users.module';
 import { MqttModule } from './mqtt/mqtt.module';
 import { AppService } from './app.service';
 import { SensorsModule } from './sensors/sensors.module';
-import { GatewayModule } from './gateway/gateway.module';
+import { WebsocketModule } from './websocket/websocket.module';
 
 @Module({
     imports: [
@@ -46,7 +46,7 @@ import { GatewayModule } from './gateway/gateway.module';
         UsersModule,
         MqttModule,
         SensorsModule,
-        GatewayModule,
+        WebsocketModule,
     ],
     controllers: [AppController],
     providers: [
