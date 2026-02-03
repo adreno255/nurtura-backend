@@ -4,6 +4,7 @@ import { Server } from 'socket.io';
 import { FirebaseService } from '../firebase/firebase.service';
 import { MyLoggerService } from '../my-logger/my-logger.service';
 import { SensorsService } from '../sensors/sensors.service';
+import { RacksService } from '../racks/racks.service';
 import { type DecodedIdToken } from 'firebase-admin/auth';
 import { type Notification, type SensorReading } from '../generated/prisma';
 import {
@@ -21,6 +22,7 @@ export class WebsocketService {
     constructor(
         private readonly firebaseService: FirebaseService,
         private readonly sensorsService: SensorsService,
+        private readonly racksService: RacksService,
         private readonly logger: MyLoggerService,
     ) {}
 
@@ -180,7 +182,7 @@ export class WebsocketService {
         userId: string,
     ): Promise<InitialDataResponse> {
         // Verify ownership
-        await this.sensorsService.verifyRackOwnership(rackId, userId);
+        await this.racksService.verifyRackOwnership(rackId, userId);
 
         // Join room
         await this.joinRoom(socket, rackId);

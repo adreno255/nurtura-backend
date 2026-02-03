@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Query, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, HttpCode, HttpStatus } from '@nestjs/common';
 import {
     ApiTags,
     ApiOperation,
@@ -22,7 +22,7 @@ import { type CurrentUserPayload } from '../common/interfaces';
 export class UsersController {
     constructor(private readonly usersService: UsersService) {}
 
-    @Get()
+    @Get('exists')
     @Public()
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
@@ -171,7 +171,7 @@ export class UsersController {
         return this.usersService.create(user.firebaseUid, user.email, createUserDto);
     }
 
-    @Get(':firebaseUid')
+    @Get()
     @ApiBearerAuth('firebase-jwt')
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
@@ -243,7 +243,7 @@ export class UsersController {
             },
         },
     })
-    async getUserById(@Param('firebaseUid') firebaseUid: string) {
-        return this.usersService.findByFirebaseUid(firebaseUid);
+    async getUserById(@CurrentUser() user: CurrentUserPayload) {
+        return this.usersService.findById(user.dbId);
     }
 }

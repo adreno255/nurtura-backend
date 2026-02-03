@@ -204,14 +204,14 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
     private async handleIncomingMessage(topic: string, message: string) {
         const topicParts = topic.split('/');
 
-        // Expected format: nurtura/{deviceId}/{messageType}
-        if (topicParts.length < 3 || topicParts[0] !== 'nurtura') {
+        // Expected format: nurtura/rack/{deviceId}/{messageType}
+        if (topicParts.length < 4 || topicParts[0] !== 'nurtura') {
             this.logger.warn(`Invalid topic format: ${topic}`, 'MqttService');
             return;
         }
 
-        const deviceId = topicParts[1];
-        const messageType = topicParts[2];
+        const deviceId = topicParts[2];
+        const messageType = topicParts[3];
 
         this.logger.log(
             `Processing message from device: ${deviceId}, type: ${messageType}`,
@@ -238,28 +238,13 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
 
     private async handleSensorData(deviceId: string, payload: string) {
         try {
-            let data: any;
+            const sensorData = await this.parseAndValidate<SensorDataDto>(
+                payload,
+                SensorDataDto,
+                deviceId,
+            );
 
-            try {
-                data = JSON.parse(payload) as object;
-            } catch {
-                this.logger.warn('Invalid JSON payload', 'MqttService');
-                return;
-            }
-
-            // Map optimized types to readable types
-            const sensorData = plainToInstance(SensorDataDto, data);
-
-            // Validate the mapped object
-            const errors = await validate(sensorData);
-
-            if (errors.length > 0) {
-                this.logger.warn(
-                    `Sensor data validation failed for ${deviceId}: ${JSON.stringify(errors)}`,
-                    'MqttService',
-                );
-                return;
-            }
+            if (!sensorData) return;
 
             this.logger.log(
                 `Sensor data from ${deviceId}: T=${sensorData.temperature}°C, H=${sensorData.humidity}%, M=${sensorData.moisture}%, L=${sensorData.lightLevel}lx`,
@@ -316,28 +301,13 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
 
     private async handleDeviceStatus(deviceId: string, payload: string) {
         try {
-            let status: any;
+            const deviceStatus = await this.parseAndValidate<DeviceStatusDto>(
+                payload,
+                DeviceStatusDto,
+                deviceId,
+            );
 
-            try {
-                status = JSON.parse(payload) as object;
-            } catch {
-                this.logger.warn('Invalid JSON payload', 'MqttService');
-                return;
-            }
-
-            // Map optimized types to readable types
-            const deviceStatus = plainToInstance(DeviceStatusDto, status);
-
-            // Validate the mapped object
-            const errors = await validate(deviceStatus);
-
-            if (errors.length > 0) {
-                this.logger.warn(
-                    `Device status validation failed for ${deviceId}: ${JSON.stringify(errors)}`,
-                    'MqttService',
-                );
-                return;
-            }
+            if (!deviceStatus) return;
 
             this.logger.log(
                 `Device status from ${deviceId}: ${JSON.stringify(status)}`,
@@ -382,32 +352,17 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
 
     private async handleDeviceError(deviceId: string, payload: string) {
         try {
-            let error: any;
+            const deviceError = await this.parseAndValidate<DeviceErrorDto>(
+                payload,
+                DeviceErrorDto,
+                deviceId,
+            );
 
-            try {
-                error = JSON.parse(payload) as object;
-            } catch {
-                this.logger.warn('Invalid JSON payload', 'MqttService');
-                return;
-            }
-
-            // Map optimized types to readable types
-            const deviceError = plainToInstance(DeviceErrorDto, error);
-
-            // Validate the mapped object
-            const errors = await validate(deviceError);
-
-            if (errors.length > 0) {
-                this.logger.warn(
-                    `Device error validation failed for ${deviceId}: ${JSON.stringify(errors)}`,
-                    'MqttService',
-                );
-                return;
-            }
+            if (!deviceError) return;
 
             this.logger.error(
                 `Device error from ${deviceId}`,
-                JSON.stringify(error),
+                JSON.stringify(deviceError),
                 'MqttService',
             );
 
@@ -426,7 +381,7 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
                     status: 'UNREAD',
                     title: `Device Error: ${deviceId}`,
                     message: deviceError.message || 'Unknown error occurred',
-                    metadata: error as object,
+                    metadata: deviceError as object,
                 },
             });
 
@@ -438,6 +393,30 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
                 error instanceof Error ? error.message : String(error),
                 'MqttService',
             );
+        }
+    }
+
+    private async parseAndValidate<T>(
+        payload: string,
+        dtoClass: new () => T,
+        deviceId: string,
+    ): Promise<T | null> {
+        try {
+            const data = JSON.parse(payload) as object;
+            const dtoObj = plainToInstance(dtoClass, data);
+            const errors = await validate(dtoObj as object);
+
+            if (errors.length > 0) {
+                this.logger.warn(
+                    `Validation failed for ${deviceId}: ${JSON.stringify(errors)}`,
+                    'MqttService',
+                );
+                return null;
+            }
+            return dtoObj;
+        } catch {
+            this.logger.warn('Invalid JSON payload', 'MqttService');
+            return null;
         }
     }
 

@@ -4,12 +4,14 @@ import { Strategy, ExtractJwt } from 'passport-firebase-jwt';
 import { FirebaseService } from '../../firebase/firebase.service';
 import { MyLoggerService } from '../../my-logger/my-logger.service';
 import { DecodedIdToken } from 'firebase-admin/auth';
-import { FirebaseTokenPayload } from '../interfaces';
+import { DatabaseService } from '../../database/database.service';
+import { CurrentUserPayload } from '../interfaces';
 
 @Injectable()
 export class FirebaseJwtStrategy extends PassportStrategy(Strategy, 'firebase-jwt') {
     constructor(
         private readonly firebaseService: FirebaseService,
+        private readonly databaseService: DatabaseService,
         private readonly logger: MyLoggerService,
     ) {
         super({
@@ -30,9 +32,23 @@ export class FirebaseJwtStrategy extends PassportStrategy(Strategy, 'firebase-jw
             throw new UnauthorizedException('Invalid or expired token');
         }
 
-        const user: FirebaseTokenPayload = {
-            firebaseUid: decodedToken.uid,
-            email: decodedToken.email ?? '',
+        const dbUser = await this.databaseService.user.findUnique({
+            where: { firebaseUid: decodedToken.uid },
+            select: { id: true, firebaseUid: true, email: true },
+        });
+
+        if (!dbUser) {
+            this.logger.warn(
+                `No corresponding user found in database for UID: ${decodedToken.uid}`,
+                'FirebaseJwtStrategy',
+            );
+            throw new UnauthorizedException('User not found');
+        }
+
+        const user: CurrentUserPayload = {
+            dbId: dbUser.id,
+            firebaseUid: dbUser.firebaseUid,
+            email: dbUser.email,
         };
 
         this.logger.log(
