@@ -36,7 +36,7 @@ export class FirebaseJwtStrategy extends PassportStrategy(Strategy, 'firebase-jw
         };
 
         this.logger.log(
-            `User authenticated: ${user.email ?? user.firebaseUid}`,
+            `User authenticated: ${user.email || user.firebaseUid}`,
             'FirebaseJwtStrategy',
         );
 
