@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
 import { MqttService } from './mqtt.service';
-import { DatabaseModule } from '../database/database.module';
-import { WebsocketModule } from '../websocket/websocket.module';
+import { SensorsModule } from '../sensors/sensors.module';
+import { RacksModule } from '../racks/racks.module';
 
 @Module({
-    imports: [DatabaseModule, WebsocketModule],
+    imports: [SensorsModule, RacksModule],
     providers: [MqttService],
     exports: [MqttService],
 })

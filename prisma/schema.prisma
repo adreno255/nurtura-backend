@@ -2,13 +2,13 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-    provider = "prisma-client-js"
-    output   = "../src/generated/prisma"
-    moduleFormat = "cjs"
+  provider     = "prisma-client-js"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
 }
 
 datasource db {
-    provider = "postgresql"
+  provider = "postgresql"
 }
 
 // ============================================
@@ -16,11 +16,11 @@ datasource db {
 // ============================================
 
 enum PlantType {
-  ASTERACEAE  // Lettuce, Sunflower
-  BASELLACEAE // Alugbati, Malabar spinach
-  LAMIACEAE   // Basil, Mint
-  APIACEAE    // Parsley, Celery
-  
+  LEAFY_GREENS      // Lettuce, Sunflower leaves (ASTERACEAE)
+  TROPICAL_GREENS   // Alugbati, Malabar spinach (BASELLACEAE)
+  HERBS             // Basil, Mint (LAMIACEAE)
+  ROOT_AND_STALK    // Parsley, Celery (APIACEAE)
+
   @@map("plant_type")
 }
 
@@ -31,11 +31,16 @@ enum SoilType {
   SILTY
   CHALKY
   CLAY
-  
+
   @@map("soil_type")
 }
 
 enum ActivityEventType {
+  RACK_ADDED
+  RACK_REMOVED
+  PLANT_ADDED
+  PLANT_REMOVED
+  PLANT_HARVESTED
   LIGHT_ON
   LIGHT_OFF
   WATERING_ON
@@ -48,7 +53,7 @@ enum ActivityEventType {
   AUTOMATION_TRIGGERED
   DEVICE_ONLINE
   DEVICE_OFFLINE
-  
+
   @@map("activity_event_type")
 }
 
@@ -58,7 +63,7 @@ enum NotificationType {
   WARNING
   INFO
   SUCCESS
-  
+
   @@map("notification_type")
 }
 
@@ -66,7 +71,7 @@ enum NotificationStatus {
   UNREAD
   READ
   ARCHIVED
-  
+
   @@map("notification_status")
 }
 
@@ -75,7 +80,7 @@ enum DeviceStatus {
   OFFLINE
   ERROR
   MAINTENANCE
-  
+
   @@map("device_status")
 }
 
@@ -85,20 +90,20 @@ enum DeviceStatus {
 
 model User {
   // Primary fields
-  id          String   @id @default(cuid())
-  firebaseUid String   @unique @map("firebase_uid") @db.VarChar(128)
-  email       String   @unique @db.VarChar(255)
-  
+  id          String @id @default(cuid())
+  firebaseUid String @unique @map("firebase_uid") @db.VarChar(128)
+  email       String @unique @db.VarChar(255)
+
   // Personal information
-  firstName   String   @map("first_name") @db.VarChar(100)
-  middleName  String?  @map("middle_name") @db.VarChar(100)
-  lastName    String   @map("last_name") @db.VarChar(100)
-  suffix      String?  @db.VarChar(20)
-  address     String   @db.VarChar(500)
-  
+  firstName  String  @map("first_name") @db.VarChar(100)
+  middleName String? @map("middle_name") @db.VarChar(100)
+  lastName   String  @map("last_name") @db.VarChar(100)
+  suffix     String? @db.VarChar(20)
+  address    String  @db.VarChar(500)
+
   // Timestamps
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
   racks         Rack[]
@@ -109,24 +114,24 @@ model User {
 
 model Rack {
   // Primary fields
-  id             String       @id @default(cuid())
-  userId         String       @map("user_id")
-  
+  id     String @id @default(cuid())
+  userId String @map("user_id")
+
   // Device information
-  name           String       @db.VarChar(200)
-  macAddress     String       @unique @map("mac_address") @db.VarChar(17)
-  mqttTopic      String?      @map("mqtt_topic") @db.VarChar(255)
-  description    String?      @db.VarChar(1000)
-  
+  name        String  @db.VarChar(200)
+  macAddress  String  @unique @map("mac_address") @db.VarChar(17)
+  mqttTopic   String? @map("mqtt_topic") @db.VarChar(255)
+  description String? @db.VarChar(1000)
+
   // Status fields
   isActive       Boolean      @default(true) @map("is_active")
   status         DeviceStatus @default(OFFLINE)
   lastActivityAt DateTime?    @map("last_activity_at")
   lastSeenAt     DateTime?    @map("last_seen_at")
-  
+
   // Timestamps
-  createdAt      DateTime     @default(now()) @map("created_at")
-  updatedAt      DateTime     @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
   user               User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -146,28 +151,29 @@ model Rack {
 
 model Plant {
   // Primary fields
-  id              String     @id @default(cuid())
-  rackId          String     @map("rack_id")
-  
+  id     String @id @default(cuid())
+  rackId String @map("rack_id")
+
   // Plant information
   name            String     @db.VarChar(200)
   type            PlantType?
   quantity        Int        @default(1)
   recommendedSoil SoilType?  @map("recommended_soil")
-  
+
   // Tracking dates
-  plantedAt       DateTime   @default(now()) @map("planted_at")
-  harvestAt       DateTime?  @map("harvest_at")
-  lastWateredAt   DateTime?  @map("last_watered_at")
-  lastLightOnAt   DateTime?  @map("last_light_on_at")
-  
+  plantedAt     DateTime  @default(now()) @map("planted_at")
+  lastHarvestAt DateTime? @map("last_harvest_at")
+  lastWateredAt DateTime? @map("last_watered_at")
+  lastLightOnAt DateTime? @map("last_light_on_at")
+  harvestCount  Int       @default(0) @map("harvest_count")
+
   // Additional information
-  notes           String?    @db.Text
-  isActive        Boolean    @default(true) @map("is_active")
-  
+  notes    String? @db.Text
+  isActive Boolean @default(true) @map("is_active")
+
   // Timestamps
-  createdAt       DateTime   @default(now()) @map("created_at")
-  updatedAt       DateTime   @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
   rack Rack @relation(fields: [rackId], references: [id], onDelete: Cascade)
@@ -179,18 +185,19 @@ model Plant {
 
 model SensorReading {
   // Primary fields
-  id          String   @id @default(cuid())
-  rackId      String   @map("rack_id")
-  
+  id     String @id @default(cuid())
+  rackId String @map("rack_id")
+
   // Sensor data
-  temperature Float    // Celsius
-  humidity    Float    // Percentage (0-100)
-  moisture    Float    // Percentage (0-100)
-  lightLevel  Float    @map("light_level") // Lux or raw LDR value
-  
+  temperature Float // Celsius
+  humidity    Float // Percentage (0-100)
+  moisture    Float // Percentage (0-100)
+  lightLevel  Float @map("light_level") // Lux or raw LDR value
+  waterUsed   Float? @map("water_used") // mL
+
   // Metadata
-  timestamp   DateTime @default(now())
-  rawData     Json?    @map("raw_data")
+  timestamp DateTime @default(now())
+  rawData   Json?    @map("raw_data")
 
   // Relations
   rack Rack @relation(fields: [rackId], references: [id], onDelete: Cascade)
@@ -203,25 +210,25 @@ model SensorReading {
 
 model AggregatedSensorReading {
   // Primary fields
-  id             String   @id @default(cuid())
-  rackId         String   @map("rack_id")
-  hour           DateTime
-  
+  id     String   @id @default(cuid())
+  rackId String   @map("rack_id")
+  hour   DateTime
+
   // Average values
-  avgTemperature Float    @map("avg_temperature")
-  avgHumidity    Float    @map("avg_humidity")
-  avgMoisture    Float    @map("avg_moisture")
-  avgLightLevel  Float    @map("avg_light_level")
-  
+  avgTemperature Float @map("avg_temperature")
+  avgHumidity    Float @map("avg_humidity")
+  avgMoisture    Float @map("avg_moisture")
+  avgLightLevel  Float @map("avg_light_level")
+
   // Min/Max values
-  minTemperature Float    @map("min_temperature")
-  maxTemperature Float    @map("max_temperature")
-  minMoisture    Float    @map("min_moisture")
-  maxMoisture    Float    @map("max_moisture")
-  
+  minTemperature Float @map("min_temperature")
+  maxTemperature Float @map("max_temperature")
+  minMoisture    Float @map("min_moisture")
+  maxMoisture    Float @map("max_moisture")
+
   // Metadata
-  readingCount   Int      @map("reading_count")
-  createdAt      DateTime @default(now()) @map("created_at")
+  readingCount Int      @map("reading_count")
+  createdAt    DateTime @default(now()) @map("created_at")
 
   // Relations
   rack Rack @relation(fields: [rackId], references: [id], onDelete: Cascade)
@@ -234,26 +241,26 @@ model AggregatedSensorReading {
 
 model AutomationRule {
   // Primary fields
-  id          String   @id @default(cuid())
-  rackId      String   @map("rack_id")
-  
+  id     String @id @default(cuid())
+  rackId String @map("rack_id")
+
   // Rule information
-  name        String   @db.VarChar(200)
-  description String?  @db.VarChar(1000)
-  isEnabled   Boolean  @default(true) @map("is_enabled")
-  
+  name        String  @db.VarChar(200)
+  description String? @db.VarChar(1000)
+  isEnabled   Boolean @default(true) @map("is_enabled")
+
   // Rule configuration (JSON)
-  conditions  Json
-  actions     Json
-  
+  conditions Json
+  actions    Json
+
   // Execution tracking
   cooldownMinutes Int?      @map("cooldown_minutes")
   lastTriggeredAt DateTime? @map("last_triggered_at")
   triggerCount    Int       @default(0) @map("trigger_count")
-  
+
   // Timestamps
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
   rack Rack @relation(fields: [rackId], references: [id], onDelete: Cascade)
@@ -265,9 +272,9 @@ model AutomationRule {
 
 model Activity {
   // Primary fields
-  id        String            @id @default(cuid())
-  rackId    String            @map("rack_id")
-  
+  id     String @id @default(cuid())
+  rackId String @map("rack_id")
+
   // Activity information
   eventType ActivityEventType @map("event_type")
   details   String?           @db.VarChar(1000)
@@ -286,23 +293,23 @@ model Activity {
 
 model Notification {
   // Primary fields
-  id        String              @id @default(cuid())
-  userId    String              @map("user_id")
-  rackId    String?             @map("rack_id")
-  
+  id     String  @id @default(cuid())
+  userId String  @map("user_id")
+  rackId String? @map("rack_id")
+
   // Notification information
-  type      NotificationType    @default(INFO)
-  status    NotificationStatus  @default(UNREAD)
-  title     String              @db.VarChar(255)
-  message   String              @db.VarChar(1000)
-  metadata  Json?
-  
+  type     NotificationType   @default(INFO)
+  status   NotificationStatus @default(UNREAD)
+  title    String             @db.VarChar(255)
+  message  String             @db.VarChar(1000)
+  metadata Json?
+
   // Tracking
-  readAt    DateTime?           @map("read_at")
-  
+  readAt DateTime? @map("read_at")
+
   // Timestamps
-  createdAt DateTime            @default(now()) @map("created_at")
-  updatedAt DateTime            @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // Relations
   user User  @relation(fields: [userId], references: [id], onDelete: Cascade)

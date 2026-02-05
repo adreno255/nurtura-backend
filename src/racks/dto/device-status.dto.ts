@@ -1,6 +1,10 @@
 import { Expose } from 'class-transformer';
 import { IsBoolean, IsNumber, IsOptional, IsString, IsIP, Max, Min } from 'class-validator';
 
+/**
+ * DTO for device status updates
+ * Topic: nurtura/rack/{macAddress}/status
+ */
 export class DeviceStatusDto {
     @Expose({ name: 'o' })
     @IsBoolean()

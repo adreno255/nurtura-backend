@@ -40,6 +40,11 @@ class ErrorDetailsDto {
     errorData?: any;
 }
 
+/**
+ * DTO for device error messages
+ * Topic: nurtura/rack/{macAddress}/errors
+ */
+
 export class DeviceErrorDto {
     @Expose({ name: 'c' })
     @IsString()

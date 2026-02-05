@@ -1,7 +1,11 @@
-import { IsIn, IsNotEmpty } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { IsIn, IsNotEmpty } from 'class-validator';
 
-export class LightCommandDto {
+/**
+ * DTO for lighting command
+ * Topic: nurtura/rack/{macAddress}/commands/lighting
+ */
+export class LightingCommandDto {
     @ApiProperty({
         example: 'on',
         description: 'Action to perform on grow light',

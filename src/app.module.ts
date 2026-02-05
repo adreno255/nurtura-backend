@@ -18,6 +18,7 @@ import { AppService } from './app.service';
 import { SensorsModule } from './sensors/sensors.module';
 import { WebsocketModule } from './websocket/websocket.module';
 import { RacksModule } from './racks/racks.module';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 
 @Module({
     imports: [
@@ -38,6 +39,7 @@ import { RacksModule } from './racks/racks.module';
                 blockDuration: 60000, // If they hit 30/min, they are banned for 1 minute
             },
         ]),
+        EventEmitterModule.forRoot(),
         MyLoggerModule,
         DatabaseModule,
         CommonModule,

@@ -7,6 +7,7 @@ export interface RackCreatedResponse {
 
 export interface RackUpdatedResponse {
     message: string;
+    rack: Rack;
 }
 
 export interface RackDeletedResponse {

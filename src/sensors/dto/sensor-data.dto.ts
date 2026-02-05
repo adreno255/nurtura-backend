@@ -1,6 +1,10 @@
 import { Expose } from 'class-transformer';
 import { IsNumber, Min, Max, IsOptional } from 'class-validator';
 
+/**
+ * DTO for sensor data received from ESP32 devices
+ * Topic: nurtura/rack/{macAddress}/sensors
+ */
 export class SensorDataDto {
     @Expose({ name: 't' })
     @IsNumber()
@@ -24,6 +28,12 @@ export class SensorDataDto {
     @IsNumber()
     @Min(0)
     lightLevel: number;
+
+    @Expose({ name: 'wu' })
+    @IsOptional()
+    @IsNumber()
+    @Min(0)
+    waterUsed: number;
 
     @Expose({ name: 'tm' })
     @IsOptional()

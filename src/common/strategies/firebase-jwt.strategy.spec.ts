@@ -5,10 +5,12 @@ import { MyLoggerService } from '../../my-logger/my-logger.service';
 import { UnauthorizedException } from '@nestjs/common';
 import { type DecodedIdToken } from 'firebase-admin/auth';
 import {
+    createMockDatabaseService,
     createMockFirebaseAuth,
     createMockFirebaseService,
     createMockLogger,
 } from '../../../test/mocks';
+import { DatabaseService } from '../../database/database.service';
 
 // 1. Mock PassportStrategy to avoid real passport initialization
 jest.mock('@nestjs/passport', () => ({
@@ -35,6 +37,8 @@ describe('FirebaseJwtStrategy', () => {
 
     const mockFirebaseService = createMockFirebaseService(mockFirebaseAuth);
 
+    const mockDatabaseService = createMockDatabaseService();
+
     const mockLoggerService = createMockLogger();
 
     beforeEach(async () => {
@@ -44,6 +48,7 @@ describe('FirebaseJwtStrategy', () => {
             providers: [
                 FirebaseJwtStrategy,
                 { provide: FirebaseService, useValue: mockFirebaseService },
+                { provide: DatabaseService, useValue: mockDatabaseService },
                 { provide: MyLoggerService, useValue: mockLoggerService },
             ],
         }).compile();
@@ -66,31 +71,59 @@ describe('FirebaseJwtStrategy', () => {
             email: 'test@nurtura.com',
         };
 
-        it('should return a user payload when token is valid', async () => {
-            // Arrange
+        it('should return a user payload when token is valid and user is not in DB', async () => {
             mockFirebaseService.getAuth().verifyIdToken.mockResolvedValue(mockDecodedToken);
 
-            // Act
+            mockDatabaseService.user.findUnique.mockResolvedValue(null);
+
             const result = await strategy.validate(mockToken);
 
-            // Assert
             expect(result).toEqual({
+                dbId: '',
                 firebaseUid: 'firebase-user-123',
                 email: 'test@nurtura.com',
             });
+
+            expect(mockLoggerService.log).not.toHaveBeenCalled();
+        });
+
+        it('should return DB-backed user payload when user exists in database', async () => {
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValue(mockDecodedToken);
+
+            mockDatabaseService.user.findUnique.mockResolvedValue({
+                id: 'db-user-1',
+                firebaseUid: 'firebase-user-123',
+                email: 'test@nurtura.com',
+            });
+
+            const result = await strategy.validate(mockToken);
+
+            expect(result).toEqual({
+                dbId: 'db-user-1',
+                firebaseUid: 'firebase-user-123',
+                email: 'test@nurtura.com',
+            });
+
             expect(mockLoggerService.log).toHaveBeenCalledWith(
-                expect.stringContaining('User authenticated: test@nurtura.com'),
+                'User authenticated: test@nurtura.com',
                 'FirebaseJwtStrategy',
             );
         });
 
         it('should use empty string if email is missing in token', async () => {
-            const tokenWithoutEmail = { uid: 'uid-only' };
-            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValue(tokenWithoutEmail);
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValue({
+                uid: 'uid-only',
+            });
+
+            mockDatabaseService.user.findUnique.mockResolvedValue(null);
 
             const result = await strategy.validate(mockToken);
 
-            expect(result.email).toBe('');
+            expect(result).toEqual({
+                dbId: '',
+                firebaseUid: 'uid-only',
+                email: '',
+            });
         });
 
         it('should throw UnauthorizedException and log warning when token is invalid', async () => {
@@ -108,15 +141,21 @@ describe('FirebaseJwtStrategy', () => {
             );
         });
 
-        it('should log the UID if email is not available during successful auth', async () => {
+        it('should log the UID if email is not available and user exists in DB', async () => {
             mockFirebaseService.getAuth().verifyIdToken.mockResolvedValue({
                 uid: 'uid-123',
+            });
+
+            mockDatabaseService.user.findUnique.mockResolvedValue({
+                id: 'db-id',
+                firebaseUid: 'uid-123',
+                email: '',
             });
 
             await strategy.validate(mockToken);
 
             expect(mockLoggerService.log).toHaveBeenCalledWith(
-                expect.stringContaining('User authenticated: uid-123'),
+                'User authenticated: uid-123',
                 'FirebaseJwtStrategy',
             );
         });

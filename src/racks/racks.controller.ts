@@ -247,6 +247,20 @@ export class RacksController {
             type: 'object',
             properties: {
                 message: { type: 'string', example: 'Rack updated successfully' },
+                rack: {
+                    type: 'object',
+                    properties: {
+                        id: { type: 'string', example: 'clx123abc456' },
+                        name: { type: 'string', example: 'Living Room Farm' },
+                        macAddress: { type: 'string', example: 'AA:BB:CC:DD:EE:FF' },
+                        mqttTopic: { type: 'string', example: 'nurtura/rack/living-room' },
+                        description: { type: 'string', example: 'Rack for growing herbs' },
+                        status: { type: 'string', example: 'ONLINE' },
+                        isActive: { type: 'boolean', example: true },
+                        lastSeenAt: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
+                        createdAt: { type: 'string', example: '2025-01-15T08:00:00.000Z' },
+                    },
+                },
             },
         },
     })

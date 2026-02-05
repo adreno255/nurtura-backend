@@ -8,12 +8,13 @@ import {
     ConnectedSocket,
     MessageBody,
 } from '@nestjs/websockets';
-import { Server, Socket } from 'socket.io';
+import { Namespace, Socket } from 'socket.io';
 import { MyLoggerService } from '../my-logger/my-logger.service';
 import { WebsocketService } from './websocket.service';
 import { type AuthenticatedSocket } from './interfaces/websocket.interface';
 import { SubscribeToRackDto, UnsubscribeFromRackDto } from './dto/websocket.dto';
-import { Notification, SensorReading } from 'src/generated/prisma';
+import type { Notification, SensorReading } from '../generated/prisma';
+import { OnEvent } from '@nestjs/event-emitter';
 
 @WebSocketGateway({
     cors: {
@@ -24,15 +25,17 @@ import { Notification, SensorReading } from 'src/generated/prisma';
 })
 export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
     @WebSocketServer()
-    server!: Server;
+    server!: Namespace;
 
     constructor(
         private readonly logger: MyLoggerService,
         private readonly websocketService: WebsocketService,
     ) {}
 
+    // ==================== Server Initialization ====================
+
     // Initialize gateway and setup middleware
-    afterInit(server: Server): void {
+    afterInit(server: Namespace): void {
         // Register server instance with service
         this.websocketService.setServer(server);
 
@@ -56,7 +59,7 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
 
         client.emit('connected', {
             message: 'Connected to sensor updates',
-            userId: client.data.user.uid,
+            userId: client.data.user.dbId,
         });
     }
 
@@ -65,6 +68,8 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
         this.websocketService.removeClient(client.id);
     }
 
+    // ==================== Client-specific Events ====================
+
     // Subscribe to specific rack's sensor updates
     @SubscribeMessage('subscribeToRack')
     async handleSubscribeToRack(
@@ -72,10 +77,14 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
         @MessageBody() data: SubscribeToRackDto,
     ) {
         try {
-            const { rackId, userId } = data;
+            const { rackId } = data;
 
             // Subscribe and get initial data
-            const initialData = await this.websocketService.subscribeToRack(client, rackId, userId);
+            const initialData = await this.websocketService.subscribeToRack(
+                client,
+                rackId,
+                client.data.user.dbId,
+            );
 
             // Send initial data
             client.emit('initialData', initialData);
@@ -141,9 +150,10 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
         });
     }
 
-    // ==================== Public Methods for External Services ====================
-    // These are called by other services (e.g., MqttService, SensorsService)
+    // ==================== Public Events for External Services ====================
+    // These are called by other services (e.g., SensorsService, RacksService) to broadcast updates to clients
 
+    @OnEvent('broadcastSensorData')
     broadcastSensorData(rackId: string, data: SensorReading) {
         this.websocketService.broadcastSensorData(rackId, data);
     }

@@ -4,7 +4,8 @@ import { type SensorReading } from '../../generated/prisma';
 export interface AuthenticatedSocket extends Socket {
     data: {
         user: {
-            uid: string;
+            dbId: string;
+            firebaseUid: string;
             email: string;
         };
     };

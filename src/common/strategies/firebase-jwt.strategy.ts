@@ -38,11 +38,11 @@ export class FirebaseJwtStrategy extends PassportStrategy(Strategy, 'firebase-jw
         });
 
         if (!dbUser) {
-            this.logger.warn(
-                `No corresponding user found in database for UID: ${decodedToken.uid}`,
-                'FirebaseJwtStrategy',
-            );
-            throw new UnauthorizedException('User not found');
+            return {
+                dbId: '',
+                firebaseUid: decodedToken.uid,
+                email: decodedToken.email || '',
+            };
         }
 
         const user: CurrentUserPayload = {

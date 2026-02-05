@@ -1,6 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { WsException } from '@nestjs/websockets';
-import { Server } from 'socket.io';
+import { Namespace } from 'socket.io';
 import { FirebaseService } from '../firebase/firebase.service';
 import { MyLoggerService } from '../my-logger/my-logger.service';
 import { SensorsService } from '../sensors/sensors.service';
@@ -13,13 +13,16 @@ import {
     type ConnectionStats,
     type InitialDataResponse,
 } from './interfaces/websocket.interface';
+import { OnEvent } from '@nestjs/event-emitter';
+import { DatabaseService } from '../database/database.service';
 
 @Injectable()
 export class WebsocketService {
-    private server: Server | null = null;
+    private server: Namespace | null = null;
     private connectedClients = new Map<string, ConnectedClient>();
 
     constructor(
+        private readonly databaseService: DatabaseService,
         private readonly firebaseService: FirebaseService,
         private readonly sensorsService: SensorsService,
         private readonly racksService: RacksService,
@@ -28,14 +31,14 @@ export class WebsocketService {
 
     // ==================== Server Initialization ====================
 
-    setServer(server: Server): void {
+    setServer(server: Namespace): void {
         this.server = server;
         this.logger.log('WebSocket server instance registered', 'WebsocketService');
     }
 
-    private ensureServerInitialized(): Server {
+    private ensureServerInitialized(): Namespace {
         if (!this.server) {
-            throw new Error('WebSocket server not initialized');
+            throw new Error('WebSocket server not initialized yet');
         }
         return this.server;
     }
@@ -58,16 +61,33 @@ export class WebsocketService {
         try {
             const token = rawToken.startsWith('Bearer ') ? rawToken.slice(7) : rawToken;
 
-            const decoded: DecodedIdToken = await this.firebaseService
+            const decodedToken: DecodedIdToken = await this.firebaseService
                 .getAuth()
                 .verifyIdToken(token);
 
+            const dbUser = await this.databaseService.user.findUnique({
+                where: { firebaseUid: decodedToken.uid },
+                select: { id: true, firebaseUid: true, email: true },
+            });
+
+            if (!dbUser) {
+                this.logger.warn(
+                    `No corresponding user found in database for UID: ${decodedToken.uid}`,
+                    'FirebaseJwtStrategy',
+                );
+                throw new UnauthorizedException('User not found');
+            }
+
             socket.data.user = {
-                uid: decoded.uid,
-                email: decoded.email ?? '',
+                dbId: dbUser.id,
+                firebaseUid: dbUser.firebaseUid,
+                email: dbUser.email,
             };
 
-            this.logger.log(`Token validated for user: ${decoded.uid}`, 'WebsocketService');
+            this.logger.log(
+                `Token validated for user: ${dbUser.email || dbUser.firebaseUid}`,
+                'WebsocketService',
+            );
         } catch (error) {
             this.logger.error(
                 `Token validation failed for client ${socket.id}`,
@@ -83,7 +103,8 @@ export class WebsocketService {
     async validateConnectionBypass(socket: AuthenticatedSocket): Promise<void> {
         await new Promise<void>((resolve) => {
             socket.data.user = {
-                uid: 'test-uid',
+                dbId: 'test-uid',
+                firebaseUid: 'test-firebase-uid',
                 email: 'test@example.com',
             };
 
@@ -101,11 +122,11 @@ export class WebsocketService {
     addClient(socket: AuthenticatedSocket): void {
         this.connectedClients.set(socket.id, {
             socket,
-            userId: socket.data.user.uid,
+            userId: socket.data.user.dbId,
         });
 
         this.logger.log(
-            `Client connected: ${socket.id} (user: ${socket.data.user.uid})`,
+            `Client connected: ${socket.id} (user: ${socket.data.user.dbId})`,
             'WebsocketService',
         );
     }
@@ -167,11 +188,21 @@ export class WebsocketService {
             .map((room) => room.replace('rack-', ''));
     }
 
-    getRoomClientCount(rackId: string): number {
-        const server = this.ensureServerInitialized();
-        const room = `rack-${rackId}`;
-        const clientsInRoom = server.sockets.adapter.rooms.get(room);
-        return clientsInRoom?.size || 0;
+    getRoomClientCount(macAddress: string): number {
+        const namespace = this.ensureServerInitialized();
+        const roomName = `rack-${macAddress}`;
+
+        // In a Namespace instance, the adapter is usually direct
+        // or accessed via the 'adapter' property.
+        const adapter = namespace.adapter;
+
+        if (!adapter) {
+            this.logger.warn('Namespace adapter not ready');
+            return 0;
+        }
+
+        const room = adapter.rooms.get(roomName);
+        return room ? room.size : 0;
     }
 
     // ==================== Subscription Logic ====================
@@ -229,6 +260,7 @@ export class WebsocketService {
         });
     }
 
+    @OnEvent('broadcastDeviceStatus')
     broadcastDeviceStatus(rackId: string, status: string): void {
         const server = this.ensureServerInitialized();
         const room = `rack-${rackId}`;
@@ -245,6 +277,7 @@ export class WebsocketService {
         });
     }
 
+    @OnEvent('broadcastAlert')
     broadcastAlert(rackId: string, notification: Notification): void {
         const server = this.ensureServerInitialized();
         const room = `rack-${rackId}`;

@@ -23,59 +23,43 @@ export class SensorsController {
         private readonly racksService: RacksService,
     ) {}
 
-    @Get(':rackId/history')
+    @Get('racks/:rackId/latest')
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
-        summary: 'Get sensor reading history',
-        description: 'Retrieves historical sensor readings for a specific rack over a time period',
+        summary: 'Get latest sensor reading for a rack',
+        description: 'Retrieves the most recent sensor reading for the specified rack',
     })
     @ApiParam({
         name: 'rackId',
+        required: true,
+        type: String,
         description: 'Rack ID',
         example: 'clx123abc456',
     })
-    @ApiQuery({
-        name: 'hours',
-        required: false,
-        description: 'Number of hours of history to retrieve',
-        example: 24,
-        type: Number,
-    })
     @ApiResponse({
         status: HttpStatus.OK,
-        description: 'Sensor reading history retrieved successfully',
+        description: 'Latest sensor reading retrieved successfully',
         schema: {
             type: 'object',
             properties: {
-                message: { type: 'string', example: 'Sensor reading history retrieved' },
-                data: {
-                    type: 'array',
-                    items: {
-                        type: 'object',
-                        properties: {
-                            id: { type: 'string', example: 'clx789def012' },
-                            temperature: { type: 'number', example: 25.5 },
-                            humidity: { type: 'number', example: 65.2 },
-                            moisture: { type: 'number', example: 45.8 },
-                            lightLevel: { type: 'number', example: 850 },
-                            timestamp: { type: 'string', example: '2025-02-01T10:00:00.000Z' },
-                        },
-                    },
-                },
-                count: { type: 'number', example: 48 },
-                periodHours: { type: 'number', example: 24 },
+                id: { type: 'string', example: 'clx789xyz123' },
+                temperature: { type: 'number', example: 25.5 },
+                humidity: { type: 'number', example: 65.2 },
+                moisture: { type: 'number', example: 45.8 },
+                lightLevel: { type: 'number', example: 850 },
+                timestamp: { type: 'string', example: '2025-02-01T10:25:00.000Z' },
             },
         },
     })
     @ApiNotFoundResponse({
-        description: 'Rack not found or access denied',
+        description: 'No sensor readings found for this rack',
         schema: {
             type: 'object',
             properties: {
                 statusCode: { type: 'number', example: 404 },
-                timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/sensors/clx123abc456/history' },
-                message: { type: 'string', example: 'Rack not found or access denied' },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/sensors/racks/clx123abc456/latest' },
+                message: { type: 'string', example: 'No sensor readings found' },
             },
         },
     })
@@ -85,26 +69,92 @@ export class SensorsController {
             type: 'object',
             properties: {
                 statusCode: { type: 'number', example: 500 },
-                timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/sensors/clx123abc456/history' },
-                message: { type: 'string', example: 'Failed to fetch sensor history' },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/sensors/racks/clx123abc456/latest' },
+                message: { type: 'string', example: 'Failed to retrieve latest sensor reading' },
             },
         },
     })
-    async getHistory(
-        @Param('rackId') rackId: string,
-        @Query('hours') hours: number = 24,
-        @CurrentUser() user: CurrentUserPayload,
-    ) {
-        await this.racksService.verifyRackOwnership(rackId, user.firebaseUid);
-        const readings = await this.sensorsService.getHistory(rackId, Number(hours));
+    async getLatestReading(@Param('rackId') rackId: string) {
+        return this.sensorsService.getLatestReading(rackId);
+    }
 
-        return {
-            message: 'Sensor reading history retrieved',
-            data: readings,
-            count: readings.length,
-            periodHours: Number(hours),
-        };
+    @Get('racks/:rackId/readings')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({
+        summary: 'Get sensor reading history for a rack',
+        description: 'Retrieves sensor readings within a specified time range',
+    })
+    @ApiParam({
+        name: 'rackId',
+        required: true,
+        type: String,
+        description: 'Rack ID',
+        example: 'clx123abc456',
+    })
+    @ApiQuery({
+        name: 'startDate',
+        required: false,
+        type: String,
+        description: 'Start date (ISO 8601 format)',
+        example: '2025-02-01T00:00:00.000Z',
+    })
+    @ApiQuery({
+        name: 'endDate',
+        required: false,
+        type: String,
+        description: 'End date (ISO 8601 format)',
+        example: '2025-02-02T00:00:00.000Z',
+    })
+    @ApiQuery({
+        name: 'limit',
+        required: false,
+        type: Number,
+        description: 'Maximum number of readings to return',
+        example: 100,
+    })
+    @ApiResponse({
+        status: HttpStatus.OK,
+        description: 'Sensor readings retrieved successfully',
+        schema: {
+            type: 'array',
+            items: {
+                type: 'object',
+                properties: {
+                    id: { type: 'string', example: 'clx789xyz123' },
+                    temperature: { type: 'number', example: 25.5 },
+                    humidity: { type: 'number', example: 65.2 },
+                    moisture: { type: 'number', example: 45.8 },
+                    lightLevel: { type: 'number', example: 850 },
+                    timestamp: { type: 'string', example: '2025-02-01T10:25:00.000Z' },
+                },
+            },
+        },
+    })
+    @ApiInternalServerErrorResponse({
+        description: 'Internal server error',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 500 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/sensors/racks/clx123abc456/history' },
+                message: { type: 'string', example: 'Failed to retrieve sensor readings' },
+            },
+        },
+    })
+    async getReadings(
+        @Param('rackId') rackId: string,
+        @Query('startDate') startDate?: string,
+        @Query('endDate') endDate?: string,
+        @Query('limit') limit?: number,
+    ) {
+        return this.sensorsService.getReadings(
+            rackId,
+            startDate ? new Date(startDate) : undefined,
+            endDate ? new Date(endDate) : undefined,
+            limit,
+        );
     }
 
     @Get(':rackId/aggregated')
@@ -192,6 +242,91 @@ export class SensorsController {
             message: 'Aggregated sensor data retrieved',
             data,
             count: data.length,
+            periodHours: Number(hours),
+        };
+    }
+
+    @Get(':rackId/history')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({
+        summary: 'Get sensor reading history',
+        description:
+            'Retrieves historical sensor readings for a specific rack over a time period (in hours)',
+    })
+    @ApiParam({
+        name: 'rackId',
+        description: 'Rack ID',
+        example: 'clx123abc456',
+    })
+    @ApiQuery({
+        name: 'hours',
+        required: false,
+        description: 'Number of hours of history to retrieve',
+        example: 24,
+        type: Number,
+    })
+    @ApiResponse({
+        status: HttpStatus.OK,
+        description: 'Sensor reading history retrieved successfully',
+        schema: {
+            type: 'object',
+            properties: {
+                message: { type: 'string', example: 'Sensor reading history retrieved' },
+                data: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            id: { type: 'string', example: 'clx789def012' },
+                            temperature: { type: 'number', example: 25.5 },
+                            humidity: { type: 'number', example: 65.2 },
+                            moisture: { type: 'number', example: 45.8 },
+                            lightLevel: { type: 'number', example: 850 },
+                            timestamp: { type: 'string', example: '2025-02-01T10:00:00.000Z' },
+                        },
+                    },
+                },
+                count: { type: 'number', example: 48 },
+                periodHours: { type: 'number', example: 24 },
+            },
+        },
+    })
+    @ApiNotFoundResponse({
+        description: 'Rack not found or access denied',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 404 },
+                timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/sensors/clx123abc456/history' },
+                message: { type: 'string', example: 'Rack not found or access denied' },
+            },
+        },
+    })
+    @ApiInternalServerErrorResponse({
+        description: 'Internal server error',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 500 },
+                timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/sensors/clx123abc456/history' },
+                message: { type: 'string', example: 'Failed to fetch sensor history' },
+            },
+        },
+    })
+    async getHistory(
+        @Param('rackId') rackId: string,
+        @Query('hours') hours: number = 24,
+        @CurrentUser() user: CurrentUserPayload,
+    ) {
+        await this.racksService.verifyRackOwnership(rackId, user.firebaseUid);
+        const readings = await this.sensorsService.getHistory(rackId, Number(hours));
+
+        return {
+            message: 'Sensor reading history retrieved',
+            data: readings,
+            count: readings.length,
             periodHours: Number(hours),
         };
     }
