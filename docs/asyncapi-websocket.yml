@@ -1,0 +1,769 @@
+asyncapi: 3.0.0
+#region Info
+info:
+    title: Nurtura WebSocket Gateway API
+    version: 1.0.0
+    description: |
+        Real-time WebSocket API for Nurtura smart farming system.
+        Provides live updates of sensor data, device status, alerts, and automation events to web and mobile clients.
+
+        **Features:**
+        - Real-time sensor data streaming
+        - Device status updates
+        - Alert notifications
+        - Automation event broadcasts
+        - Room-based subscriptions (per rack)
+
+        **Authentication:**
+        - Firebase JWT token required for all connections
+        - Token sent via query parameter or auth header
+        - User identity verified on connection
+
+        **Connection Flow:**
+        1. Client connects with Firebase ID token
+        2. Server validates token and extracts user info
+        3. Client receives 'connected' event with user data
+        4. Client subscribes to specific rack channels
+        5. Server sends 'initialData' with latest readings
+        6. Real-time updates broadcast to subscribed clients
+
+    tags:
+        - name: Connection
+          description: Connection lifecycle events
+        - name: Subscription
+          description: Rack subscription management
+        - name: Sensors
+          description: Real-time sensor data
+        - name: Devices
+          description: Device status updates
+        - name: Alerts
+          description: Notifications and alerts
+        - name: Automation
+          description: Automation events
+
+    contact:
+        name: LoamTech Solutions
+        url: https://nurturaloam.tech/api
+        email: lots.loamtechsolutions@gmail.com
+#endregion
+
+#region Servers
+servers:
+    production:
+        host: nurturaloam.tech
+        protocol: wss
+        description: Production WebSocket server (TLS)
+        pathname: /sensors
+        security:
+            - $ref: '#/components/securitySchemes/firebaseAuth'
+        tags:
+            - name: production
+              description: Production environment
+
+    staging/development/test:
+        host: localhost:3000
+        protocol: ws
+        description: Development WebSocket server (no TLS)
+        pathname: /sensors
+        security:
+            - $ref: '#/components/securitySchemes/firebaseAuth'
+        tags:
+            - name: staging
+              description: Staging environment
+            - name: development
+              description: Local development
+            - name: test
+              description: Local testing
+
+defaultContentType: application/json
+#endregion
+
+#region Channels
+channels:
+    root:
+        address: /sensors
+        title: Root Channel
+        description: |
+            Main WebSocket connection endpoint
+            Authentication:
+            - Preferred: Authorization header
+                - Authorization: Bearer \<Firebase ID Token\>
+
+            - Socket.IO clients may also send the token via handshake auth:
+                - io.connect('/sensors', {
+                    auth: { token: '\<Firebase ID Token\>' }
+                })
+        bindings:
+            ws:
+                method: GET
+                headers:
+                    type: object
+                    properties:
+                        Authorization:
+                            type: string
+                            description: |
+                                Bearer Firebase ID token.
+
+                                Format: Authorization: Bearer \<JWT\>
+
+    subscribeToRack:
+        address: subscribeToRack
+        title: Subscribe to Rack Channel
+        description: Subscribe to real-time updates for a specific rack
+        messages:
+            payload:
+                $ref: '#/components/messages/subscribeToRackMessage'
+
+    unsubscribeFromRack:
+        address: unsubscribeFromRack
+        title: Unsubscribe from Rack Channel
+        description: Unsubscribe from rack updates
+        messages:
+            payload:
+                $ref: '#/components/messages/unsubscribeFromRackMessage'
+
+    getStatus:
+        address: getStatus
+        title: Get Connection Status
+        description: Request current connection and subscription status
+        messages:
+            payload:
+                $ref: '#/components/messages/getStatusMessage'
+
+    sensorUpdate:
+        address: sensorData
+        title: Sensor Data Update
+        description: Real-time sensor data broadcast to subscribed clients
+
+    deviceStatusUpdate:
+        address: deviceStatus
+        title: Device Status Update
+        description: Device online/offline status changes
+
+    deviceErrorUpdate:
+        address: deviceError
+        title: Device Error Update
+        description: Device error notifications
+
+    notificationUpdate:
+        address: notification
+        title: Notification Update
+        description: Critical alerts and notifications
+
+    automationEventTriggered:
+        address: automationEvent
+        title: Automation Event
+        description: Automation rule triggered events
+#endregion
+
+#region Operations
+operations:
+    onConnect:
+        action: receive
+        channel:
+            $ref: '#/channels/root'
+        summary: Client connects to WebSocket
+        description: |
+            Client establishes WebSocket connection with Firebase auth token.
+            Server validates token and sends connection confirmation.
+        reply:
+            messages:
+                - $ref: '#/components/messages/connected'
+
+    subscribeToRack:
+        action: send
+        channel:
+            $ref: '#/channels/subscribeToRack'
+        summary: Client subscribes to rack updates
+        description: |
+            Client requests to receive real-time updates for a specific rack.
+            Server verifies ownership and sends initial data plus subscription confirmation.
+        messages:
+            - $ref: '#/channels/subscribeToRack/messages/payload'
+        reply:
+            messages:
+                - $ref: '#/components/messages/subscribedAck'
+                - $ref: '#/components/messages/initialData'
+                - $ref: '#/components/messages/error'
+
+    unsubscribeFromRack:
+        action: send
+        channel:
+            $ref: '#/channels/unsubscribeFromRack'
+        summary: Client unsubscribes from rack updates
+        description: |
+            Client stops receiving updates for a specific rack.
+            Server confirms unsubscription.
+        messages:
+            - $ref: '#/channels/unsubscribeFromRack/messages/payload'
+        reply:
+            messages:
+                - $ref: '#/components/messages/unsubscribedAck'
+                - $ref: '#/components/messages/error'
+
+    getConnectionStatus:
+        action: send
+        channel:
+            $ref: '#/channels/getStatus'
+        summary: Request connection status
+        description: |
+            Client requests current connection information including subscribed racks.
+        messages:
+            - $ref: '#/channels/getStatus/messages/payload'
+        reply:
+            messages:
+                - $ref: '#/components/messages/statusAck'
+
+    broadcastSensorData:
+        action: receive
+        channel:
+            $ref: '#/channels/sensorUpdate'
+        summary: Receive real-time sensor data
+        description: |
+            Server broadcasts sensor readings to clients subscribed to the rack.
+            Triggered when ESP32 publishes new sensor data via MQTT.
+        reply:
+            messages:
+                - $ref: '#/components/messages/sensorData'
+
+    broadcastDeviceStatus:
+        action: receive
+        channel:
+            $ref: '#/channels/deviceStatusUpdate'
+        summary: Receive device status changes
+        description: |
+            Server broadcasts device online/offline status to subscribed clients.
+            Triggered by MQTT status messages or heartbeat timeouts.
+        reply:
+            messages:
+                - $ref: '#/components/messages/deviceStatus'
+
+    broadcastNotification:
+        action: receive
+        channel:
+            $ref: '#/channels/notificationUpdate'
+        summary: Receive notifications
+        description: |
+            Server sends critical alerts and notifications to subscribed clients.
+            Includes sensor threshold violations, device errors, and system notifications.
+        reply:
+            messages:
+                - $ref: '#/components/messages/notification'
+
+    broadcastAutomationEvent:
+        action: receive
+        channel:
+            $ref: '#/channels/automationEventTriggered'
+        summary: Receive automation events
+        description: |
+            Server broadcasts automation rule executions to subscribed clients.
+            Includes rule name, triggered actions, and sensor conditions.
+        reply:
+            messages:
+                - $ref: '#/components/messages/automationEvent'
+    #endregion
+
+components:
+    #region Messages
+    messages:
+        connected:
+            name: Connected
+            title: Connection Established
+            summary: Sent when client successfully connects
+            contentType: application/json
+            payload:
+                $ref: '#/components/schemas/ConnectedReplyPayload'
+            examples:
+                - name: connectionSuccess
+                  payload:
+                      message: 'Connected to sensor updates'
+                      userId: 'clx123abc456'
+
+        subscribeToRackMessage:
+            name: Subscribe
+            title: Subscribe Request
+            summary: Client requests to subscribe to rack
+            contentType: application/json
+            payload:
+                $ref: '#/components/schemas/SubscribeRequestPayload'
+            examples:
+                - name: subscribe
+                  payload:
+                      rackId: 'clx789xyz123'
+
+        subscribedAck:
+            name: Subscribed
+            title: Subscription Confirmed
+            summary: Sent when subscription is successful
+            contentType: application/json
+            payload:
+                $ref: '#/components/schemas/SubscribedReplyPayload'
+            examples:
+                - name: subscribed
+                  payload:
+                      rackId: 'clx789xyz123'
+                      message: 'Subscribed to rack clx789xyz123'
+
+        initialData:
+            name: InitialData
+            title: Initial Data
+            summary: Initial rack data sent after subscription
+            contentType: application/json
+            payload:
+                $ref: '#/components/schemas/InitialDataReplyPayload'
+            examples:
+                - name: initialData
+                  payload:
+                      rackId: 'cmlat15fi000084uua19zeg8a'
+                      data:
+                          id: 'cmlatcoq40000i8uu2y2t8ppp'
+                          rackId: 'cmlat15fi000084uua19zeg8a'
+                          temperature: 25.5
+                          humidity: 65.2
+                          moisture: 45.8
+                          lightLevel: 850
+                          waterUsed: 1200
+                          timestamp: '2025-02-05T14:30:00.000Z'
+                      rawData:
+                          temperature: 25.5
+                          humidity: 65.2
+                          moisture: 45.8
+                          lightLevel: 850
+                          waterUsed: 1200
+
+        error:
+            name: Error
+            title: Error Event
+            summary: Sent when an error occurs
+            contentType: application/json
+            payload:
+                $ref: '#/components/schemas/ErrorReplyPayload'
+            examples:
+                - name: subscribeToRackError
+                  payload:
+                      message: 'Failed to subscribe to rack'
+                      error: 'Rack not found or access denied'
+                - name: unsubscribeFromRackError
+                  payload:
+                      message: 'Failed to unsubscribe from rack'
+                      error: 'Rack not found or access denied'
+
+        unsubscribeFromRackMessage:
+            name: Unsubscribe
+            title: Unsubscribe Request
+            summary: Client requests to unsubscribe from rack
+            contentType: application/json
+            payload:
+                $ref: '#/components/schemas/UnsubscribeRequestPayload'
+            examples:
+                - name: unsubscribe
+                  payload:
+                      rackId: 'clx789xyz123'
+
+        unsubscribedAck:
+            name: Unsubscribed
+            title: Unsubscription Confirmed
+            summary: Sent when unsubscription is successful
+            contentType: application/json
+            payload:
+                $ref: '#/components/schemas/UnsubscribedReplyPayload'
+            examples:
+                - name: unsubscribed
+                  payload:
+                      rackId: 'clx789xyz123'
+                      message: 'Unsubscribed from rack clx789xyz123'
+
+        getStatusMessage:
+            name: StatusRequest
+            title: Status Request
+            summary: Client requests connection status
+            contentType: application/json
+            payload:
+                type: object
+                properties: {}
+
+        statusAck:
+            name: Status
+            title: Connection Status
+            summary: Current connection and subscription status
+            contentType: application/json
+            payload:
+                $ref: '#/components/schemas/StatusReplyPayload'
+            examples:
+                - name: status
+                  payload:
+                      connected: true
+                      clientId: 'abc123xyz'
+                      subscribedRacks:
+                          - 'clx789xyz123'
+                          - 'clx456def789'
+                      totalConnections: 5
+
+        sensorData:
+            name: SensorUpdate
+            title: Sensor Data Update
+            summary: Real-time sensor reading
+            contentType: application/json
+            payload:
+                $ref: '#/components/schemas/SensorUpdatePayload'
+            examples:
+                - name: sensorUpdate
+                  payload:
+                      rackId: 'clx789xyz123'
+                      data:
+                          id: 'cmlatcoq40000i8uu2y2t8ppp'
+                          rackId: 'cmlat15fi000084uua19zeg8a'
+                          temperature: 26.1
+                          humidity: 67.3
+                          moisture: 42.5
+                          lightLevel: 920
+                          waterUsed: null
+                          timestamp: '2025-02-05T14:35:00.000Z'
+                          rawData:
+                              temperature: 26.1
+                              humidity: 67.3
+                              moisture: 42.5
+                              lightLevel: 920
+                      timestamp: '2025-02-05T14:35:00.000Z'
+
+        deviceStatus:
+            name: DeviceStatusUpdate
+            title: Device Status Change
+            summary: Device online/offline status update
+            contentType: application/json
+            payload:
+                $ref: '#/components/schemas/DeviceStatusUpdatePayload'
+            examples:
+                - name: deviceOnline
+                  payload:
+                      rackId: 'clx789xyz123'
+                      status: 'ONLINE'
+                      timestamp: '2025-02-05T14:35:00.000Z'
+                - name: deviceOffline
+                  payload:
+                      rackId: 'clx789xyz123'
+                      status: 'OFFLINE'
+                      timestamp: '2025-02-05T14:35:00.000Z'
+
+        notification:
+            name: Notification
+            title: Notification Update
+            summary: Critical alert or notification
+            contentType: application/json
+            payload:
+                $ref: '#/components/schemas/NotificationPayload'
+            examples:
+                - name: moistureAlert
+                  payload:
+                      rackId: 'clx789xyz123'
+                      notification:
+                          id: 'clx999notification'
+                          userId: 'clx123abc456'
+                          rackId: 'clx789xyz123'
+                          type: 'ALERT'
+                          status: 'UNREAD'
+                          title: 'Low Soil Moisture'
+                          message: 'Soil moisture has dropped below 25%'
+                          metadata:
+                              sensor: 'moisture'
+                              value: 24.5
+                              threshold: 25
+                          createdAt: '2025-02-05T14:40:00.000Z'
+                          updatedAt: '2025-02-05T14:40:00.000Z'
+                      timestamp: '2025-02-05T14:35:00.000Z'
+
+        automationEvent:
+            name: AutomationEvent
+            title: Automation Rule Triggered
+            summary: Automation rule execution event
+            contentType: application/json
+            payload:
+                $ref: '#/components/schemas/AutomationEventPayload'
+            examples:
+                - name: autoWateringTriggered
+                  payload:
+                      rackId: 'clx789xyz123'
+                      event:
+                          rackId: 'clx789xyz123'
+                          ruleName: 'Auto-water when dry'
+                          executedActions:
+                              - 'watering: start for 5000ms'
+                              - 'growLight: on'
+                      timestamp: '2025-02-05T14:45:00.000Z'
+    #endregion
+
+    #region Schemas
+    schemas:
+        ConnectedReplyPayload:
+            type: object
+            properties:
+                message:
+                    type: string
+                    example: 'Connected to sensor updates'
+                userId:
+                    type: string
+                    example: 'clx123abc456'
+
+        SubscribeRequestPayload:
+            type: object
+            required:
+                - rackId
+            properties:
+                rackId:
+                    type: string
+                    example: 'clx789xyz123'
+
+        SubscribedReplyPayload:
+            type: object
+            properties:
+                rackId:
+                    type: string
+                    example: 'clx789xyz123'
+                message:
+                    type: string
+                    example: 'Subscribed to rack clx789xyz123'
+
+        InitialDataReplyPayload:
+            type: object
+            properties:
+                rackId:
+                    type: string
+                    example: 'clx789xyz123'
+                data:
+                    type: object
+                    properties:
+                        id:
+                            type: string
+                            example: 'cmlatcoq40000i8uu2y2t8ppp'
+                        rackId:
+                            type: string
+                            example: 'cmlat15fi000084uua19zeg8a'
+                        temperature:
+                            type: number
+                            example: 25.5
+                        humidity:
+                            type: number
+                            example: 65.2
+                        moisture:
+                            type: number
+                            example: 45.8
+                        lightLevel:
+                            type: number
+                            example: 850
+                        waterUsed:
+                            type: number
+                        timestamp:
+                            type: string
+                            format: date-time
+                            example: '2025-02-05T14:30:00.000Z'
+                        rawData:
+                            type: object
+
+                timestamp:
+                    type: string
+                    format: date-time
+                    example: '2025-02-05T14:35:00.000Z'
+
+        UnsubscribeRequestPayload:
+            type: object
+            required:
+                - rackId
+            properties:
+                rackId:
+                    type: string
+                    example: 'clx789xyz123'
+
+        UnsubscribedReplyPayload:
+            type: object
+            properties:
+                rackId:
+                    type: string
+                    example: 'clx789xyz123'
+                message:
+                    type: string
+                    example: 'Unsubscribed from rack clx789xyz123'
+
+        ErrorReplyPayload:
+            type: object
+            properties:
+                message:
+                    type: string
+                    example: 'Failed to subscribe to rack'
+                error:
+                    type: string
+                    example: 'Rack not found or access denied'
+
+        StatusReplyPayload:
+            type: object
+            properties:
+                connected:
+                    type: boolean
+                    example: true
+                clientId:
+                    type: string
+                    example: 'abc123xyz'
+                subscribedRacks:
+                    type: array
+                    items:
+                        type: string
+                    example:
+                        - 'clx789xyz123'
+                        - 'clx456def789'
+                totalConnections:
+                    type: integer
+                    example: 5
+
+        SensorUpdatePayload:
+            type: object
+            properties:
+                rackId:
+                    type: string
+                    example: 'clx789xyz123'
+                data:
+                    type: object
+                    properties:
+                        id:
+                            type: string
+                            example: 'cmlatcoq40000i8uu2y2t8ppp'
+                        rackId:
+                            type: string
+                            example: 'cmlat15fi000084uua19zeg8a'
+                        temperature:
+                            type: number
+                            example: 25.5
+                        humidity:
+                            type: number
+                            example: 65.2
+                        moisture:
+                            type: number
+                            example: 45.8
+                        lightLevel:
+                            type: number
+                            example: 850
+                        waterUsed:
+                            type: number
+                        timestamp:
+                            type: string
+                            format: date-time
+                            example: '2025-02-05T14:30:00.000Z'
+                        rawData:
+                            type: object
+                timestamp:
+                    type: string
+                    format: date-time
+                    example: '2025-02-05T14:35:00.000Z'
+
+        DeviceStatusUpdatePayload:
+            type: object
+            properties:
+                rackId:
+                    type: string
+                    example: 'clx789xyz123'
+                status:
+                    type: string
+                    enum:
+                        - ONLINE
+                        - OFFLINE
+                        - ERROR
+                        - MAINTENANCE
+                    example: 'ONLINE'
+                timestamp:
+                    type: string
+                    format: date-time
+                    example: '2025-02-05T14:37:00.000Z'
+
+        NotificationPayload:
+            type: object
+            properties:
+                rackId:
+                    type: string
+                    example: 'clx789xyz123'
+                notification:
+                    type: object
+                    properties:
+                        id:
+                            type: string
+                            example: 'clx999notification'
+                        userId:
+                            type: string
+                            example: 'clx123abc456'
+                        rackId:
+                            type: string
+                            example: 'clx789xyz123'
+                        type:
+                            type: string
+                            enum:
+                                - SYSTEM
+                                - ALERT
+                                - WARNING
+                                - INFO
+                                - SUCCESS
+                            example: 'ALERT'
+                        status:
+                            type: string
+                            enum:
+                                - UNREAD
+                                - READ
+                                - ARCHIVED
+                            example: 'UNREAD'
+                        title:
+                            type: string
+                            example: 'Low Soil Moisture'
+                        message:
+                            type: string
+                            example: 'Soil moisture has dropped below 25%'
+                        metadata:
+                            type: object
+                            additionalProperties: true
+                            example:
+                                sensor: 'moisture'
+                                value: 24.5
+                                threshold: 25
+                        createdAt:
+                            type: string
+                            format: date-time
+                            example: '2025-02-05T14:40:00.000Z'
+                        updatedAt:
+                            type: string
+                            format: date-time
+                            example: '2025-02-05T14:40:00.000Z'
+                timestamp:
+                    type: string
+                    format: date-time
+                    example: '2025-02-05T14:41:00.000Z'
+
+        AutomationEventPayload:
+            type: object
+            properties:
+                rackId:
+                    type: string
+                    example: 'clx789xyz123'
+                event:
+                    type: object
+                    properties:
+                        rackId:
+                            type: string
+                            example: 'clx789xyz123'
+                        ruleName:
+                            type: string
+                            example: 'Auto-water when dry'
+                        executedActions:
+                            type: array
+                            items:
+                                type: string
+                            example:
+                                - 'Start watering for 5000 ms'
+                timestamp:
+                    type: string
+                    format: date-time
+                    example: '2025-02-05T14:41:00.000Z'
+    #endregion
+
+    #region Security Schemes
+    securitySchemes:
+        firebaseAuth:
+            type: http
+            scheme: bearer
+            bearerFormat: JWT
+            description: Firebase ID token (JWT) used for authentication
+    #endregion

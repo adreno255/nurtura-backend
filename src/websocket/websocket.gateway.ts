@@ -15,6 +15,7 @@ import { type AuthenticatedSocket } from './interfaces/websocket.interface';
 import { SubscribeToRackDto, UnsubscribeFromRackDto } from './dto/websocket.dto';
 import type { Notification, SensorReading } from '../generated/prisma';
 import { OnEvent } from '@nestjs/event-emitter';
+import { AutomatedEventDto } from '../automation/dto';
 
 @WebSocketGateway({
     cors: {
@@ -77,7 +78,13 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
         @MessageBody() data: SubscribeToRackDto,
     ) {
         try {
-            const { rackId } = data;
+            // Validate payload first
+            const validatedData = await this.websocketService.validatePayload(
+                client,
+                data,
+                SubscribeToRackDto,
+            );
+            const { rackId } = validatedData;
 
             // Subscribe and get initial data
             const initialData = await this.websocketService.subscribeToRack(
@@ -90,7 +97,7 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
             client.emit('initialData', initialData);
 
             // Send subscription acknowledgment
-            client.emit('subscribed', {
+            client.emit('subscribedAck', {
                 rackId,
                 message: `Subscribed to rack ${rackId}`,
             });
@@ -115,11 +122,17 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
         @MessageBody() data: UnsubscribeFromRackDto,
     ) {
         try {
-            const { rackId } = data;
+            // Validate payload first
+            const validatedData = await this.websocketService.validatePayload(
+                client,
+                data,
+                UnsubscribeFromRackDto,
+            );
+            const { rackId } = validatedData;
 
             await this.websocketService.unsubscribeFromRack(client, rackId);
 
-            client.emit('unsubscribed', {
+            client.emit('unsubscribedAck', {
                 rackId,
                 message: `Unsubscribed from rack ${rackId}`,
             });
@@ -142,7 +155,7 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
     handleGetStatus(@ConnectedSocket() client: AuthenticatedSocket) {
         const subscribedRacks = this.websocketService.getSubscribedRacks(client);
 
-        client.emit('status', {
+        client.emit('statusAck', {
             connected: true,
             clientId: client.id,
             subscribedRacks,
@@ -158,17 +171,20 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
         this.websocketService.broadcastSensorData(rackId, data);
     }
 
+    @OnEvent('broadcastDeviceStatus')
     broadcastDeviceStatus(rackId: string, status: string) {
         this.websocketService.broadcastDeviceStatus(rackId, status);
     }
 
-    broadcastAlert(rackId: string, notification: Notification) {
-        this.websocketService.broadcastAlert(rackId, notification);
+    @OnEvent('broadcastNotification')
+    broadcastNotification(rackId: string, notification: Notification) {
+        this.websocketService.broadcastNotification(rackId, notification);
     }
 
-    // broadcastAutomationEvent(rackId: string, event: any) {
-    //     this.websocketService.broadcastAutomationEvent(rackId, event);
-    // }
+    @OnEvent('broadcastAutomationEvent')
+    broadcastAutomationEvent(rackId: string, event: AutomatedEventDto) {
+        this.websocketService.broadcastAutomationEvent(rackId, event);
+    }
 
     getConnectionStats() {
         return this.websocketService.getConnectionStats();

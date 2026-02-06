@@ -60,7 +60,7 @@ export class DeviceErrorDto {
     @IsEnum(ErrorSeverity)
     severity: ErrorSeverity;
 
-    @Expose({ name: 't' })
+    @Expose({ name: 'tm' })
     @IsOptional()
     @IsNumber()
     timestamp?: number;

@@ -6,6 +6,7 @@ import { MyLoggerService } from '../my-logger/my-logger.service';
 import { SensorsService } from '../sensors/sensors.service';
 import { RacksService } from '../racks/racks.service';
 import { MqttMessageParser } from '../common/utils/mqtt-parser.helper';
+import { OnEvent } from '@nestjs/event-emitter';
 
 @Injectable()
 export class MqttService implements OnModuleInit, OnModuleDestroy {
@@ -243,6 +244,7 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
      * Publish a command to a device
      * Called by: AutomationService, RacksService (manual control)
      */
+    @OnEvent('publishCommand')
     async publishCommand(
         macAddress: string,
         commandType: 'watering' | 'lighting' | 'sensors',

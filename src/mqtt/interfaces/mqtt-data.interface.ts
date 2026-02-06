@@ -3,6 +3,7 @@ export interface SensorData {
     humidity: number;
     moisture: number;
     lightLevel: number;
+    waterUsed?: number;
     timestamp?: number;
 }
 

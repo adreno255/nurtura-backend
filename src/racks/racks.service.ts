@@ -26,11 +26,13 @@ import { MqttMessageParser } from '../common/utils/mqtt-parser.helper';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DeviceErrorDto, DeviceStatusDto, ErrorSeverity } from './dto';
 import { NotificationType, Prisma } from '../generated/prisma';
+import { LogRackActivityHelper } from '../common/utils/log-rack-activity.helper';
 
 @Injectable()
 export class RacksService {
     constructor(
         private readonly databaseService: DatabaseService,
+        private readonly logRackActivityHelper: LogRackActivityHelper,
         private readonly eventEmitter: EventEmitter2,
         private readonly logger: MyLoggerService,
     ) {}
@@ -311,17 +313,7 @@ export class RacksService {
         );
 
         // Step 2: Find the rack by MAC address
-        const rack = await this.databaseService.rack.findUnique({
-            where: { macAddress },
-            include: {
-                user: {
-                    select: {
-                        id: true,
-                        email: true,
-                    },
-                },
-            },
-        });
+        const rack = await this.findByMacAddress(macAddress);
 
         if (!rack) {
             this.logger.warn(
@@ -356,16 +348,14 @@ export class RacksService {
 
             // Step 4: Log status change activity if status changed
             if (oldStatus !== newStatus) {
-                await this.databaseService.activity.create({
-                    data: {
-                        rackId: rack.id,
-                        eventType: statusData.online
-                            ? ActivityEventType.DEVICE_ONLINE
-                            : ActivityEventType.DEVICE_OFFLINE,
-                        details: `Device status changed from ${oldStatus} to ${newStatus}`,
-                        metadata: statusData as unknown as Prisma.InputJsonValue,
-                    },
-                });
+                await this.logRackActivityHelper.logActivity(
+                    rack.id,
+                    statusData.online
+                        ? ActivityEventType.DEVICE_ONLINE
+                        : ActivityEventType.DEVICE_OFFLINE,
+                    `Device status changed from ${oldStatus} to ${newStatus}`,
+                    statusData as unknown as Prisma.InputJsonValue,
+                );
 
                 this.logger.log(
                     `Activity logged for rack ${rack.id}: ${oldStatus} → ${newStatus}`,
@@ -409,17 +399,7 @@ export class RacksService {
         );
 
         // Step 2: Find the rack by MAC address
-        const rack = await this.databaseService.rack.findUnique({
-            where: { macAddress },
-            include: {
-                user: {
-                    select: {
-                        id: true,
-                        email: true,
-                    },
-                },
-            },
-        });
+        const rack = await this.findByMacAddress(macAddress);
 
         if (!rack) {
             this.logger.warn(
@@ -446,35 +426,36 @@ export class RacksService {
                     `Rack ${rack.name} (${rack.id}) marked as ERROR due to: ${errorData.code}`,
                     'RacksService',
                 );
+                // Step 4: Create notification for the user
+                const alert = await this.databaseService.notification.create({
+                    data: {
+                        userId: rack.userId,
+                        rackId: rack.id,
+                        type:
+                            errorData.severity === ErrorSeverity.CRITICAL
+                                ? NotificationType.ALERT
+                                : NotificationType.WARNING,
+                        title: `Device Error: ${errorData.code}`,
+                        message: errorData.message,
+                        metadata: errorData as unknown as Prisma.InputJsonValue,
+                    },
+                });
+
+                this.logger.log(
+                    `Notification created for rack ${rack.name} (${rack.id}) regarding error: ${errorData.code}`,
+                    'RacksService',
+                );
+
+                // Step 5: Broadcast error to connected clients via WebSocket
+                this.eventEmitter.emit('broadcastNotification', alert);
+
+                this.eventEmitter.emit('broadcastDeviceStatus', rack.status);
+
+                this.logger.warn(
+                    `Device error broadcasted to WebSocket clients for rack: ${rack.id}`,
+                    'RacksService',
+                );
             }
-
-            // Step 4: Create notification for the user
-            const alert = await this.databaseService.notification.create({
-                data: {
-                    userId: rack.userId,
-                    rackId: rack.id,
-                    type:
-                        errorData.severity === ErrorSeverity.CRITICAL
-                            ? NotificationType.ALERT
-                            : NotificationType.WARNING,
-                    title: `Device Error: ${errorData.code}`,
-                    message: errorData.message,
-                    metadata: errorData as unknown as Prisma.InputJsonValue,
-                },
-            });
-
-            this.logger.log(
-                `Notification created for user ${rack.user.email} regarding error: ${errorData.code}`,
-                'RacksService',
-            );
-
-            // Step 5: Broadcast error to connected clients via WebSocket
-            this.eventEmitter.emit('broadcastAlert', alert);
-
-            this.logger.warn(
-                `Device error broadcasted to WebSocket clients for rack: ${rack.id}`,
-                'RacksService',
-            );
         } catch (error) {
             this.logger.error(
                 `Failed to process device error for: ${macAddress}`,
@@ -624,145 +605,6 @@ export class RacksService {
         }
     }
 
-    // Control Commands (via MQTT) - Placeholder implementations
-    /*
-    async triggerWatering(
-        rackId: string,
-        userId: string,
-        duration?: number,
-    ): Promise<CommandResponse> {
-        try {
-            // Verify ownership
-            await this.verifyRackOwnership(rackId, userId);
-
-            // Validate duration
-            const wateringDuration = duration || 5000;
-            if (wateringDuration < 1000 || wateringDuration > 60000) {
-                throw new BadRequestException(
-                    'Watering duration must be between 1000ms and 60000ms',
-                );
-            }
-
-            // TODO: Publish MQTT command
-            await this.publishCommand(rackId, 'water', { duration: wateringDuration });
-
-            // Log activity
-            await this.logActivity(
-                rackId,
-                ActivityEventType.WATERING_ON,
-                `Manual watering triggered (${wateringDuration}ms)`,
-                { duration: wateringDuration },
-            );
-
-            this.logger.log(
-                `Watering command sent to rack ${rackId} (duration: ${wateringDuration}ms)`,
-                'RacksService',
-            );
-
-            return {
-                message: 'Watering command sent successfully',
-                commandType: 'water',
-                timestamp: new Date(),
-            };
-        } catch (error) {
-            if (error instanceof NotFoundException || error instanceof BadRequestException) {
-                throw error;
-            }
-
-            this.logger.error(
-                `Error triggering watering for rack ${rackId}`,
-                error instanceof Error ? error.message : String(error),
-                'RacksService',
-            );
-            throw new InternalServerErrorException('Failed to send watering command');
-        }
-    }
-
-    async controlGrowLight(
-        rackId: string,
-        userId: string,
-        action: 'on' | 'off',
-    ): Promise<CommandResponse> {
-        try {
-            // Verify ownership
-            await this.verifyRackOwnership(rackId, userId);
-
-            // TODO: Publish MQTT command
-            await this.publishCommand(rackId, 'light', { action });
-
-            // Log activity
-            const eventType =
-                action === 'on' ? ActivityEventType.LIGHT_ON : ActivityEventType.LIGHT_OFF;
-            await this.logActivity(rackId, eventType, `Grow light ${action} (manual)`, { action });
-
-            this.logger.log(`Grow light ${action} command sent to rack ${rackId}`, 'RacksService');
-
-            return {
-                message: `Grow light ${action} command sent successfully`,
-                commandType: 'light',
-                timestamp: new Date(),
-            };
-        } catch (error) {
-            if (error instanceof NotFoundException) {
-                throw error;
-            }
-
-            this.logger.error(
-                `Error controlling grow light for rack ${rackId}`,
-                error instanceof Error ? error.message : String(error),
-                'RacksService',
-            );
-            throw new InternalServerErrorException('Failed to send grow light command');
-        }
-    }
-
-    async controlSensors(
-        rackId: string,
-        userId: string,
-        action: 'on' | 'off',
-    ): Promise<CommandResponse> {
-        try {
-            // Verify ownership
-            await this.verifyRackOwnership(rackId, userId);
-
-            // TODO: Publish MQTT command
-            await this.publishCommand(rackId, 'sensors', { action });
-
-            // Log activity
-            const eventType =
-                action === 'on' ? ActivityEventType.SENSORS_ON : ActivityEventType.SENSORS_OFF;
-            await this.logActivity(rackId, eventType, `Sensors ${action} (manual)`, { action });
-
-            this.logger.log(`Sensors ${action} command sent to rack ${rackId}`, 'RacksService');
-
-            return {
-                message: `Sensors ${action} command sent successfully`,
-                commandType: 'sensors',
-                timestamp: new Date(),
-            };
-        } catch (error) {
-            if (error instanceof NotFoundException) {
-                throw error;
-            }
-
-            this.logger.error(
-                `Error controlling sensors for rack ${rackId}`,
-                error instanceof Error ? error.message : String(error),
-                'RacksService',
-            );
-            throw new InternalServerErrorException('Failed to send sensors command');
-        }
-    }
-
-    async publishCommand(rackId: string, commandType: string, payload: any): Promise<void> {
-        // TODO: Implement MQTT publish logic
-        // This will be implemented when MQTT module is ready
-        this.logger.log(
-            `[MQTT Placeholder] Command: ${commandType}, Rack: ${rackId}, Payload: ${JSON.stringify(payload)}`,
-            'RacksService',
-        );
-    }
-
     // Activity Logging
 
     async getRecentActivities(rackId: string, userId: string, limit: number = 50) {
@@ -790,37 +632,4 @@ export class RacksService {
             throw new InternalServerErrorException('Failed to fetch activities');
         }
     }
-
-    async logActivity(
-        rackId: string,
-        eventType: ActivityEventType,
-        details: string,
-        metadata?: object,
-    ) {
-        try {
-            const activity = await this.databaseService.activity.create({
-                data: {
-                    rackId,
-                    eventType,
-                    details,
-                    metadata,
-                },
-            });
-
-            this.logger.log(
-                `Activity logged for rack ${rackId}: ${eventType} - ${details}`,
-                'RacksService',
-            );
-
-            return activity;
-        } catch (error) {
-            this.logger.error(
-                `Error logging activity for rack ${rackId}`,
-                error instanceof Error ? error.message : String(error),
-                'RacksService',
-            );
-            // Don't throw - logging failures shouldn't break the main operation
-        }
-    }
-    */
 }

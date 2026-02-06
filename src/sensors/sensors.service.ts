@@ -5,11 +5,13 @@ import { DeviceStatus, Prisma } from '../generated/prisma';
 import { SensorDataDto } from './dto/sensor-data.dto';
 import { MqttMessageParser } from '../common/utils/mqtt-parser.helper';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { AutomationService } from '../automation/automation.service';
 
 @Injectable()
 export class SensorsService {
     constructor(
         private readonly databaseService: DatabaseService,
+        private readonly automationService: AutomationService,
         private readonly eventEmitter: EventEmitter2,
         private readonly logger: MyLoggerService,
     ) {}
@@ -309,8 +311,8 @@ export class SensorsService {
 
             this.logger.log(`Processing complete for rack: ${rack.id}`, 'SensorsService');
 
-            // Step 6: TODO: Pass to AutomationService for rule evaluation
-            // await this.automationService.evaluateRules(rack.id, sensorData);
+            // Step 6: Pass to AutomationService for rule evaluation
+            await this.automationService.evaluateRules(rack.id, sensorData);
         } catch (error) {
             this.logger.error(
                 `Failed to process sensor data for device: ${macAddress}`,

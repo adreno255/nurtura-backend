@@ -10,7 +10,7 @@ export class DeviceStatusDto {
     @IsBoolean()
     online: boolean;
 
-    @Expose({ name: 't' })
+    @Expose({ name: 'tm' })
     @IsOptional()
     @IsNumber()
     timestamp?: number;
@@ -25,7 +25,7 @@ export class DeviceStatusDto {
     @IsIP()
     ipAddress?: string;
 
-    @Expose({ name: 'id' })
+    @Expose({ name: 'mac' })
     @IsOptional()
     @IsString()
     macAddress?: string;

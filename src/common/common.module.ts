@@ -3,6 +3,7 @@ import { PassportModule } from '@nestjs/passport';
 import { FirebaseJwtStrategy } from './strategies/firebase-jwt.strategy';
 import { FirebaseModule } from '../firebase/firebase.module';
 import { DatabaseModule } from '../database/database.module';
+import { LogRackActivityHelper } from './utils/log-rack-activity.helper';
 
 @Global()
 @Module({
@@ -11,7 +12,7 @@ import { DatabaseModule } from '../database/database.module';
         FirebaseModule,
         DatabaseModule,
     ],
-    providers: [FirebaseJwtStrategy],
-    exports: [FirebaseJwtStrategy, PassportModule],
+    providers: [FirebaseJwtStrategy, LogRackActivityHelper],
+    exports: [FirebaseJwtStrategy, PassportModule, LogRackActivityHelper],
 })
 export class CommonModule {}

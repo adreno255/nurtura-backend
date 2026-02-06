@@ -4,10 +4,6 @@ export class SubscribeToRackDto {
     @IsString()
     @IsNotEmpty()
     rackId!: string;
-
-    @IsString()
-    @IsNotEmpty()
-    userId!: string;
 }
 
 export class UnsubscribeFromRackDto {

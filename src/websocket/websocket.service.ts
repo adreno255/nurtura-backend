@@ -13,8 +13,10 @@ import {
     type ConnectionStats,
     type InitialDataResponse,
 } from './interfaces/websocket.interface';
-import { OnEvent } from '@nestjs/event-emitter';
 import { DatabaseService } from '../database/database.service';
+import { AutomatedEventDto } from '../automation/dto';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
 
 @Injectable()
 export class WebsocketService {
@@ -241,68 +243,119 @@ export class WebsocketService {
         this.logger.log(`Client ${socket.id} unsubscribed from rack ${rackId}`, 'WebsocketService');
     }
 
+    // ==================== Helper Functions ====================
+
+    async validatePayload<T>(
+        client: AuthenticatedSocket,
+        data: any,
+        dtoClass: new () => T,
+    ): Promise<T> {
+        const dtoInstance = plainToInstance(dtoClass, data);
+        const errors = await validate(dtoInstance as object);
+
+        if (errors.length > 0) {
+            const errorMessages = errors
+                .map((error) => Object.values(error.constraints || {}).join(', '))
+                .join('; ');
+
+            throw new WsException(
+                `Validation failed for ${client.data.user.dbId}: ${errorMessages}`,
+            );
+        }
+
+        return dtoInstance;
+    }
+
     // ==================== Broadcasting ====================
 
     broadcastSensorData(rackId: string, data: SensorReading): void {
-        const server = this.ensureServerInitialized();
-        const room = `rack-${rackId}`;
-        const clientCount = this.getRoomClientCount(rackId);
+        try {
+            const server = this.ensureServerInitialized();
+            const room = `rack-${rackId}`;
+            const clientCount = this.getRoomClientCount(rackId);
 
-        this.logger.log(
-            `Broadcasting sensor data for rack ${rackId} to ${clientCount} client(s)`,
-            'WebsocketService',
-        );
+            this.logger.log(
+                `Broadcasting sensor data for rack ${rackId} to ${clientCount} client(s)`,
+                'WebsocketService',
+            );
 
-        server.to(room).emit('sensorData', {
-            rackId,
-            data,
-            timestamp: new Date().toISOString(),
-        });
+            server.to(room).emit('sensorData', {
+                rackId,
+                data,
+                timestamp: new Date().toISOString(),
+            });
+        } catch (error) {
+            this.logger.error(
+                `Failed to broadcast sensor data for rack ${rackId}`,
+                error instanceof Error ? error.message : String(error),
+                'WebsocketService',
+            );
+        }
     }
 
-    @OnEvent('broadcastDeviceStatus')
     broadcastDeviceStatus(rackId: string, status: string): void {
-        const server = this.ensureServerInitialized();
-        const room = `rack-${rackId}`;
+        try {
+            const server = this.ensureServerInitialized();
+            const room = `rack-${rackId}`;
 
-        this.logger.log(
-            `Broadcasting device status for rack ${rackId}: ${status}`,
-            'WebsocketService',
-        );
+            this.logger.log(
+                `Broadcasting device status for rack ${rackId}: ${status}`,
+                'WebsocketService',
+            );
 
-        server.to(room).emit('deviceStatus', {
-            rackId,
-            status,
-            timestamp: new Date().toISOString(),
-        });
+            server.to(room).emit('deviceStatus', {
+                rackId,
+                status,
+                timestamp: new Date().toISOString(),
+            });
+        } catch (error) {
+            this.logger.error(
+                `Failed to broadcast device status for rack ${rackId}`,
+                error instanceof Error ? error.message : String(error),
+                'WebsocketService',
+            );
+        }
     }
 
-    @OnEvent('broadcastAlert')
-    broadcastAlert(rackId: string, notification: Notification): void {
-        const server = this.ensureServerInitialized();
-        const room = `rack-${rackId}`;
+    broadcastNotification(rackId: string, notification: Notification): void {
+        try {
+            const server = this.ensureServerInitialized();
+            const room = `rack-${rackId}`;
 
-        this.logger.log(`Broadcasting alert for rack ${rackId}`, 'WebsocketService');
+            this.logger.log(`Broadcasting notification for rack ${rackId}`, 'WebsocketService');
 
-        server.to(room).emit('alert', {
-            rackId,
-            notification,
-            timestamp: new Date().toISOString(),
-        });
+            server.to(room).emit('notification', {
+                rackId,
+                notification,
+                timestamp: new Date().toISOString(),
+            });
+        } catch (error) {
+            this.logger.error(
+                `Failed to broadcast notification for rack ${rackId}`,
+                error instanceof Error ? error.message : String(error),
+                'WebsocketService',
+            );
+        }
     }
 
-    /*
-    broadcastAutomationEvent(rackId: string, event: any): void {
-        const server = this.ensureServerInitialized();
-        const room = `rack-${rackId}`;
+    broadcastAutomationEvent(rackId: string, event: AutomatedEventDto): void {
+        try {
+            const server = this.ensureServerInitialized();
+            const room = `rack-${rackId}`;
 
-        this.logger.log(`Broadcasting automation event for rack ${rackId}`, 'WebsocketService');
+            this.logger.log(`Broadcasting automation event for rack ${rackId}`, 'WebsocketService');
 
-        server.to(room).emit('automationEvent', {
-            rackId,
-            event,
-            timestamp: new Date().toISOString(),
-        });
+            server.to(room).emit('automationEvent', {
+                rackId,
+                event,
+                timestamp: new Date().toISOString(),
+            });
+        } catch (error) {
+            this.logger.error(
+                `Failed to broadcast automation event for rack ${rackId}`,
+                error instanceof Error ? error.message : String(error),
+                'WebsocketService',
+            );
+        }
     }
-    */
 }

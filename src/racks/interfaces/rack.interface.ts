@@ -25,12 +25,6 @@ export interface DeviceStatusResponse {
     lastSeenAt: Date | null;
 }
 
-export interface CommandResponse {
-    message: string;
-    commandType: string;
-    timestamp: Date;
-}
-
 export interface RackCurrentStateResponse {
     message: string;
     rack: {
