@@ -25,8 +25,8 @@ export class VerifyOtpDto {
         enum: ['registration', 'forgot-password'],
     })
     @IsString()
-    @IsIn(['registration', 'forgot-password'], {
-        message: 'Purpose must be either "registration" or "forgot-password"',
+    @IsIn(['registration', 'forgot-password', 'email-reset'], {
+        message: 'Purpose must be either "registration", "forgot-password", or "email-reset"',
     })
     purpose!: 'registration' | 'forgot-password' | 'email-reset';
 }

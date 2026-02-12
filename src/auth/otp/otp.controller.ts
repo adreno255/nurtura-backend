@@ -5,6 +5,7 @@ import {
     ApiResponse,
     ApiBadRequestResponse,
     ApiInternalServerErrorResponse,
+    ApiBearerAuth,
 } from '@nestjs/swagger';
 import { OtpService } from './otp.service';
 import { SendOtpRequestDto } from './dto/send-otp-request.dto';
@@ -12,12 +13,12 @@ import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { Public } from '../../common/decorators';
 import { Throttle } from '@nestjs/throttler';
 
-@Public()
 @ApiTags('Authentication - OTP')
 @Controller('auth/otp')
 export class OtpController {
     constructor(private readonly otpService: OtpService) {}
 
+    @Public()
     @Post('registration')
     @Throttle({ default: { limit: process.env.NODE_ENV === 'test' ? 15 : 3, ttl: 60000 } })
     @HttpCode(HttpStatus.OK)
@@ -73,6 +74,7 @@ export class OtpController {
         };
     }
 
+    @Public()
     @Post('forgot-password')
     @Throttle({ default: { limit: process.env.NODE_ENV === 'test' ? 15 : 3, ttl: 60000 } })
     @HttpCode(HttpStatus.OK)
@@ -129,6 +131,7 @@ export class OtpController {
     }
 
     @Post('email-reset')
+    @ApiBearerAuth('firebase-jwt')
     @Throttle({ default: { limit: process.env.NODE_ENV === 'test' ? 15 : 3, ttl: 60000 } })
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
@@ -182,6 +185,7 @@ export class OtpController {
         };
     }
 
+    @Public()
     @Post('verify')
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
