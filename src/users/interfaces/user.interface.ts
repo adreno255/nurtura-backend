@@ -38,6 +38,11 @@ export interface UserCreatedResponse {
     userId: string;
 }
 
+export interface UserUpdatedResponse {
+    message: string;
+    userInfo: UserInfo;
+}
+
 export interface UserInfoResponse {
     message: string;
     userInfo: UserInfo;

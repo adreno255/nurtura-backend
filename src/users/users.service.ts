@@ -7,21 +7,23 @@ import {
 import { DatabaseService } from '../database/database.service';
 import { FirebaseService } from '../firebase/firebase.service';
 import { MyLoggerService } from '../my-logger/my-logger.service';
-import { CreateUserDto } from './dto/create-user.dto';
-import { CheckEmailAvailabilityDto } from './dto/check-email-availability.dto';
+import { CheckEmailAvailabilityDto, CreateUserDto, UpdateUserDto } from './dto';
 import {
     EmailAvailabilityResponse,
     UserCreatedResponse,
     UserInfoResponse,
     UserInfo,
+    UserUpdatedResponse,
 } from './interfaces/user.interface';
 import { isFirebaseAuthError } from '../common/type-guards';
+import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class UsersService {
     constructor(
         private readonly databaseService: DatabaseService,
         private readonly firebaseService: FirebaseService,
+        private readonly emailService: EmailService,
         private readonly logger: MyLoggerService,
     ) {}
 
@@ -76,12 +78,7 @@ export class UsersService {
             const middleName = dto.middleName?.trim() || null;
             const lastName = dto.lastName.trim();
             const suffix = dto.suffix?.trim() || null;
-
-            const addressParts = [dto.block, dto.street, dto.barangay, dto.city]
-                .map((part) => part.trim())
-                .filter((part) => part !== '');
-
-            const address = addressParts.join(', ');
+            const address = this.joinAddress(dto.block, dto.street, dto.barangay, dto.city);
 
             const user = await this.databaseService.user.create({
                 data: {
@@ -126,10 +123,7 @@ export class UsersService {
             }
 
             // Parse address
-            const addressParts = user.address
-                .split(',')
-                .map((part) => part.trim())
-                .filter((part) => part !== '');
+            const addressParts = this.splitAdress(user.address);
 
             const userInfo: UserInfo = {
                 id: user.id,
@@ -180,10 +174,7 @@ export class UsersService {
             }
 
             // Parse address
-            const addressParts = user.address
-                .split(',')
-                .map((part) => part.trim())
-                .filter((part) => part !== '');
+            const addressParts = this.splitAdress(user.address);
 
             const userInfo: UserInfo = {
                 id: user.id,
@@ -221,5 +212,93 @@ export class UsersService {
 
             throw new InternalServerErrorException('Failed to fetch user by Firebase UID');
         }
+    }
+
+    async update(userId: string, dto: UpdateUserDto): Promise<UserUpdatedResponse> {
+        try {
+            let address: string | undefined;
+
+            // Check if user already exists in database
+            const existingUser = await this.databaseService.user.findUnique({
+                where: { id: userId },
+            });
+
+            if (!existingUser) {
+                throw new NotFoundException('User not found');
+            }
+
+            if (dto.email) {
+                // Notify user that their email was changed
+                await this.emailService.sendEmailResetNotification(existingUser.email);
+            }
+
+            if (dto.block && dto.street && dto.barangay && dto.city) {
+                address = this.joinAddress(dto.block, dto.street, dto.barangay, dto.city);
+            }
+
+            const updatedUser = await this.databaseService.user.update({
+                where: { id: userId },
+                data: {
+                    email: dto.email,
+                    firstName: dto.firstName,
+                    middleName: dto.middleName,
+                    lastName: dto.lastName,
+                    suffix: dto.suffix,
+                    address,
+                },
+            });
+
+            const addressParts = this.splitAdress(updatedUser.address);
+
+            const userInfo: UserInfo = {
+                id: updatedUser.id,
+                firebaseUid: updatedUser.firebaseUid,
+                firstName: updatedUser.firstName,
+                middleName: updatedUser.middleName,
+                lastName: updatedUser.lastName,
+                suffix: updatedUser.suffix,
+                email: updatedUser.email,
+                address: updatedUser.address,
+                block: addressParts[0] || '',
+                street: addressParts[1] || '',
+                barangay: addressParts[2] || '',
+                city: addressParts[3] || '',
+                createdAt: updatedUser.createdAt,
+                updatedAt: updatedUser.updatedAt,
+            };
+
+            this.logger.log(`User updated successfully: ${userId}`, 'UsersService');
+
+            return {
+                message: 'User updated successfully',
+                userInfo,
+            };
+        } catch (error) {
+            if (error instanceof NotFoundException) {
+                throw error;
+            }
+
+            this.logger.error(
+                `Error updating user ${userId}`,
+                error instanceof Error ? error.message : String(error),
+                'UsersService',
+            );
+            throw new InternalServerErrorException('Failed to update user');
+        }
+    }
+
+    joinAddress(block: string, street: string, barangay: string, city: string): string {
+        const addressParts = [block, street, barangay, city]
+            .map((part) => part.trim())
+            .filter((part) => part !== '');
+
+        return addressParts.join(', ');
+    }
+
+    splitAdress(address: string): string[] {
+        return address
+            .split(',')
+            .map((part) => part.trim())
+            .filter((part) => part !== '');
     }
 }

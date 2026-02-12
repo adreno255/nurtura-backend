@@ -128,6 +128,60 @@ export class OtpController {
         };
     }
 
+    @Post('email-reset')
+    @Throttle({ default: { limit: process.env.NODE_ENV === 'test' ? 15 : 3, ttl: 60000 } })
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({
+        summary: 'Send email reset OTP',
+        description: 'Sends a 5-digit OTP code to the provided email for email reset verification',
+    })
+    @ApiResponse({
+        status: HttpStatus.OK,
+        description: 'Email reset OTP sent successfully',
+        schema: {
+            type: 'object',
+            properties: {
+                message: {
+                    type: 'string',
+                    example: 'Email reset OTP sent successfully. Please check your email.',
+                },
+            },
+        },
+    })
+    @ApiBadRequestResponse({
+        description: 'Invalid email format',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 400 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/auth/otp/email-reset' },
+                message: {
+                    type: 'string',
+                    example: 'Invalid email format',
+                },
+            },
+        },
+    })
+    @ApiInternalServerErrorResponse({
+        description: 'Failed to send email reset OTP',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 500 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/auth/otp/email-reset' },
+                message: { type: 'string', example: 'Failed to send email reset OTP email' },
+            },
+        },
+    })
+    async sendEmailResetOtp(@Body() dto: SendOtpRequestDto) {
+        await this.otpService.sendEmailResetOtp(dto);
+        return {
+            message: 'Email reset OTP sent successfully. Please check your email.',
+        };
+    }
+
     @Post('verify')
     @HttpCode(HttpStatus.OK)
     @ApiOperation({

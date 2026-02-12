@@ -89,6 +89,31 @@ export class OtpService {
         }
     }
 
+    async sendEmailResetOtp(dto: SendOtpRequestDto): Promise<void> {
+        const { email } = dto;
+
+        // Generate OTP on backend
+        const code = this.generateOtp();
+        const expiryTime = this.getExpiryTimeString();
+
+        // Store OTP before sending email
+        this.storeOtp(email, code, 'email-reset');
+
+        try {
+            await this.emailService.sendEmailResetOtp(email, code, expiryTime);
+            this.logger.log(`Email reset OTP sent successfully to ${email}`, 'OtpService');
+        } catch (error) {
+            // Remove stored OTP if email fails
+            delete this.otpStore[email];
+            this.logger.error(
+                `Failed to send email reset OTP to ${email}`,
+                String(error),
+                'OtpService',
+            );
+            throw new InternalServerErrorException('Failed to send email reset OTP email');
+        }
+    }
+
     verifyOtp(dto: VerifyOtpDto): void {
         const { email, code, purpose } = dto;
         const record = this.otpStore[email];
@@ -127,7 +152,7 @@ export class OtpService {
     private storeOtp(
         email: string,
         code: string,
-        purpose: 'registration' | 'forgot-password',
+        purpose: 'registration' | 'forgot-password' | 'email-reset',
     ): void {
         this.otpStore[email] = {
             code: String(code),

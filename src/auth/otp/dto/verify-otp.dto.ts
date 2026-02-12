@@ -28,5 +28,5 @@ export class VerifyOtpDto {
     @IsIn(['registration', 'forgot-password'], {
         message: 'Purpose must be either "registration" or "forgot-password"',
     })
-    purpose!: 'registration' | 'forgot-password';
+    purpose!: 'registration' | 'forgot-password' | 'email-reset';
 }
