@@ -59,7 +59,7 @@ This directory contains AsyncAPI 3.0 specification documents for Nurtura's real-
 3. Upload `asyncapi-mqtt.yaml` or `asyncapi-websocket.yaml`
 4. Explore the interactive documentation
 
-### Option A: AsyncAPI Studio (Online) ALTERNATIVE
+#### Option A: AsyncAPI Studio (Online) ALTERNATIVE
 
 ##### If "Import From File" did not work, do this:
 

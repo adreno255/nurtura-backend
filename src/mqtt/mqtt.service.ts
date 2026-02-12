@@ -40,8 +40,9 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
                 reject(new Error('MQTT configuration is incomplete. Check environment variables.'));
                 return;
             }
-
-            const mqttUrl = `mqtts://${host}:${port}`;
+            const isLocal = host === 'localhost' || host === '127.0.0.1' || host === 'mqtt';
+            const protocol = isLocal ? 'mqtt' : 'mqtts';
+            const mqttUrl = `${protocol}://${host}:${port}`;
             const clientId = `nurtura-backend-${Math.random().toString(16).slice(2, 8)}`;
 
             this.logger.bootstrap(`Connecting to MQTT broker: ${mqttUrl}`, 'MqttService');
@@ -50,7 +51,7 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
                 username,
                 password,
                 clientId,
-                rejectUnauthorized: true,
+                rejectUnauthorized: !isLocal,
                 reconnectPeriod: 5000,
                 connectTimeout: 30000,
                 keepalive: 60,
