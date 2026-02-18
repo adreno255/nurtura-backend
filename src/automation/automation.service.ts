@@ -55,7 +55,7 @@ export class AutomationService {
             });
 
             if (rules.length === 0) {
-                this.logger.log(
+                this.logger.warn(
                     `No automation rules found for rack: ${rackId}`,
                     'AutomationService',
                 );
@@ -295,7 +295,7 @@ export class AutomationService {
     /**
      * Create a new automation rule
      */
-    async createRule(userId: string, createRuleDto: CreateAutomationRuleDto) {
+    async create(userId: string, createRuleDto: CreateAutomationRuleDto) {
         try {
             // Verify rack ownership
             const rack = await this.databaseService.rack.findFirst({
@@ -362,7 +362,7 @@ export class AutomationService {
     /**
      * Get all automation rules for a rack
      */
-    async getRackRules(rackId: string, userId: string) {
+    async findAll(rackId: string, userId: string) {
         try {
             // Verify rack ownership
             const rack = await this.databaseService.rack.findFirst({
@@ -406,7 +406,7 @@ export class AutomationService {
     /**
      * Update an automation rule
      */
-    async updateRule(ruleId: string, userId: string, updateData: UpdateAutomationRuleDto) {
+    async update(ruleId: string, userId: string, updateData: UpdateAutomationRuleDto) {
         try {
             // Verify rule ownership through rack
             const rule = await this.databaseService.automationRule.findUnique({
@@ -483,7 +483,7 @@ export class AutomationService {
     /**
      * Delete an automation rule
      */
-    async deleteRule(ruleId: string, userId: string) {
+    async delete(ruleId: string, userId: string) {
         try {
             // Verify rule ownership through rack
             const rule = await this.databaseService.automationRule.findUnique({

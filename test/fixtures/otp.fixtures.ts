@@ -27,12 +27,12 @@ export const validVerifyOtpRegistrationDto: VerifyOtpDto = {
 };
 
 /**
- * Valid VerifyOtpDto - Forgot Password
+ * Valid VerifyOtpDto - Password Rest
  */
-export const validVerifyOtpForgotPasswordDto: VerifyOtpDto = {
+export const validVerifyOtpPasswordResetDto: VerifyOtpDto = {
     email: 'test@example.com',
     code: '54321',
-    purpose: 'forgot-password',
+    purpose: 'password-reset',
 };
 
 /**
@@ -50,7 +50,7 @@ export const invalidCodeVerifyOtpDto: VerifyOtpDto = {
 export const wrongPurposeVerifyOtpDto: VerifyOtpDto = {
     email: 'test@example.com',
     code: '12345',
-    purpose: 'forgot-password', // Wrong purpose
+    purpose: 'password-reset', // Wrong purpose
 };
 
 /**

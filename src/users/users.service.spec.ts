@@ -4,8 +4,10 @@ import { UsersService } from './users.service';
 import { DatabaseService } from '../database/database.service';
 import { FirebaseService } from '../firebase/firebase.service';
 import { MyLoggerService } from '../my-logger/my-logger.service';
+import { EmailService } from '../email/email.service';
 import { type CheckEmailAvailabilityDto } from './dto/check-email-availability.dto';
 import { type CreateUserDto } from './dto/create-user.dto';
+import { type UpdateUserDto } from './dto/update-user.dto';
 import { type User } from './interfaces/user.interface';
 import { type Prisma } from '../generated/prisma/client';
 import {
@@ -15,12 +17,14 @@ import {
     validCreateUserDto,
     validEmailQueryDto,
     validUser,
+    validUpdateUserDto,
 } from '../../test/fixtures';
 import {
     createMockDatabaseService,
     createMockFirebaseAuth,
     createMockFirebaseService,
     createMockLogger,
+    createMockEmailService,
     FirebaseAuthErrors,
 } from '../../test/mocks';
 
@@ -48,6 +52,8 @@ describe('UsersService', () => {
 
     const mockLoggerService = createMockLogger();
 
+    const mockEmailService = createMockEmailService();
+
     const testEmail = testEmails.valid;
     const testFirebaseUid = testFirebaseUids.primary;
     const checkEmailAvailabilityDto = validEmailQueryDto;
@@ -70,6 +76,10 @@ describe('UsersService', () => {
                 {
                     provide: MyLoggerService,
                     useValue: mockLoggerService,
+                },
+                {
+                    provide: EmailService,
+                    useValue: mockEmailService,
                 },
             ],
         }).compile();
@@ -500,8 +510,9 @@ describe('UsersService', () => {
             await expect(service.findByFirebaseUid(testFirebaseUid)).rejects.toThrow(
                 NotFoundException,
             );
+            // service throws generic "User not found" message here
             await expect(service.findByFirebaseUid(testFirebaseUid)).rejects.toThrow(
-                'User profile not found in database',
+                'User not found',
             );
         });
 
@@ -537,6 +548,130 @@ describe('UsersService', () => {
                 'Database error',
                 'UsersService',
             );
+        });
+    });
+
+    describe('update', () => {
+        const userId = 'user-id-123';
+        const dto: UpdateUserDto = validUpdateUserDto;
+
+        it('should throw NotFoundException if user not found', async () => {
+            mockDatabaseService.user.findUnique.mockResolvedValue(null);
+
+            await expect(service.update(userId, dto)).rejects.toThrow(NotFoundException);
+            await expect(service.update(userId, dto)).rejects.toThrow('User not found');
+        });
+
+        it('should send notification if email changed', async () => {
+            const existing = createMockUser({ email: 'old@example.com' });
+            mockDatabaseService.user.findUnique.mockResolvedValue(existing);
+            mockDatabaseService.user.update.mockResolvedValue(
+                createMockUser({
+                    email: dto.email,
+                    address: 'Block 7, Amaryllis St, Brgy New Field, Muntinlupa City',
+                }),
+            );
+
+            await service.update(userId, dto);
+
+            expect(mockEmailService.sendEmailResetNotification).toHaveBeenCalledWith(
+                'old@example.com',
+            );
+        });
+
+        it('should update address when address fields provided', async () => {
+            const existing = createMockUser({ email: 'old@example.com' });
+            mockDatabaseService.user.findUnique.mockResolvedValue(existing);
+            mockDatabaseService.user.update.mockResolvedValue(
+                createMockUser({
+                    address: 'Block 7, Amaryllis St, Brgy New Field, Muntinlupa City',
+                }),
+            );
+
+            await service.update(userId, dto);
+
+            expect(mockDatabaseService.user.update).toHaveBeenCalledWith({
+                where: { id: userId },
+                data: expect.objectContaining({
+                    email: dto.email,
+                    firstName: dto.firstName,
+                    lastName: dto.lastName,
+                    address: 'Block 7, Amaryllis St, Brgy New Field, Muntinlupa City',
+                }) as Partial<UpdateUserDto>,
+            });
+        });
+
+        it('should return parsed userInfo on success', async () => {
+            const existing = createMockUser({ email: 'old@example.com' });
+            const updated = createMockUser({
+                email: dto.email,
+                address: 'Block 7, Amaryllis St, Brgy New Field, Muntinlupa City',
+            });
+            mockDatabaseService.user.findUnique.mockResolvedValue(existing);
+            mockDatabaseService.user.update.mockResolvedValue(updated);
+
+            const result = await service.update(userId, dto);
+
+            expect(result.message).toBe('User updated successfully');
+            expect(result.userInfo.email).toBe(dto.email);
+            expect(result.userInfo.block).toBe('Block 7');
+            expect(result.userInfo.city).toBe('Muntinlupa City');
+        });
+
+        it('should log success message', async () => {
+            const existing = createMockUser({ email: 'old@example.com' });
+            mockDatabaseService.user.findUnique.mockResolvedValue(existing);
+            mockDatabaseService.user.update.mockResolvedValue(createMockUser());
+
+            await service.update(userId, dto);
+
+            expect(mockLoggerService.log).toHaveBeenCalledWith(
+                `User updated successfully: ${userId}`,
+                'UsersService',
+            );
+        });
+
+        it('should throw InternalServerErrorException for update errors', async () => {
+            const existing = createMockUser();
+            mockDatabaseService.user.findUnique.mockResolvedValue(existing);
+            mockDatabaseService.user.update.mockRejectedValue(new Error('DB error'));
+
+            await expect(service.update(userId, dto)).rejects.toThrow(InternalServerErrorException);
+            await expect(service.update(userId, dto)).rejects.toThrow('Failed to update user');
+        });
+
+        it('should log error for update failures', async () => {
+            const existing = createMockUser();
+            mockDatabaseService.user.findUnique.mockResolvedValue(existing);
+            mockDatabaseService.user.update.mockRejectedValue(new Error('DB error'));
+
+            await expect(service.update(userId, dto)).rejects.toThrow();
+
+            expect(mockLoggerService.error).toHaveBeenCalledWith(
+                `Error updating user ${userId}`,
+                'DB error',
+                'UsersService',
+            );
+        });
+
+        it('should not call email service if email not present', async () => {
+            const existing = createMockUser({ email: 'same@example.com' });
+            const partial: UpdateUserDto = { firstName: 'Newname' };
+            mockDatabaseService.user.findUnique.mockResolvedValue(existing);
+            mockDatabaseService.user.update.mockResolvedValue(createMockUser());
+
+            await service.update(userId, partial);
+
+            expect(mockEmailService.sendEmailResetNotification).not.toHaveBeenCalled();
+        });
+
+        it('should propagate email service error as internal error', async () => {
+            const existing = createMockUser({ email: 'old@example.com' });
+            mockDatabaseService.user.findUnique.mockResolvedValue(existing);
+            mockEmailService.sendEmailResetNotification.mockRejectedValue(new Error('Email fail'));
+            mockDatabaseService.user.update.mockResolvedValue(createMockUser());
+
+            await expect(service.update(userId, dto)).rejects.toThrow(InternalServerErrorException);
         });
     });
 

@@ -170,7 +170,7 @@ export class UsersService {
             });
 
             if (!user) {
-                throw new NotFoundException('User profile not found in database');
+                throw new NotFoundException('User not found');
             }
 
             // Parse address

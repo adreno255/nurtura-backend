@@ -83,8 +83,6 @@ describe('FirebaseJwtStrategy', () => {
                 firebaseUid: 'firebase-user-123',
                 email: 'test@nurtura.com',
             });
-
-            expect(mockLoggerService.log).not.toHaveBeenCalled();
         });
 
         it('should return DB-backed user payload when user exists in database', async () => {

@@ -98,8 +98,8 @@ export class UsersController {
     @ApiBearerAuth('firebase-jwt')
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
-        summary: 'Get user by Firebase UID',
-        description: 'Retrieves user information by Firebase UID',
+        summary: 'Get user using authentication token',
+        description: 'Retrieves user information by Firebase JWT',
     })
     @ApiResponse({
         status: HttpStatus.OK,
@@ -138,7 +138,7 @@ export class UsersController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/users/clx123abc456' },
+                path: { type: 'string', example: '/api/users' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
@@ -150,7 +150,7 @@ export class UsersController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/users/clx123abc456' },
+                path: { type: 'string', example: '/api/users' },
                 message: { type: 'string', example: 'User not found' },
             },
         },
@@ -162,7 +162,7 @@ export class UsersController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/users/clx123abc456' },
+                path: { type: 'string', example: '/api/users' },
                 message: { type: 'string', example: 'Failed to fetch user by Firebase UID' },
             },
         },
@@ -336,7 +336,10 @@ export class UsersController {
             },
         },
     })
-    async update(@CurrentUser() user: CurrentUserPayload, @Body() updateUserDto: UpdateUserDto) {
+    async updateUser(
+        @CurrentUser() user: CurrentUserPayload,
+        @Body() updateUserDto: UpdateUserDto,
+    ) {
         return this.usersService.update(user.dbId, updateUserDto);
     }
 }

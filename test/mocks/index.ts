@@ -17,3 +17,12 @@ export * from './logger.mock';
 
 // Config mocks
 export * from './config.mock';
+
+// Services mocks
+export * from './services.mock';
+
+// MQTT Client mocks
+export * from './mqtt-client.mock';
+
+// WebSocket mocks
+export * from './websocket.mock';

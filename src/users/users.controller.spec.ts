@@ -4,6 +4,7 @@ import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 import { type CheckEmailAvailabilityDto } from './dto/check-email-availability.dto';
 import { type CreateUserDto } from './dto/create-user.dto';
+import { type UpdateUserDto } from './dto/update-user.dto';
 import { type CurrentUserPayload } from '../common/interfaces';
 import {
     minimalCreateUserDto,
@@ -13,17 +14,15 @@ import {
     validCreateUserDto,
     validEmailQueryDto,
     validUser,
+    validUpdateUserDto,
+    testDbIds,
 } from '../../test/fixtures';
+import { createMockUsersService } from '../../test/mocks';
 
 describe('UsersController', () => {
     let controller: UsersController;
 
-    const mockUsersService = {
-        checkEmailAvailability: jest.fn(),
-        create: jest.fn(),
-        findById: jest.fn(),
-        findByFirebaseUid: jest.fn(),
-    };
+    const mockUsersService = createMockUsersService();
 
     beforeEach(async () => {
         jest.clearAllMocks();
@@ -149,6 +148,7 @@ describe('UsersController', () => {
 
     describe('createUser', () => {
         const currentUser: CurrentUserPayload = {
+            dbId: '',
             firebaseUid: testFirebaseUids.primary,
             email: testEmails.valid,
         };
@@ -302,81 +302,158 @@ describe('UsersController', () => {
         });
     });
 
-    describe('getUserById', () => {
-        const firebaseUid = testFirebaseUids.primary;
+    describe('updateUser', () => {
+        const currentUser: CurrentUserPayload = {
+            dbId: 'user-id-123',
+            firebaseUid: testFirebaseUids.primary,
+            email: testEmails.valid,
+        };
+        const dto: UpdateUserDto = validUpdateUserDto;
 
-        it('should get user by Firebase UID successfully', async () => {
+        it('should update user successfully', async () => {
+            const mockResponse = {
+                message: 'User updated successfully',
+                userInfo: validUser,
+            };
+            mockUsersService.update.mockResolvedValue(mockResponse);
+
+            const result = await controller.updateUser(currentUser, dto);
+
+            expect(result).toEqual(mockResponse);
+        });
+
+        it('should call UsersService.update with correct parameters', async () => {
+            mockUsersService.update.mockResolvedValue({
+                message: 'User updated successfully',
+                userInfo: validUser,
+            });
+
+            await controller.updateUser(currentUser, dto);
+
+            expect(mockUsersService.update).toHaveBeenCalledWith(currentUser.dbId, dto);
+        });
+
+        it('should call UsersService.update once', async () => {
+            mockUsersService.update.mockResolvedValue({
+                message: 'User updated successfully',
+                userInfo: validUser,
+            });
+
+            await controller.updateUser(currentUser, dto);
+
+            expect(mockUsersService.update).toHaveBeenCalledTimes(1);
+        });
+
+        it('should propagate NotFoundException from service', async () => {
+            mockUsersService.update.mockRejectedValue(new NotFoundException('User not found'));
+
+            await expect(controller.updateUser(currentUser, dto)).rejects.toThrow(
+                NotFoundException,
+            );
+        });
+
+        it('should propagate InternalServerErrorException from service', async () => {
+            mockUsersService.update.mockRejectedValue(
+                new InternalServerErrorException('Failed to update user to the database'),
+            );
+
+            await expect(controller.updateUser(currentUser, dto)).rejects.toThrow(
+                InternalServerErrorException,
+            );
+        });
+
+        it('should return response with message and userInfo properties', async () => {
+            mockUsersService.update.mockResolvedValue({
+                message: 'User updated successfully',
+                userInfo: validUser,
+            });
+
+            const result = await controller.updateUser(currentUser, dto);
+
+            expect(result).toHaveProperty('message');
+            expect(result).toHaveProperty('userInfo');
+            expect(typeof result.message).toBe('string');
+        });
+    });
+    describe('getUserById', () => {
+        const currentUser: CurrentUserPayload = {
+            dbId: testDbIds.primary,
+            firebaseUid: testFirebaseUids.primary,
+            email: testEmails.valid,
+        };
+
+        it('should get user by DB ID successfully', async () => {
             const mockResponse = {
                 message: 'User info fetched successfully',
                 userInfo: validUser,
             };
 
-            mockUsersService.findByFirebaseUid.mockResolvedValue(mockResponse);
+            mockUsersService.findById.mockResolvedValue(mockResponse);
 
-            const result = await controller.getUserById(firebaseUid);
+            const result = await controller.getUserById(currentUser);
 
             expect(result).toEqual(mockResponse);
         });
 
-        it('should call UsersService.findByFirebaseUid with correct parameter', async () => {
-            mockUsersService.findByFirebaseUid.mockResolvedValue({
+        it('should call UsersService.findById with correct parameter', async () => {
+            mockUsersService.findById.mockResolvedValue({
                 message: 'User info fetched successfully',
                 userInfo: validUser,
             });
 
-            await controller.getUserById(firebaseUid);
+            await controller.getUserById(currentUser);
 
-            expect(mockUsersService.findByFirebaseUid).toHaveBeenCalledWith(firebaseUid);
+            expect(mockUsersService.findById).toHaveBeenCalledWith(currentUser.dbId);
         });
 
-        it('should call UsersService.findByFirebaseUid once', async () => {
-            mockUsersService.findByFirebaseUid.mockResolvedValue({
+        it('should call UsersService.findById once', async () => {
+            mockUsersService.findById.mockResolvedValue({
                 message: 'User info fetched successfully',
                 userInfo: validUser,
             });
 
-            await controller.getUserById(firebaseUid);
+            await controller.getUserById(currentUser);
 
-            expect(mockUsersService.findByFirebaseUid).toHaveBeenCalledTimes(1);
+            expect(mockUsersService.findById).toHaveBeenCalledTimes(1);
         });
 
         it('should propagate NotFoundException from service', async () => {
-            mockUsersService.findByFirebaseUid.mockRejectedValue(
+            mockUsersService.findById.mockRejectedValue(
                 new NotFoundException('User profile not found in database'),
             );
 
-            await expect(controller.getUserById(firebaseUid)).rejects.toThrow(NotFoundException);
+            await expect(controller.getUserById(currentUser)).rejects.toThrow(NotFoundException);
         });
 
         it('should propagate InternalServerErrorException from service', async () => {
-            mockUsersService.findByFirebaseUid.mockRejectedValue(
-                new InternalServerErrorException('Failed to fetch user by Firebase UID'),
+            mockUsersService.findById.mockRejectedValue(
+                new InternalServerErrorException('Failed to fetch user by DB ID'),
             );
 
-            await expect(controller.getUserById(firebaseUid)).rejects.toThrow(
+            await expect(controller.getUserById(currentUser)).rejects.toThrow(
                 InternalServerErrorException,
             );
         });
 
         it('should return response with message', async () => {
-            mockUsersService.findByFirebaseUid.mockResolvedValue({
+            mockUsersService.findById.mockResolvedValue({
                 message: 'User info fetched successfully',
                 userInfo: validUser,
             });
 
-            const result = await controller.getUserById(firebaseUid);
+            const result = await controller.getUserById(currentUser);
 
             expect(result).toHaveProperty('message');
             expect(result.message).toBe('User info fetched successfully');
         });
 
         it('should return response with userInfo', async () => {
-            mockUsersService.findByFirebaseUid.mockResolvedValue({
+            mockUsersService.findById.mockResolvedValue({
                 message: 'User info fetched successfully',
                 userInfo: validUser,
             });
 
-            const result = await controller.getUserById(firebaseUid);
+            const result = await controller.getUserById(currentUser);
 
             expect(result).toHaveProperty('userInfo');
             expect(result.userInfo).toHaveProperty('id');
@@ -385,12 +462,12 @@ describe('UsersController', () => {
         });
 
         it('should return userInfo with parsed address components', async () => {
-            mockUsersService.findByFirebaseUid.mockResolvedValue({
+            mockUsersService.findById.mockResolvedValue({
                 message: 'User info fetched successfully',
                 userInfo: parsedUser,
             });
 
-            const result = await controller.getUserById(firebaseUid);
+            const result = await controller.getUserById(currentUser);
 
             expect(result.userInfo).toHaveProperty('block');
             expect(result.userInfo).toHaveProperty('street');
@@ -398,18 +475,34 @@ describe('UsersController', () => {
             expect(result.userInfo).toHaveProperty('city');
         });
 
-        it('should work with different Firebase UIDs', async () => {
-            const uids = ['uid-123', 'firebase-abc', 'test-uid-xyz'];
+        it('should work with different DB IDs', async () => {
+            const users = [
+                {
+                    dbId: testDbIds.primary,
+                    firebaseUid: testFirebaseUids.primary,
+                    email: testEmails.valid,
+                },
+                {
+                    dbId: testDbIds.secondary,
+                    firebaseUid: testFirebaseUids.secondary,
+                    email: testEmails.alternative,
+                },
+                {
+                    dbId: testDbIds.alternative,
+                    firebaseUid: testFirebaseUids.alternative,
+                    email: testEmails.subdomain,
+                },
+            ];
 
-            for (const uid of uids) {
-                mockUsersService.findByFirebaseUid.mockResolvedValue({
+            for (const user of users) {
+                mockUsersService.findById.mockResolvedValue({
                     message: 'User info fetched successfully',
                     userInfo: validUser,
                 });
 
-                await controller.getUserById(uid);
+                await controller.getUserById(user);
 
-                expect(mockUsersService.findByFirebaseUid).toHaveBeenCalledWith(uid);
+                expect(mockUsersService.findById).toHaveBeenCalledWith(user.dbId);
             }
         });
     });
@@ -424,14 +517,18 @@ describe('UsersController', () => {
                 message: 'User registered successfully',
                 userId: 'user-id-123',
             });
-            mockUsersService.findByFirebaseUid.mockResolvedValue({
+            mockUsersService.findById.mockResolvedValue({
                 message: 'User info fetched successfully',
+                userInfo: validUser,
+            });
+            mockUsersService.update.mockResolvedValue({
+                message: 'User updated successfully',
                 userInfo: validUser,
             });
 
             await controller.checkEmail({ email: 'test@example.com' });
             await controller.createUser(
-                { firebaseUid: 'test-uid', email: 'test@example.com' },
+                { dbId: '', firebaseUid: 'test-uid', email: 'test@example.com' },
                 {
                     firstName: 'John',
                     lastName: 'Doe',
@@ -441,11 +538,20 @@ describe('UsersController', () => {
                     city: 'Quezon City',
                 },
             );
-            await controller.getUserById('test-uid');
+            await controller.getUserById({
+                dbId: 'user-id-123',
+                firebaseUid: 'test-uid',
+                email: 'test@example.com',
+            });
+            await controller.updateUser(
+                { dbId: 'user-id-123', firebaseUid: 'test-uid', email: 'test@example.com' },
+                validUpdateUserDto,
+            );
 
             expect(mockUsersService.checkEmailAvailability).toHaveBeenCalled();
             expect(mockUsersService.create).toHaveBeenCalled();
-            expect(mockUsersService.findByFirebaseUid).toHaveBeenCalled();
+            expect(mockUsersService.findById).toHaveBeenCalled();
+            expect(mockUsersService.update).toHaveBeenCalled();
         });
 
         it('should not add additional business logic', async () => {
@@ -490,7 +596,7 @@ describe('UsersController', () => {
 
             await expect(
                 controller.createUser(
-                    { firebaseUid: 'test-uid', email: 'test@example.com' },
+                    { dbId: '', firebaseUid: 'test-uid', email: 'test@example.com' },
                     {
                         firstName: 'John',
                         lastName: 'Doe',
@@ -505,9 +611,15 @@ describe('UsersController', () => {
 
         it('should not catch service errors in getUserById', async () => {
             const serviceError = new NotFoundException('User not found');
-            mockUsersService.findByFirebaseUid.mockRejectedValue(serviceError);
+            mockUsersService.findById.mockRejectedValue(serviceError);
 
-            await expect(controller.getUserById('test-uid')).rejects.toThrow(NotFoundException);
+            await expect(
+                controller.getUserById({
+                    dbId: 'test-dbid',
+                    firebaseUid: testFirebaseUids.primary,
+                    email: testEmails.valid,
+                }),
+            ).rejects.toThrow(NotFoundException);
         });
     });
 });

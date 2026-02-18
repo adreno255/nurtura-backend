@@ -75,11 +75,11 @@ export class OtpController {
     }
 
     @Public()
-    @Post('forgot-password')
+    @Post('password-reset')
     @Throttle({ default: { limit: process.env.NODE_ENV === 'test' ? 15 : 3, ttl: 60000 } })
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
-        summary: 'Send forgot password OTP',
+        summary: 'Send password reset OTP',
         description:
             'Sends a 5-digit OTP code to the provided email for password reset verification',
     })
@@ -123,8 +123,8 @@ export class OtpController {
             },
         },
     })
-    async sendForgotPasswordOtp(@Body() dto: SendOtpRequestDto) {
-        await this.otpService.sendForgotPasswordOtp(dto);
+    async sendPasswordResetOtp(@Body() dto: SendOtpRequestDto) {
+        await this.otpService.sendPasswordResetOtp(dto);
         return {
             message: 'Password reset OTP sent successfully. Please check your email.',
         };

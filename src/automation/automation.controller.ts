@@ -107,7 +107,7 @@ export class AutomationController {
         @CurrentUser() user: CurrentUserPayload,
         @Body() body: CreateAutomationRuleDto,
     ) {
-        return this.automationService.createRule(user.dbId, body);
+        return this.automationService.create(user.dbId, body);
     }
 
     @Get('racks/:rackId/rules')
@@ -173,7 +173,7 @@ export class AutomationController {
         },
     })
     async getRackRules(@Param('rackId') rackId: string, @CurrentUser() user: CurrentUserPayload) {
-        return this.automationService.getRackRules(rackId, user.dbId);
+        return this.automationService.findAll(rackId, user.dbId);
     }
 
     @Put('rules/:ruleId')
@@ -252,7 +252,7 @@ export class AutomationController {
         @CurrentUser() user: CurrentUserPayload,
         @Body() body: UpdateAutomationRuleDto,
     ) {
-        return this.automationService.updateRule(ruleId, user.dbId, body);
+        return this.automationService.update(ruleId, user.dbId, body);
     }
 
     @Delete('rules/:ruleId')
@@ -303,6 +303,6 @@ export class AutomationController {
         },
     })
     async deleteRule(@Param('ruleId') ruleId: string, @CurrentUser() user: CurrentUserPayload) {
-        return this.automationService.deleteRule(ruleId, user.dbId);
+        return this.automationService.delete(ruleId, user.dbId);
     }
 }

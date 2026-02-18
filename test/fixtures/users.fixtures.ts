@@ -4,7 +4,9 @@
  */
 
 import { type CreateUserDto } from '../../src/users/dto/create-user.dto';
+import { type UpdateUserDto } from '../../src/users/dto/update-user.dto';
 import { type UserInfo, type User } from '../../src/users/interfaces/user.interface';
+import { type CurrentUserPayload } from '../../src/common/interfaces';
 
 /**
  * Valid CreateUserDto with all fields
@@ -106,6 +108,21 @@ export const alternativeUser: User = {
     updatedAt: new Date('2025-01-03T00:00:00.000Z'),
 };
 
+/**
+ * Valid UpdateUserDto with all fields
+ */
+export const validUpdateUserDto: UpdateUserDto = {
+    email: 'new@example.com',
+    firstName: 'Jonathan',
+    middleName: 'M.',
+    lastName: 'Dough',
+    suffix: 'Sr.',
+    block: 'Block 7',
+    street: 'Amaryllis St',
+    barangay: 'Brgy New Field',
+    city: 'Muntinlupa City',
+};
+
 export const parsedUser: UserInfo = {
     id: 'user-id-123',
     firebaseUid: 'firebase-uid-789',
@@ -129,6 +146,33 @@ export const parsedUser: UserInfo = {
 export const multipleUsers: User[] = [validUser, minimalUser, alternativeUser];
 
 /**
+ * A sample authenticated user payload used by controllers
+ */
+export const testUser: CurrentUserPayload = {
+    dbId: 'test-db-id',
+    firebaseUid: 'firebase-uid-123',
+    email: 'test@example.com',
+};
+
+/**
+ * Valid database user
+ */
+export const validDbUser: CurrentUserPayload = {
+    dbId: 'user-123',
+    firebaseUid: 'firebase-uid-123',
+    email: 'user@example.com',
+};
+
+/**
+ * Alternative database user
+ */
+export const alternativeDbUser: CurrentUserPayload = {
+    dbId: 'user-456',
+    firebaseUid: 'firebase-uid-456',
+    email: 'user2@example.com',
+};
+
+/**
  * Common test emails
  */
 export const testEmails = {
@@ -147,3 +191,17 @@ export const testFirebaseUids = {
     secondary: 'firebase-uid-abc123',
     alternative: 'uid-xyz789',
 };
+
+/**
+ * Common DB IDs
+ */
+export const testDbIds = {
+    primary: 'test-db-id',
+    secondary: 'db-id-abc789',
+    alternative: 'id-xyz123',
+};
+
+/**
+ * Common User IDs (alias for testDbIds)
+ */
+export const testUserIds = testDbIds;
