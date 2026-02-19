@@ -62,7 +62,7 @@ jobs:
                   SENDGRID_FROM_EMAIL: ${{ secrets.SENDGRID_FROM_EMAIL_E2E }}
                   SENDGRID_FROM_NAME: LoamTech Solutions
                   FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_E2E }}
-                  MQTT_HOST_E2E: ${{ secrets.MQTT_HOST_E2E }}
-                  MQTT_PORT_E2E: ${{ secrets.MQTT_PORT_E2E }}
-                  MQTT_USERNAME_E2E: ${{ secrets.MQTT_USERNAME_E2E }}
-                  MQTT_PASSWORD_E2E: ${{ secrets.MQTT_PASSWORD_E2E }}
+                  MQTT_HOST: ${{ secrets.MQTT_HOST_E2E }}
+                  MQTT_PORT: ${{ secrets.MQTT_PORT_E2E }}
+                  MQTT_USERNAME: ${{ secrets.MQTT_USERNAME_E2E }}
+                  MQTT_PASSWORD: ${{ secrets.MQTT_PASSWORD_E2E }}
