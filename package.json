@@ -1,6 +1,6 @@
 {
     "name": "nurtura-api-server",
-    "version": "0.0.0-development",
+    "version": "1.0.0",
     "description": "The API server for the Nurtura Android application.",
     "author": "https://github.com/adreno255",
     "private": true,
