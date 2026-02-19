@@ -1,3 +1,9 @@
+## [1.0.1](https://github.com/adreno255/nurtura-backend/compare/v1.0.0...v1.0.1) (2026-02-19)
+
+### Bug Fixes
+
+* bug in build docker workflow ([fa4b176](https://github.com/adreno255/nurtura-backend/commit/fa4b176e981f31752548a1ddef685107f165736b))
+
 ## 1.0.0 (2026-02-19)
 
 ### ⚠ BREAKING CHANGES
