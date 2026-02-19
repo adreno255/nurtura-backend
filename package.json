@@ -33,6 +33,8 @@
         "test:all:cov": "npm run test:cov && npm run test:integration:cov && npm run test:e2e:cov",
         "prepare": "husky",
         "init:dev": "npm install && node scripts/init-env.js && prisma generate",
+        "seed:prod": "dotenv -e .env.production -- npx prisma db seed",
+        "seed:dev": "dotenv -e .env.development -- npx prisma db seed",
         "docker:mqtt:up": "docker-compose up -d mqtt",
         "docker:mqtt:password": "docker exec -it nurtura-mqtt mosquitto_passwd -b -c //mosquitto/config/password.txt my_user my_pass",
         "docker:mqtt:setup": "docker exec -it nurtura-mqtt chmod 644 //mosquitto/config/password.txt",
@@ -111,13 +113,16 @@
         "ts-loader": "^9.5.2",
         "ts-node": "^10.9.2",
         "tsconfig-paths": "^4.2.0",
+        "tsx": "^4.21.0",
         "typescript": "^5.7.3",
         "typescript-eslint": "^8.20.0"
     },
     "overrides": {
         "hono": "^4.11.7",
         "lodash": "^4.17.23",
-        "fast-xml-parser": "^5.3.4"
+        "fast-xml-parser": "^5.3.4",
+        "minimatch": "^10.2.1",
+        "tar": "^7.5.8"
     },
     "jest": {
         "moduleFileExtensions": [
@@ -155,5 +160,8 @@
         "*.{json,md,yml,yaml}": [
             "prettier --write"
         ]
+    },
+    "prisma": {
+        "seed": "tsx prisma/seed.ts"
     }
 }
