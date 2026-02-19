@@ -76,8 +76,8 @@ jobs:
 
                   npx semantic-release --dry-run > release-output.txt 2>&1 || true
 
-                  if grep -q "The next release version is" release-output.txt; then
-                    RELEASE_TYPE=$(grep "The next release version is" release-output.txt | sed -n 's/.*Analysis of .* commits complete: \([a-z]*\) release/\1/p')
+                  if grep -qE "Analysis of [0-9]+ commits complete: (major|minor|patch) release" release-output.txt; then
+                    RELEASE_TYPE=$(grep -oE "(major|minor|patch) release" release-output.txt | awk '{print $1}' | head -n 1)
                     echo "release-type=$RELEASE_TYPE" >> $GITHUB_OUTPUT
                     echo "Release type detected: $RELEASE_TYPE"
                   else
@@ -114,53 +114,54 @@ jobs:
                   while IFS= read -r commit; do
                       # Skip empty lines
                       [ -z "$commit" ] && continue
-                      
+
                       # Skip merge commits
                       if echo "$commit" | grep -qE '^Merge [0-9a-f]+ into [0-9a-f]+'; then
-                      echo "Skipping merge commit"
-                      continue
+                          echo "Skipping merge commit"
+                          continue
                       fi
                       echo "Analyzing: $commit"
-                      
+
                       # Extract type from this commit
                       COMMIT_TYPE=""
-                      RE_TYPE='^([a-z]+)(!|\([^)]+\)!?)?:.*$'
+                      RE_TYPE='^([a-z]+)(\([^)]+\))?(!)?:.*$'
                       if [[ "$commit" =~ $RE_TYPE ]]; then
-                      COMMIT_TYPE="${BASH_REMATCH[1]}"
-                      HAS_EXCLAMATION="${BASH_REMATCH[2]}"
+                          COMMIT_TYPE="${BASH_REMATCH[1]}"
+                          HAS_SCOPE="${BASH_REMATCH[2]}"
+                          HAS_EXCLAMATION="${BASH_REMATCH[3]}"
                       else
-                      COMMIT_TYPE=$(echo "$commit" | grep -oE '^[a-z]+' | head -n 1)
+                          COMMIT_TYPE=$(echo "$commit" | grep -oE '^[a-z]+' | head -n 1)
                       fi
-                      
+
                       echo "Type: ${COMMIT_TYPE:-unknown}"
-                      
-                      # Check for breaking change (! or footer)
-                      RE_BREAKING='^(feat|fix|refactor|perf|revert)!(\([^)]+\))?:.*$'
+
+                      # Conventional commits format: type(scope)!: msg  OR  type!: msg
+                      RE_BREAKING='^(feat|fix|refactor|perf|revert)(\([^)]+\))?!:.*$'
                       if [[ "$commit" =~ $RE_BREAKING ]]; then
-                      HAS_BREAKING=true
-                      HIGHEST_PRIORITY_TYPE="$COMMIT_TYPE"
-                      echo "Breaking change detected via !"
+                          HAS_BREAKING=true
+                          HIGHEST_PRIORITY_TYPE="$COMMIT_TYPE"
+                          echo "Breaking change detected via !"
                       elif echo "$commit" | grep -qi 'BREAKING[- ]CHANGE:'; then
-                      HAS_BREAKING=true
-                      [ -z "$HIGHEST_PRIORITY_TYPE" ] && HIGHEST_PRIORITY_TYPE="$COMMIT_TYPE"
-                      echo "Breaking change detected via footer"
+                          HAS_BREAKING=true
+                          [ -z "$HIGHEST_PRIORITY_TYPE" ] && HIGHEST_PRIORITY_TYPE="$COMMIT_TYPE"
+                          echo "Breaking change detected via footer"
                       fi
-                      
+
                       # Check for release-triggering types
                       if [[ "$COMMIT_TYPE" =~ ^(feat|fix|refactor|perf|revert)$ ]]; then
-                      HAS_FEAT_FIX=true
-                      # Only update if we don't have a higher priority type
-                      if [ -z "$HIGHEST_PRIORITY_TYPE" ]; then
-                          HIGHEST_PRIORITY_TYPE="$COMMIT_TYPE"
+                          HAS_FEAT_FIX=true
+                          # Only update if we don't have a higher priority type
+                          if [ -z "$HIGHEST_PRIORITY_TYPE" ]; then
+                              HIGHEST_PRIORITY_TYPE="$COMMIT_TYPE"
+                          fi
+                          echo "Release-triggering type"
                       fi
-                      echo "Release-triggering type"
-                      fi
-                      
+
                       # Track any commit that could trigger a release
                       if [[ "$COMMIT_TYPE" =~ ^(feat|fix|refactor|perf|revert)$ ]] || [ "$HAS_BREAKING" = true ]; then
-                      HAS_ANY_RELEASE=true
+                          HAS_ANY_RELEASE=true
                       fi
-                      
+
                       echo ""
                   done <<< "$COMMITS"
 
@@ -185,11 +186,11 @@ jobs:
                       # Fallback: get type from first non-merge commit
                       FIRST_COMMIT=$(echo "$COMMITS" | grep -vE '^Merge [0-9a-f]+ into [0-9a-f]+' | head -n 1)
 
-                      RE_FALLBACK='^([a-z]+)(!|\([^)]+\)!?)?:.*$'
+                      RE_FALLBACK='^([a-z]+)(\([^)]+\))?(!)?:.*$'
                       if [[ "$FIRST_COMMIT" =~ $RE_FALLBACK ]]; then
-                      FALLBACK_TYPE="${BASH_REMATCH[1]}"
+                          FALLBACK_TYPE="${BASH_REMATCH[1]}"
                       else
-                      FALLBACK_TYPE=$(echo "$FIRST_COMMIT" | grep -oE '^[a-z]+' | head -n 1)
+                          FALLBACK_TYPE=$(echo "$FIRST_COMMIT" | grep -oE '^[a-z]+' | head -n 1)
                       fi
                       echo "type=${FALLBACK_TYPE:-unknown}" >> $GITHUB_OUTPUT
                       echo "Type (fallback): ${FALLBACK_TYPE:-unknown}"

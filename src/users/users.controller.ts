@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Query, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, HttpCode, HttpStatus, Patch } from '@nestjs/common';
 import {
     ApiTags,
     ApiOperation,
@@ -12,17 +12,16 @@ import {
     ApiQuery,
 } from '@nestjs/swagger';
 import { UsersService } from './users.service';
-import { CreateUserDto } from './dto/create-user.dto';
-import { CheckEmailAvailabilityDto } from './dto/check-email-availability.dto';
 import { Public, CurrentUser } from '../common/decorators';
 import { type CurrentUserPayload } from '../common/interfaces';
+import { CheckEmailAvailabilityDto, CreateUserDto, UpdateUserDto } from './dto';
 
 @ApiTags('Users')
 @Controller('users')
 export class UsersController {
     constructor(private readonly usersService: UsersService) {}
 
-    @Get()
+    @Get('exists')
     @Public()
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
@@ -93,6 +92,83 @@ export class UsersController {
     })
     async checkEmail(@Query() dto: CheckEmailAvailabilityDto) {
         return this.usersService.checkEmailAvailability(dto);
+    }
+
+    @Get()
+    @ApiBearerAuth('firebase-jwt')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({
+        summary: 'Get user using authentication token',
+        description: 'Retrieves user information by Firebase JWT',
+    })
+    @ApiResponse({
+        status: HttpStatus.OK,
+        description: 'User info retrieved successfully',
+        schema: {
+            type: 'object',
+            properties: {
+                message: { type: 'string', example: 'User info fetched successfully' },
+                userInfo: {
+                    type: 'object',
+                    properties: {
+                        id: { type: 'string', example: 'clx123abc456' },
+                        firebaseUid: { type: 'string', example: 'cml789xyz' },
+                        firstName: { type: 'string', example: 'Juan' },
+                        middleName: { type: 'string', example: 'Santos', nullable: true },
+                        lastName: { type: 'string', example: 'Dela Cruz' },
+                        suffix: { type: 'string', example: 'Jr.', nullable: true },
+                        email: { type: 'string', example: 'juan@example.com' },
+                        address: {
+                            type: 'string',
+                            example: 'Block 5, Sampaguita St, Brgy Commonwealth, Quezon City',
+                        },
+                        block: { type: 'string', example: 'Block 5' },
+                        street: { type: 'string', example: 'Sampaguita St' },
+                        barangay: { type: 'string', example: 'Brgy Commonwealth' },
+                        city: { type: 'string', example: 'Quezon City' },
+                    },
+                },
+            },
+        },
+    })
+    @ApiUnauthorizedResponse({
+        description: 'Missing or invalid authentication token',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 401 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/users' },
+                message: { type: 'string', example: 'Authentication required' },
+            },
+        },
+    })
+    @ApiNotFoundResponse({
+        description: 'User not found',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 404 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/users' },
+                message: { type: 'string', example: 'User not found' },
+            },
+        },
+    })
+    @ApiInternalServerErrorResponse({
+        description: 'Internal server error',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 500 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/users' },
+                message: { type: 'string', example: 'Failed to fetch user by Firebase UID' },
+            },
+        },
+    })
+    async getUserById(@CurrentUser() user: CurrentUserPayload) {
+        return this.usersService.findById(user.dbId);
     }
 
     @Post()
@@ -171,24 +247,26 @@ export class UsersController {
         return this.usersService.create(user.firebaseUid, user.email, createUserDto);
     }
 
-    @Get(':firebaseUid')
+    @Patch()
     @ApiBearerAuth('firebase-jwt')
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
-        summary: 'Get user by Firebase UID',
-        description: 'Retrieves user information by Firebase UID',
+        summary: 'Update user',
+        description:
+            'Updates user information (email, first name, middle name, last name, suffix, and/or address)',
     })
     @ApiResponse({
         status: HttpStatus.OK,
-        description: 'User info retrieved successfully',
+        description: 'User updated successfully',
         schema: {
             type: 'object',
             properties: {
-                message: { type: 'string', example: 'User info fetched successfully' },
+                message: { type: 'string', example: 'User updated successfully' },
                 userInfo: {
                     type: 'object',
                     properties: {
                         id: { type: 'string', example: 'clx123abc456' },
+                        firebaseUid: { type: 'string', example: 'cml789xyz' },
                         firstName: { type: 'string', example: 'Juan' },
                         middleName: { type: 'string', example: 'Santos', nullable: true },
                         lastName: { type: 'string', example: 'Dela Cruz' },
@@ -214,8 +292,23 @@ export class UsersController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/users/clx123abc456' },
+                path: { type: 'string', example: '/api/users' },
                 message: { type: 'string', example: 'Authentication required' },
+            },
+        },
+    })
+    @ApiBadRequestResponse({
+        description: 'Validation error',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 400 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/users' },
+                message: {
+                    type: 'string',
+                    example: 'Validation failed',
+                },
             },
         },
     })
@@ -226,7 +319,7 @@ export class UsersController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/users/clx123abc456' },
+                path: { type: 'string', example: '/api/users' },
                 message: { type: 'string', example: 'User not found' },
             },
         },
@@ -238,12 +331,15 @@ export class UsersController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/users/clx123abc456' },
-                message: { type: 'string', example: 'Failed to fetch user by Firebase UID' },
+                path: { type: 'string', example: '/api/users' },
+                message: { type: 'string', example: 'Failed to update user to the database' },
             },
         },
     })
-    async getUserById(@Param('firebaseUid') firebaseUid: string) {
-        return this.usersService.findByFirebaseUid(firebaseUid);
+    async updateUser(
+        @CurrentUser() user: CurrentUserPayload,
+        @Body() updateUserDto: UpdateUserDto,
+    ) {
+        return this.usersService.update(user.dbId, updateUserDto);
     }
 }

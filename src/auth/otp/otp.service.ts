@@ -64,7 +64,7 @@ export class OtpService {
         }
     }
 
-    async sendForgotPasswordOtp(dto: SendOtpRequestDto): Promise<void> {
+    async sendPasswordResetOtp(dto: SendOtpRequestDto): Promise<void> {
         const { email } = dto;
 
         // Generate OTP on backend
@@ -72,20 +72,45 @@ export class OtpService {
         const expiryTime = this.getExpiryTimeString();
 
         // Store OTP before sending email
-        this.storeOtp(email, code, 'forgot-password');
+        this.storeOtp(email, code, 'password-reset');
 
         try {
-            await this.emailService.sendForgotPasswordOtp(email, code, expiryTime);
-            this.logger.log(`Forgot password OTP sent successfully to ${email}`, 'OtpService');
+            await this.emailService.sendPasswordResetOtp(email, code, expiryTime);
+            this.logger.log(`Password reset OTP sent successfully to ${email}`, 'OtpService');
         } catch (error) {
             // Remove stored OTP if email fails
             delete this.otpStore[email];
             this.logger.error(
-                `Failed to send forgot password OTP to ${email}`,
+                `Failed to send password reset OTP to ${email}`,
                 String(error),
                 'OtpService',
             );
             throw new InternalServerErrorException('Failed to send password reset OTP email');
+        }
+    }
+
+    async sendEmailResetOtp(dto: SendOtpRequestDto): Promise<void> {
+        const { email } = dto;
+
+        // Generate OTP on backend
+        const code = this.generateOtp();
+        const expiryTime = this.getExpiryTimeString();
+
+        // Store OTP before sending email
+        this.storeOtp(email, code, 'email-reset');
+
+        try {
+            await this.emailService.sendEmailResetOtp(email, code, expiryTime);
+            this.logger.log(`Email reset OTP sent successfully to ${email}`, 'OtpService');
+        } catch (error) {
+            // Remove stored OTP if email fails
+            delete this.otpStore[email];
+            this.logger.error(
+                `Failed to send email reset OTP to ${email}`,
+                String(error),
+                'OtpService',
+            );
+            throw new InternalServerErrorException('Failed to send email reset OTP email');
         }
     }
 
@@ -127,7 +152,7 @@ export class OtpService {
     private storeOtp(
         email: string,
         code: string,
-        purpose: 'registration' | 'forgot-password',
+        purpose: 'registration' | 'password-reset' | 'email-reset',
     ): void {
         this.otpStore[email] = {
             code: String(code),

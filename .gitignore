@@ -56,3 +56,8 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 # Prisma ORM
 /generated/prisma
 /src/generated/prisma
+
+# MQTT Local Files
+local-mqtt/data/
+local-mqtt/log/
+local-mqtt/config/password.txt

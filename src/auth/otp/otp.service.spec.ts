@@ -198,23 +198,23 @@ describe('OtpService', () => {
         });
     });
 
-    describe('sendForgotPasswordOtp', () => {
+    describe('sendPasswordResetOtp', () => {
         beforeEach(() => {
-            mockEmailService.sendForgotPasswordOtp.mockResolvedValue(undefined);
+            mockEmailService.sendPasswordResetOtp.mockResolvedValue(undefined);
         });
 
         it('should generate a 5-digit OTP', async () => {
-            await service.sendForgotPasswordOtp(dto);
+            await service.sendPasswordResetOtp(dto);
 
-            expect(mockEmailService.sendForgotPasswordOtp).toHaveBeenCalled();
-            const [, code] = mockEmailService.sendForgotPasswordOtp.mock.calls[0] as string[];
+            expect(mockEmailService.sendPasswordResetOtp).toHaveBeenCalled();
+            const [, code] = mockEmailService.sendPasswordResetOtp.mock.calls[0] as string[];
             expect(code).toMatch(/^\d{5}$/);
         });
 
         it('should send OTP via EmailService', async () => {
-            await service.sendForgotPasswordOtp(dto);
+            await service.sendPasswordResetOtp(dto);
 
-            expect(mockEmailService.sendForgotPasswordOtp).toHaveBeenCalledWith(
+            expect(mockEmailService.sendPasswordResetOtp).toHaveBeenCalledWith(
                 testEmail,
                 expect.any(String),
                 expect.any(String),
@@ -222,73 +222,163 @@ describe('OtpService', () => {
         });
 
         it('should include expiry time in email', async () => {
-            await service.sendForgotPasswordOtp(dto);
+            await service.sendPasswordResetOtp(dto);
 
-            const [, , expiryTime] = mockEmailService.sendForgotPasswordOtp.mock
+            const [, , expiryTime] = mockEmailService.sendPasswordResetOtp.mock
                 .calls[0] as string[];
             expect(expiryTime).toBeDefined();
             expect(typeof expiryTime).toBe('string');
             expect(expiryTime).toMatch(/\d{1,2}:\d{2}/);
         });
 
-        it('should store OTP with purpose "forgot-password"', async () => {
-            await service.sendForgotPasswordOtp(dto);
+        it('should store OTP with purpose "password-reset"', async () => {
+            await service.sendPasswordResetOtp(dto);
 
-            const [, code] = mockEmailService.sendForgotPasswordOtp.mock.calls[0] as string[];
+            const [, code] = mockEmailService.sendPasswordResetOtp.mock.calls[0] as string[];
             const verifyDto: VerifyOtpDto = {
                 email: testEmail,
                 code,
-                purpose: 'forgot-password',
+                purpose: 'password-reset',
             };
 
             expect(() => service.verifyOtp(verifyDto)).not.toThrow();
         });
 
         it('should log success message', async () => {
-            await service.sendForgotPasswordOtp(dto);
+            await service.sendPasswordResetOtp(dto);
 
             expect(mockLoggerService.log).toHaveBeenCalledWith(
-                `Forgot password OTP sent successfully to ${testEmail}`,
+                `Password reset OTP sent successfully to ${testEmail}`,
                 'OtpService',
             );
         });
 
         it('should throw InternalServerErrorException if email fails', async () => {
             const emailError = new Error('Email service error');
-            mockEmailService.sendForgotPasswordOtp.mockRejectedValue(emailError);
+            mockEmailService.sendPasswordResetOtp.mockRejectedValue(emailError);
 
-            await expect(service.sendForgotPasswordOtp(dto)).rejects.toThrow(
+            await expect(service.sendPasswordResetOtp(dto)).rejects.toThrow(
                 InternalServerErrorException,
             );
-            await expect(service.sendForgotPasswordOtp(dto)).rejects.toThrow(
+            await expect(service.sendPasswordResetOtp(dto)).rejects.toThrow(
                 'Failed to send password reset OTP email',
             );
         });
 
         it('should log error if email fails', async () => {
             const emailError = new Error('Email service error');
-            mockEmailService.sendForgotPasswordOtp.mockRejectedValueOnce(emailError);
+            mockEmailService.sendPasswordResetOtp.mockRejectedValueOnce(emailError);
 
-            await expect(service.sendForgotPasswordOtp(dto)).rejects.toThrow();
+            await expect(service.sendPasswordResetOtp(dto)).rejects.toThrow();
 
             expect(mockLoggerService.error).toHaveBeenCalledWith(
-                `Failed to send forgot password OTP to ${testEmail}`,
+                `Failed to send password reset OTP to ${testEmail}`,
                 'Error: Email service error',
                 'OtpService',
             );
         });
 
         it('should remove stored OTP if email fails', async () => {
-            mockEmailService.sendForgotPasswordOtp.mockRejectedValueOnce(new Error('Email failed'));
+            mockEmailService.sendPasswordResetOtp.mockRejectedValueOnce(new Error('Email failed'));
 
-            await expect(service.sendForgotPasswordOtp(dto)).rejects.toThrow();
+            await expect(service.sendPasswordResetOtp(dto)).rejects.toThrow();
 
             const verifyDto: VerifyOtpDto = {
                 email: testEmail,
                 code: '12345',
-                purpose: 'forgot-password',
+                purpose: 'password-reset',
             };
 
+            expect(() => service.verifyOtp(verifyDto)).toThrow(expectedOtpErrors.notFound);
+        });
+    });
+
+    describe('sendEmailResetOtp', () => {
+        beforeEach(() => {
+            mockEmailService.sendEmailResetOtp.mockResolvedValue(undefined);
+        });
+
+        it('should generate a 5-digit OTP', async () => {
+            await service.sendEmailResetOtp(dto);
+
+            expect(mockEmailService.sendEmailResetOtp).toHaveBeenCalled();
+            const [, code] = mockEmailService.sendEmailResetOtp.mock.calls[0] as string[];
+            expect(code).toMatch(/^\d{5}$/);
+        });
+
+        it('should send OTP via EmailService', async () => {
+            await service.sendEmailResetOtp(dto);
+
+            expect(mockEmailService.sendEmailResetOtp).toHaveBeenCalledWith(
+                testEmail,
+                expect.any(String),
+                expect.any(String),
+            );
+        });
+
+        it('should include expiry time in email', async () => {
+            await service.sendEmailResetOtp(dto);
+
+            const [, , expiryTime] = mockEmailService.sendEmailResetOtp.mock.calls[0] as string[];
+            expect(expiryTime).toBeDefined();
+            expect(typeof expiryTime).toBe('string');
+            expect(expiryTime).toMatch(/\d{1,2}:\d{2}/);
+        });
+
+        it('should store OTP with purpose "email-reset"', async () => {
+            await service.sendEmailResetOtp(dto);
+            const [, code] = mockEmailService.sendEmailResetOtp.mock.calls[0] as string[];
+            const verifyDto: VerifyOtpDto = {
+                email: testEmail,
+                code,
+                purpose: 'email-reset',
+            };
+
+            expect(() => service.verifyOtp(verifyDto)).not.toThrow();
+        });
+
+        it('should log success message', async () => {
+            await service.sendEmailResetOtp(dto);
+            expect(mockLoggerService.log).toHaveBeenCalledWith(
+                `Email reset OTP sent successfully to ${testEmail}`,
+                'OtpService',
+            );
+        });
+
+        it('should throw InternalServerErrorException if email fails', async () => {
+            const emailError = new Error('Email service error');
+            mockEmailService.sendEmailResetOtp.mockRejectedValue(emailError);
+
+            await expect(service.sendEmailResetOtp(dto)).rejects.toThrow(
+                InternalServerErrorException,
+            );
+            await expect(service.sendEmailResetOtp(dto)).rejects.toThrow(
+                'Failed to send email reset OTP email',
+            );
+        });
+
+        it('should log error if email fails', async () => {
+            const emailError = new Error('Email service error');
+            mockEmailService.sendEmailResetOtp.mockRejectedValueOnce(emailError);
+
+            await expect(service.sendEmailResetOtp(dto)).rejects.toThrow();
+            expect(mockLoggerService.error).toHaveBeenCalledWith(
+                `Failed to send email reset OTP to ${testEmail}`,
+                'Error: Email service error',
+                'OtpService',
+            );
+        });
+
+        it('should remove stored OTP if email fails', async () => {
+            mockEmailService.sendEmailResetOtp.mockRejectedValueOnce(new Error('Email failed'));
+
+            await expect(service.sendEmailResetOtp(dto)).rejects.toThrow();
+
+            const verifyDto: VerifyOtpDto = {
+                email: testEmail,
+                code: '12345',
+                purpose: 'email-reset',
+            };
             expect(() => service.verifyOtp(verifyDto)).toThrow(expectedOtpErrors.notFound);
         });
     });
@@ -308,6 +398,19 @@ describe('OtpService', () => {
                 email: testEmail,
                 code,
                 purpose: 'registration',
+            };
+
+            expect(() => service.verifyOtp(verifyDto)).not.toThrow();
+        });
+
+        it('should verify correct OTP for email-reset purpose', async () => {
+            await service.sendEmailResetOtp({ email: testEmail });
+            const [, code] = mockEmailService.sendEmailResetOtp.mock.calls[0] as string[];
+
+            const verifyDto: VerifyOtpDto = {
+                email: testEmail,
+                code,
+                purpose: 'email-reset',
             };
 
             expect(() => service.verifyOtp(verifyDto)).not.toThrow();
@@ -344,7 +447,7 @@ describe('OtpService', () => {
             const verifyDto: VerifyOtpDto = {
                 email: testEmail,
                 code,
-                purpose: 'forgot-password', // Wrong purpose
+                purpose: 'password-reset', // Wrong purpose
             };
 
             expect(() => service.verifyOtp(verifyDto)).toThrow(BadRequestException);
@@ -517,7 +620,7 @@ describe('OtpService', () => {
     describe('concurrent OTP handling', () => {
         beforeEach(() => {
             mockEmailService.sendRegistrationOtp.mockResolvedValue(undefined);
-            mockEmailService.sendForgotPasswordOtp.mockResolvedValue(undefined);
+            mockEmailService.sendPasswordResetOtp.mockResolvedValue(undefined);
         });
 
         it('should handle multiple OTPs for different emails', async () => {

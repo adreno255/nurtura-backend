@@ -38,7 +38,8 @@ jobs:
                   @semantic-release/changelog \
                   @semantic-release/git \
                   @semantic-release/github \
-                  @semantic-release/npm
+                  @semantic-release/npm \
+                  conventional-changelog-conventionalcommits
 
             - name: Run semantic-release
               id: semantic
@@ -48,21 +49,21 @@ jobs:
                   npx semantic-release > release.log 2>&1 || true
 
                   if grep -qE "(Published release|Release published)" release.log; then
-                      VERSION=$(grep -oE "v?[0-9]+\.[0-9]+\.[0-9]+" release.log | head -n 1)
-                      
-                      VERSION=${VERSION#v}
-                    
+                      VERSION=$(grep -E "Published release|Release published" release.log \
+                        | grep -oE "[0-9]+\.[0-9]+\.[0-9]+" \
+                        | head -n 1)
+
                       if [ -n "$VERSION" ]; then
-                        echo "new-release-published=true" >> $GITHUB_OUTPUT
-                        echo "new-release-version=$VERSION" >> $GITHUB_OUTPUT
-                        echo "Release published: $VERSION"
+                          echo "new-release-published=true" >> $GITHUB_OUTPUT
+                          echo "new-release-version=$VERSION" >> $GITHUB_OUTPUT
+                          echo "Release published: $VERSION"
                       else
-                        echo "new-release-published=false" >> $GITHUB_OUTPUT
-                        echo "Version extraction failed, but release may have succeeded"
+                          echo "new-release-published=false" >> $GITHUB_OUTPUT
+                          echo "::warning::Release log matched but version could not be extracted"
                       fi
                   else
-                    echo "new-release-published=false" >> $GITHUB_OUTPUT
-                    echo "No new release published"
+                      echo "new-release-published=false" >> $GITHUB_OUTPUT
+                      echo "No new release published"
                   fi
 
                   echo "=== Release Log ==="
@@ -73,6 +74,3 @@ jobs:
               run: |
                   echo "New release published!"
                   echo "Version: ${{ steps.semantic.outputs.new-release-version }}"
-                  echo "Major: ${{ steps.semantic.outputs.new-release-major-version }}"
-                  echo "Minor: ${{ steps.semantic.outputs.new-release-minor-version }}"
-                  echo "Patch: ${{ steps.semantic.outputs.new-release-patch-version }}"

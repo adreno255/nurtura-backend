@@ -52,6 +52,9 @@ async function bootstrap(): Promise<void> {
             .addTag('Authentication', 'User authentication and authorization endpoints')
             .addTag('Authentication - OTP', 'OTP verification and management')
             .addTag('Users', 'User profile management')
+            .addTag('Sensors', 'Device sensors data and statistics')
+            .addTag('Racks', 'Rack management')
+            .addTag('Automation', 'Device commands and rulesets')
             .addBearerAuth(
                 {
                     type: 'http',

@@ -4,8 +4,10 @@ import sgMail from '@sendgrid/mail';
 import * as fs from 'fs';
 import * as path from 'path';
 import { getRegistrationOtpTemplate } from './templates/registration-otp.template';
-import { getForgotPasswordOtpTemplate } from './templates/forgot-password-otp.template';
+import { getPasswordResetOtpTemplate } from './templates/password-reset-otp.template';
 import { MyLoggerService } from '../my-logger/my-logger.service';
+import { getEmailResetNotificationTemplate } from './templates/email-reset-notification.template';
+import { getEmailResetOtpTemplate } from './templates/email-reset-otp.template';
 
 @Injectable()
 export class EmailService {
@@ -43,8 +45,7 @@ export class EmailService {
                 'EmailService',
             );
             throw new Error(
-                'Failed to load email assets. Please ensure images exist in src/assets/email/ ' +
-                    assetsPath,
+                `Failed to load email assets. Please ensure images exist in src/assets/email/\nCurrent Path: ${assetsPath}`,
             );
         }
 
@@ -95,7 +96,7 @@ export class EmailService {
         }
     }
 
-    async sendForgotPasswordOtp(email: string, code: string, expiryTime: string): Promise<void> {
+    async sendPasswordResetOtp(email: string, code: string, expiryTime: string): Promise<void> {
         const fromEmail = this.configService.get<string>('SENDGRID_FROM_EMAIL')!;
         const fromName = this.configService.get<string>('SENDGRID_FROM_NAME')!;
 
@@ -106,7 +107,7 @@ export class EmailService {
                 name: fromName,
             },
             subject: 'Password Reset OTP for Nurtura',
-            html: getForgotPasswordOtpTemplate(code, expiryTime),
+            html: getPasswordResetOtpTemplate(code, expiryTime),
             attachments: [
                 {
                     content: this.logoBase64,
@@ -127,15 +128,103 @@ export class EmailService {
 
         try {
             await sgMail.send(msg);
-            this.logger.log(`Forgot password OTP email sent to ${email}`, 'EmailService');
+            this.logger.log(`Password reset OTP email sent to ${email}`, 'EmailService');
         } catch (error) {
             this.logger.error(
-                `Failed to send forgot password OTP to ${email}`,
+                `Failed to send password reset OTP to ${email}`,
                 error instanceof Error ? error.message : String(error),
                 'EmailService',
             );
 
             throw new InternalServerErrorException('Failed to send password reset OTP email');
+        }
+    }
+
+    async sendEmailResetOtp(email: string, code: string, expiryTime: string): Promise<void> {
+        const fromEmail = this.configService.get<string>('SENDGRID_FROM_EMAIL')!;
+        const fromName = this.configService.get<string>('SENDGRID_FROM_NAME')!;
+
+        const msg = {
+            to: email,
+            from: {
+                email: fromEmail,
+                name: fromName,
+            },
+            subject: 'Email Reset OTP for Nurtura',
+            html: getEmailResetOtpTemplate(code, expiryTime),
+            attachments: [
+                {
+                    content: this.logoBase64,
+                    filename: 'Nurtura-Logo.png',
+                    type: 'image/png',
+                    disposition: 'inline',
+                    content_id: 'logo',
+                },
+                {
+                    content: this.facebookBase64,
+                    filename: 'Facebook-icon.png',
+                    type: 'image/png',
+                    disposition: 'inline',
+                    content_id: 'facebook',
+                },
+            ],
+        };
+
+        try {
+            await sgMail.send(msg);
+            this.logger.log(`Email reset OTP email sent to ${email}`, 'EmailService');
+        } catch (error) {
+            this.logger.error(
+                `Failed to send email reset OTP to ${email}`,
+                error instanceof Error ? error.message : String(error),
+                'EmailService',
+            );
+
+            throw new InternalServerErrorException('Failed to send email reset OTP email');
+        }
+    }
+
+    async sendEmailResetNotification(email: string): Promise<void> {
+        const fromEmail = this.configService.get<string>('SENDGRID_FROM_EMAIL')!;
+        const fromName = this.configService.get<string>('SENDGRID_FROM_NAME')!;
+
+        const msg = {
+            to: email,
+            from: {
+                email: fromEmail,
+                name: fromName,
+            },
+            subject: 'Email Reset Notification for Nurtura',
+            html: getEmailResetNotificationTemplate(),
+            attachments: [
+                {
+                    content: this.logoBase64,
+                    filename: 'Nurtura-Logo.png',
+                    type: 'image/png',
+                    disposition: 'inline',
+                    content_id: 'logo',
+                },
+                {
+                    content: this.facebookBase64,
+                    filename: 'Facebook-icon.png',
+                    type: 'image/png',
+                    disposition: 'inline',
+                    content_id: 'facebook',
+                },
+            ],
+        };
+
+        try {
+            await sgMail.send(msg);
+            this.logger.log(`Email reset notification email sent to ${email}`, 'EmailService');
+        } catch (error) {
+            this.logger.error(
+                `Failed to send email reset notification to ${email}`,
+                error instanceof Error ? error.message : String(error),
+                'EmailService',
+            );
+
+            throw new InternalServerErrorException('Failed to send email reset notification email');
         }
     }
 }

@@ -8,11 +8,6 @@ export const createMockSendGrid = () => ({
     send: jest.fn().mockResolvedValue([{ statusCode: 200 }, {}]),
 });
 
-export const createMockEmailService = () => ({
-    sendRegistrationOtp: jest.fn(),
-    sendForgotPasswordOtp: jest.fn(),
-});
-
 /**
  * Mock SendGrid Response
  */

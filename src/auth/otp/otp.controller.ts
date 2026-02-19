@@ -5,6 +5,7 @@ import {
     ApiResponse,
     ApiBadRequestResponse,
     ApiInternalServerErrorResponse,
+    ApiBearerAuth,
 } from '@nestjs/swagger';
 import { OtpService } from './otp.service';
 import { SendOtpRequestDto } from './dto/send-otp-request.dto';
@@ -12,12 +13,12 @@ import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { Public } from '../../common/decorators';
 import { Throttle } from '@nestjs/throttler';
 
-@Public()
 @ApiTags('Authentication - OTP')
 @Controller('auth/otp')
 export class OtpController {
     constructor(private readonly otpService: OtpService) {}
 
+    @Public()
     @Post('registration')
     @Throttle({ default: { limit: process.env.NODE_ENV === 'test' ? 15 : 3, ttl: 60000 } })
     @HttpCode(HttpStatus.OK)
@@ -73,11 +74,12 @@ export class OtpController {
         };
     }
 
-    @Post('forgot-password')
+    @Public()
+    @Post('password-reset')
     @Throttle({ default: { limit: process.env.NODE_ENV === 'test' ? 15 : 3, ttl: 60000 } })
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
-        summary: 'Send forgot password OTP',
+        summary: 'Send password reset OTP',
         description:
             'Sends a 5-digit OTP code to the provided email for password reset verification',
     })
@@ -121,13 +123,69 @@ export class OtpController {
             },
         },
     })
-    async sendForgotPasswordOtp(@Body() dto: SendOtpRequestDto) {
-        await this.otpService.sendForgotPasswordOtp(dto);
+    async sendPasswordResetOtp(@Body() dto: SendOtpRequestDto) {
+        await this.otpService.sendPasswordResetOtp(dto);
         return {
             message: 'Password reset OTP sent successfully. Please check your email.',
         };
     }
 
+    @Post('email-reset')
+    @ApiBearerAuth('firebase-jwt')
+    @Throttle({ default: { limit: process.env.NODE_ENV === 'test' ? 15 : 3, ttl: 60000 } })
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({
+        summary: 'Send email reset OTP',
+        description: 'Sends a 5-digit OTP code to the provided email for email reset verification',
+    })
+    @ApiResponse({
+        status: HttpStatus.OK,
+        description: 'Email reset OTP sent successfully',
+        schema: {
+            type: 'object',
+            properties: {
+                message: {
+                    type: 'string',
+                    example: 'Email reset OTP sent successfully. Please check your email.',
+                },
+            },
+        },
+    })
+    @ApiBadRequestResponse({
+        description: 'Invalid email format',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 400 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/auth/otp/email-reset' },
+                message: {
+                    type: 'string',
+                    example: 'Invalid email format',
+                },
+            },
+        },
+    })
+    @ApiInternalServerErrorResponse({
+        description: 'Failed to send email reset OTP',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 500 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/auth/otp/email-reset' },
+                message: { type: 'string', example: 'Failed to send email reset OTP email' },
+            },
+        },
+    })
+    async sendEmailResetOtp(@Body() dto: SendOtpRequestDto) {
+        await this.otpService.sendEmailResetOtp(dto);
+        return {
+            message: 'Email reset OTP sent successfully. Please check your email.',
+        };
+    }
+
+    @Public()
     @Post('verify')
     @HttpCode(HttpStatus.OK)
     @ApiOperation({

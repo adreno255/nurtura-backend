@@ -14,6 +14,7 @@ export const createMockDatabaseService = () => ({
     },
     rack: {
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
         findMany: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
@@ -46,6 +47,7 @@ export const createMockDatabaseService = () => ({
     },
     sensorReading: {
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
         findMany: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
@@ -54,6 +56,7 @@ export const createMockDatabaseService = () => ({
     },
     aggregatedSensorReading: {
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
         findMany: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),

@@ -15,6 +15,11 @@ import { FirebaseAuthGuard } from './common/guards/firebase-auth.guard';
 import { UsersModule } from './users/users.module';
 import { MqttModule } from './mqtt/mqtt.module';
 import { AppService } from './app.service';
+import { SensorsModule } from './sensors/sensors.module';
+import { WebsocketModule } from './websocket/websocket.module';
+import { RacksModule } from './racks/racks.module';
+import { EventEmitterModule } from '@nestjs/event-emitter';
+import { AutomationModule } from './automation/automation.module';
 
 @Module({
     imports: [
@@ -35,6 +40,7 @@ import { AppService } from './app.service';
                 blockDuration: 60000, // If they hit 30/min, they are banned for 1 minute
             },
         ]),
+        EventEmitterModule.forRoot(),
         MyLoggerModule,
         DatabaseModule,
         CommonModule,
@@ -43,6 +49,10 @@ import { AppService } from './app.service';
         AuthModule,
         UsersModule,
         MqttModule,
+        SensorsModule,
+        WebsocketModule,
+        RacksModule,
+        AutomationModule,
     ],
     controllers: [AppController],
     providers: [

@@ -1,20 +1,23 @@
 import { type INestApplication } from '@nestjs/common';
 import request from 'supertest';
-import { TestDatabaseHelper, TestDataHelper, TestServerHelper } from '../../helpers';
+import { TestDatabaseHelper, TestDataHelper, TestServerHelper } from '../helpers';
 import {
     createMockFirebaseAuth,
     createMockFirebaseService,
     createMockDecodedToken,
     FirebaseAuthErrors,
-} from '../../mocks';
-import { FirebaseService } from '../../../src/firebase/firebase.service';
-import type { CreateUserDto } from '../../../src/users/dto/create-user.dto';
+    createMockEmailService,
+} from '../mocks';
+import { FirebaseService } from '../../src/firebase/firebase.service';
+import { EmailService } from '../../src/email/email.service';
+import type { CreateUserDto } from '../../src/users/dto/create-user.dto';
 import { type Server } from 'http';
-import { type ExceptionResponse } from '../../../src/common/interfaces';
+import { type ExceptionResponse } from '../../src/common/interfaces';
 import {
+    type UserUpdatedResponse,
     type UserCreatedResponse,
     type UserInfoResponse,
-} from '../../../src/users/interfaces/user.interface';
+} from '../../src/users/interfaces/user.interface';
 
 describe('Users Integration Tests (HTTP Endpoints)', () => {
     let app: INestApplication;
@@ -25,6 +28,7 @@ describe('Users Integration Tests (HTTP Endpoints)', () => {
 
     const mockAuth = createMockFirebaseAuth();
     const mockFirebaseService = createMockFirebaseService(mockAuth);
+    const mockEmailService = createMockEmailService();
 
     // Valid auth token for authenticated requests
     const validAuthToken = 'valid-firebase-jwt-token';
@@ -40,7 +44,10 @@ describe('Users Integration Tests (HTTP Endpoints)', () => {
         // Create NestJS testing module with mocked external services
         serverHelper = new TestServerHelper();
         app = await serverHelper.createTestApp({
-            providers: [{ provide: FirebaseService, useValue: mockFirebaseService }],
+            providers: [
+                { provide: FirebaseService, useValue: mockFirebaseService },
+                { provide: EmailService, useValue: mockEmailService },
+            ],
         });
         httpServer = app.getHttpServer() as Server;
     });
@@ -60,7 +67,7 @@ describe('Users Integration Tests (HTTP Endpoints)', () => {
         mockFirebaseJWT = createMockDecodedToken();
     });
 
-    describe('GET /api/users?email= (Check Email Availability)', () => {
+    describe('GET /api/users/exists?email= (Check Email Availability)', () => {
         it('should return available=true when email not found in Firebase', async () => {
             const email = TestDataHelper.generateRandomEmail();
 
@@ -70,7 +77,7 @@ describe('Users Integration Tests (HTTP Endpoints)', () => {
                 .getUserByEmail.mockRejectedValue(FirebaseAuthErrors.userNotFound());
 
             const response = await request(httpServer)
-                .get('/api/users')
+                .get('/api/users/exists')
                 .query({ email })
                 .expect(200);
 
@@ -90,7 +97,7 @@ describe('Users Integration Tests (HTTP Endpoints)', () => {
             } as any);
 
             const response = await request(httpServer)
-                .get('/api/users')
+                .get('/api/users/exists')
                 .query({ email })
                 .expect(200);
 
@@ -102,7 +109,7 @@ describe('Users Integration Tests (HTTP Endpoints)', () => {
 
         it('should validate email format', async () => {
             const response = await request(httpServer)
-                .get('/api/users')
+                .get('/api/users/exists')
                 .query({ email: 'invalid-email' })
                 .expect(400);
 
@@ -113,7 +120,7 @@ describe('Users Integration Tests (HTTP Endpoints)', () => {
         });
 
         it('should require email query parameter', async () => {
-            const response = await request(httpServer).get('/api/users').expect(400);
+            const response = await request(httpServer).get('/api/users/exists').expect(400);
 
             expect(response.body).toMatchObject({
                 statusCode: 400,
@@ -136,12 +143,12 @@ describe('Users Integration Tests (HTTP Endpoints)', () => {
                 .getUserByEmail.mockRejectedValueOnce(FirebaseAuthErrors.userNotFound());
 
             const response1 = await request(httpServer)
-                .get('/api/users')
+                .get('/api/users/exists')
                 .query({ email: email1 })
                 .expect(200);
 
             const response2 = await request(httpServer)
-                .get('/api/users')
+                .get('/api/users/exists')
                 .query({ email: email2 })
                 .expect(200);
 
@@ -164,7 +171,9 @@ describe('Users Integration Tests (HTTP Endpoints)', () => {
             });
 
             for (const email of emails) {
-                const response = await request(httpServer).get('/api/users').query({ email });
+                const response = await request(httpServer)
+                    .get('/api/users/exists')
+                    .query({ email });
 
                 expect(response.status).toBe(200);
                 expect(response.body).toMatchObject({ available: true });
@@ -181,7 +190,7 @@ describe('Users Integration Tests (HTTP Endpoints)', () => {
                 .getUserByEmail.mockRejectedValue(new Error('Firebase service unavailable'));
 
             const response = await request(httpServer)
-                .get('/api/users')
+                .get('/api/users/exists')
                 .query({ email })
                 .expect(500);
 
@@ -200,7 +209,7 @@ describe('Users Integration Tests (HTTP Endpoints)', () => {
 
             // No Authorization header
             const response = await request(httpServer)
-                .get('/api/users')
+                .get('/api/users/exists')
                 .query({ email })
                 .expect(200);
 
@@ -231,9 +240,9 @@ describe('Users Integration Tests (HTTP Endpoints)', () => {
 
             const { userId } = createResponse.body as UserCreatedResponse;
 
-            // Get user by Firebase UID
+            // Get user by Firebase JWT
             const getResponse = await request(httpServer)
-                .get(`/api/users/${mockFirebaseJWT.uid}`)
+                .get(`/api/users`)
                 .set('Authorization', `Bearer ${validAuthToken}`)
                 .expect(200);
 
@@ -283,6 +292,98 @@ describe('Users Integration Tests (HTTP Endpoints)', () => {
         });
     });
 
+    describe('PATCH /api/users (Update User Profile)', () => {
+        it('should require authentication', async () => {
+            const dto = {
+                firstName: 'Updated',
+                lastName: 'User',
+                block: 'Block 1',
+                street: 'Street',
+                barangay: 'Barangay',
+                city: 'City',
+            };
+
+            const response = await request(httpServer).patch('/api/users').send(dto).expect(401);
+
+            expect(response.body).toHaveProperty('statusCode', 401);
+        });
+
+        it('should return 404 when user not found', async () => {
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            const dto = { firstName: 'No', lastName: 'User' };
+
+            const response = await request(httpServer)
+                .patch('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send(dto)
+                .expect(404);
+
+            expect(response.body).toHaveProperty('statusCode', 404);
+        });
+
+        it('should update user data successfully', async () => {
+            // seed existing user
+            await dbHelper.seedUser({
+                firebaseUid: mockFirebaseJWT.uid,
+                email: mockFirebaseJWT.email,
+                firstName: 'Original',
+                lastName: 'Name',
+                address: 'Block 1, Street, Barangay, City',
+            });
+
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            const dto = {
+                firstName: 'Updated',
+                lastName: 'User',
+                block: 'Block 2',
+                street: 'New Street',
+                barangay: 'New Barangay',
+                city: 'New City',
+            };
+
+            const response = await request(httpServer)
+                .patch('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send(dto)
+                .expect(200);
+
+            expect(response.body).toHaveProperty('message', 'User updated successfully');
+            expect((response.body as UserUpdatedResponse).userInfo).toHaveProperty(
+                'firstName',
+                'Updated',
+            );
+        });
+
+        it('should send email reset notification when email changes', async () => {
+            // seed existing user
+            await dbHelper.seedUser({
+                firebaseUid: mockFirebaseJWT.uid,
+                email: 'old@example.com',
+                firstName: 'Old',
+                lastName: 'User',
+                address: 'Block 1, Street, Barangay, City',
+            });
+
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            const dto = {
+                email: 'new@example.com',
+            };
+
+            await request(httpServer)
+                .patch('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send(dto)
+                .expect(200);
+
+            expect(mockEmailService.sendEmailResetNotification).toHaveBeenCalledWith(
+                'old@example.com',
+            );
+        });
+    });
+
     describe('Edge Cases', () => {
         it('should handle user with very long names', async () => {
             mockFirebaseService.getAuth().verifyIdToken.mockResolvedValue(mockFirebaseJWT);
@@ -301,7 +402,7 @@ describe('Users Integration Tests (HTTP Endpoints)', () => {
                 .expect(201);
 
             const response = await request(httpServer)
-                .get(`/api/users/${mockFirebaseJWT.uid}`)
+                .get(`/api/users`)
                 .set('Authorization', `Bearer ${validAuthToken}`)
                 .expect(200);
 
@@ -329,7 +430,7 @@ describe('Users Integration Tests (HTTP Endpoints)', () => {
                 .expect(201);
 
             const response = await request(httpServer)
-                .get(`/api/users/${mockFirebaseJWT.uid}`)
+                .get(`/api/users`)
                 .set('Authorization', `Bearer ${validAuthToken}`)
                 .expect(200);
 
@@ -479,7 +580,7 @@ describe('Users Integration Tests (HTTP Endpoints)', () => {
                 .getUserByEmail.mockRejectedValue(FirebaseAuthErrors.userNotFound());
 
             const response = await request(httpServer)
-                .get('/api/users')
+                .get('/api/users/exists')
                 .query({ email: TestDataHelper.generateRandomEmail() })
                 .expect(200);
 
@@ -605,7 +706,7 @@ describe('Users Integration Tests (HTTP Endpoints)', () => {
                 .getUserByEmail.mockRejectedValue(FirebaseAuthErrors.userNotFound());
 
             await request(httpServer)
-                .get('/api/users')
+                .get('/api/users/exists')
                 .query({ email: 'test@example.com' })
                 .expect(200);
         });
@@ -641,7 +742,7 @@ describe('Users Integration Tests (HTTP Endpoints)', () => {
             mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
 
             await request(httpServer)
-                .get(`/api/users/${mockFirebaseJWT.uid}`)
+                .get(`/api/users`)
                 .set('Authorization', `Bearer ${validAuthToken}`)
                 .expect(200);
         });
@@ -673,7 +774,7 @@ describe('Users Integration Tests (HTTP Endpoints)', () => {
             // Make 5 concurrent GET requests
             const requests = Array.from({ length: 5 }, () =>
                 request(httpServer)
-                    .get(`/api/users/${mockFirebaseJWT.uid}`)
+                    .get(`/api/users`)
                     .set('Authorization', `Bearer ${validAuthToken}`),
             );
 
@@ -1045,11 +1146,9 @@ describe('Users Integration Tests (HTTP Endpoints)', () => {
         });
     });
 
-    describe('GET /api/users/:firebaseUid (Get User by Firebase UID)', () => {
+    describe('GET /api/users (Get User by Firebase JWT)', () => {
         it('should require authentication', async () => {
-            const firebaseUid = TestDataHelper.generateFirebaseUid();
-
-            const response = await request(httpServer).get(`/api/users/${firebaseUid}`).expect(401);
+            const response = await request(httpServer).get(`/api/users`).expect(401);
 
             expect(response.body).toMatchObject({
                 statusCode: 401,
@@ -1072,7 +1171,7 @@ describe('Users Integration Tests (HTTP Endpoints)', () => {
             mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
 
             const response = await request(httpServer)
-                .get(`/api/users/${mockFirebaseJWT.uid}`)
+                .get(`/api/users`)
                 .set('Authorization', `Bearer ${validAuthToken}`)
                 .expect(200);
 
@@ -1099,7 +1198,7 @@ describe('Users Integration Tests (HTTP Endpoints)', () => {
             mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
 
             const response = await request(httpServer)
-                .get(`/api/users/${mockFirebaseJWT.uid}`)
+                .get(`/api/users`)
                 .set('Authorization', `Bearer ${validAuthToken}`)
                 .expect(200);
 
@@ -1115,18 +1214,17 @@ describe('Users Integration Tests (HTTP Endpoints)', () => {
         });
 
         it('should return 404 when user not found', async () => {
-            const nonExistentUid = TestDataHelper.generateFirebaseUid();
-
+            // no user seeded
             mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
 
             const response = await request(httpServer)
-                .get(`/api/users/${nonExistentUid}`)
+                .get(`/api/users`)
                 .set('Authorization', `Bearer ${validAuthToken}`)
                 .expect(404);
 
             expect(response.body).toMatchObject({
                 statusCode: 404,
-                message: 'User profile not found in database',
+                message: 'User not found',
             });
         });
 
@@ -1142,7 +1240,7 @@ describe('Users Integration Tests (HTTP Endpoints)', () => {
             mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
 
             const response = await request(httpServer)
-                .get(`/api/users/${mockFirebaseJWT.uid}`)
+                .get(`/api/users`)
                 .set('Authorization', `Bearer ${validAuthToken}`)
                 .expect(200);
 
@@ -1166,7 +1264,7 @@ describe('Users Integration Tests (HTTP Endpoints)', () => {
             mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
 
             const response = await request(httpServer)
-                .get(`/api/users/${mockFirebaseJWT.uid}`)
+                .get(`/api/users`)
                 .set('Authorization', `Bearer ${validAuthToken}`)
                 .expect(200);
 
@@ -1192,7 +1290,7 @@ describe('Users Integration Tests (HTTP Endpoints)', () => {
             mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
 
             const response = await request(httpServer)
-                .get(`/api/users/${mockFirebaseJWT.uid}`)
+                .get(`/api/users`)
                 .set('Authorization', `Bearer ${validAuthToken}`)
                 .expect(200);
 
@@ -1218,7 +1316,7 @@ describe('Users Integration Tests (HTTP Endpoints)', () => {
             mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
 
             const response = await request(httpServer)
-                .get(`/api/users/${mockFirebaseJWT.uid}`)
+                .get(`/api/users`)
                 .set('Authorization', `Bearer ${validAuthToken}`)
                 .expect(200);
 
@@ -1307,7 +1405,7 @@ describe('Users Integration Tests (HTTP Endpoints)', () => {
 
             // Get user by Firebase UID
             const getResponse = await request(httpServer)
-                .get(`/api/users/${mockFirebaseJWT.uid}`)
+                .get(`/api/users`)
                 .set('Authorization', `Bearer ${validAuthToken}`)
                 .expect(200);
 

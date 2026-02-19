@@ -1,4 +1,4 @@
-export function getForgotPasswordOtpTemplate(code: string, expiryTime: string): string {
+export function getPasswordResetOtpTemplate(code: string, expiryTime: string): string {
     const codeDigits = code
         .split('')
         .map(

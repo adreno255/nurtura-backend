@@ -9,7 +9,7 @@ import {
 } from '../../src/users/interfaces/user.interface';
 import * as crypto from 'crypto';
 import { FirebaseService } from '../../src/firebase/firebase.service';
-import { type FirebaseTokenPayload } from '../../src/common/interfaces';
+import { type CurrentUserPayload } from '../../src/common/interfaces';
 
 jest.mock('crypto', () => {
     const actualCrypto = jest.requireActual<typeof crypto>('crypto');
@@ -63,7 +63,7 @@ describe('E2E User Registration Flow', () => {
     describe('Traditional Sign-up Subflow', () => {
         const email = TestDataHelper.generateRandomEmail();
         const userData = TestDataHelper.generateUserData();
-        let firebaseUser: FirebaseTokenPayload;
+        let firebaseUser: CurrentUserPayload;
         let user: Partial<UserInfo>;
 
         afterAll(async () => {
@@ -73,7 +73,7 @@ describe('E2E User Registration Flow', () => {
 
         it('should check email availability for registration', async () => {
             const response = await request(httpServer)
-                .get('/api/users')
+                .get('/api/users/exists')
                 .query({ email })
                 .expect(200);
 
@@ -129,6 +129,7 @@ describe('E2E User Registration Flow', () => {
             });
 
             firebaseUser = {
+                dbId: '',
                 firebaseUid: userRecord.uid,
                 email: userRecord.email!,
             };
@@ -204,7 +205,7 @@ describe('E2E User Registration Flow', () => {
             );
 
             const response = await request(httpServer)
-                .get(`/api/users/${firebaseUser.firebaseUid}`)
+                .get(`/api/users`)
                 .set('Authorization', `Bearer ${firebaseUser.firebaseUid}`)
                 .expect(200);
 
@@ -240,7 +241,7 @@ describe('E2E User Registration Flow', () => {
         describe('forgot Password Endpoints', () => {
             it('should check if account exists for password reset', async () => {
                 const response = await request(httpServer)
-                    .get('/api/users')
+                    .get('/api/users/exists')
                     .query({ email })
                     .expect(200);
 
@@ -270,7 +271,7 @@ describe('E2E User Registration Flow', () => {
                 (crypto.randomInt as jest.Mock).mockReturnValue(1);
 
                 const response = await request(httpServer)
-                    .post('/api/auth/otp/forgot-password')
+                    .post('/api/auth/otp/password-reset')
                     .send({ email })
                     .expect(200);
 
@@ -287,7 +288,7 @@ describe('E2E User Registration Flow', () => {
                     .send({
                         email,
                         code,
-                        purpose: 'forgot-password',
+                        purpose: 'password-reset',
                     })
                     .expect(200);
 
@@ -301,12 +302,12 @@ describe('E2E User Registration Flow', () => {
     describe('Google SSO Subflow', () => {
         const email = 'butikaimnida@gmail.com';
         const userData = TestDataHelper.generateUserData();
-        let firebaseUser: FirebaseTokenPayload;
+        let firebaseUser: CurrentUserPayload;
         let user: Partial<UserInfo>;
 
         it('should check email availability for registration', async () => {
             const response = await request(httpServer)
-                .get('/api/users')
+                .get('/api/users/exists')
                 .query({ email })
                 .expect(200);
 
@@ -340,6 +341,7 @@ describe('E2E User Registration Flow', () => {
             const userRecord = await app.get(FirebaseService).getAuth().getUserByEmail(email);
 
             firebaseUser = {
+                dbId: '',
                 firebaseUid: userRecord.uid,
                 email: userRecord.email!,
             };
@@ -415,7 +417,7 @@ describe('E2E User Registration Flow', () => {
             );
 
             const response = await request(httpServer)
-                .get(`/api/users/${firebaseUser.firebaseUid}`)
+                .get(`/api/users`)
                 .set('Authorization', `Bearer ${firebaseUser.firebaseUid}`)
                 .expect(200);
 
@@ -451,7 +453,7 @@ describe('E2E User Registration Flow', () => {
         describe('forgot Password Endpoints', () => {
             it('should check if account exists for password reset', async () => {
                 const response = await request(httpServer)
-                    .get('/api/users')
+                    .get('/api/users/exists')
                     .query({ email })
                     .expect(200);
 

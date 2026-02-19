@@ -53,7 +53,7 @@ export class MyLoggerService extends ConsoleLogger {
         const errorMessage = stack ? `${String(message)}\t${shortStack}` : String(message);
 
         void this.writeToFile(this.errorLog, this.format(errorMessage, context));
-        super.error(message, stack, context);
+        super.error(errorMessage, undefined, context);
     }
 
     warn(message: any, context?: string): void {

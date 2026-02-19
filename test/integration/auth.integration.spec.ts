@@ -1,15 +1,16 @@
 import { type INestApplication } from '@nestjs/common';
 import request from 'supertest';
-import { TestDatabaseHelper, TestDataHelper, TestServerHelper } from '../../helpers';
+import { TestDatabaseHelper, TestDataHelper, TestServerHelper } from '../helpers';
 import {
+    createMockDecodedToken,
     createMockEmailService,
     createMockFirebaseAuth,
     createMockFirebaseService,
     FirebaseAuthErrors,
-} from '../../mocks';
-import { FirebaseService } from '../../../src/firebase/firebase.service';
-import { EmailService } from '../../../src/email/email.service';
-import { type ExceptionResponse } from '../../../src/common/interfaces';
+} from '../mocks';
+import { FirebaseService } from '../../src/firebase/firebase.service';
+import { EmailService } from '../../src/email/email.service';
+import { type ExceptionResponse } from '../../src/common/interfaces';
 import { type Server } from 'http';
 
 describe('Auth Integration Tests', () => {
@@ -17,10 +18,14 @@ describe('Auth Integration Tests', () => {
     let dbHelper: TestDatabaseHelper;
     let serverHelper: TestServerHelper;
     let httpServer: Server;
+    let mockFirebaseJWT: ReturnType<typeof createMockDecodedToken>;
 
     const mockAuth = createMockFirebaseAuth();
     const mockFirebaseService = createMockFirebaseService(mockAuth);
     const mockEmailService = createMockEmailService();
+
+    // valid JWT token string for authenticated requests
+    const validAuthToken = 'valid-firebase-jwt-token';
 
     beforeAll(async () => {
         // Initialize database helper
@@ -48,6 +53,9 @@ describe('Auth Integration Tests', () => {
         // Clean database before each test
         await dbHelper.clearDatabase();
         jest.clearAllMocks();
+
+        // reset mock decoded token
+        mockFirebaseJWT = createMockDecodedToken();
     });
 
     describe('GET /api/auth/providers', () => {
@@ -756,29 +764,29 @@ describe('Auth Integration Tests', () => {
         });
     });
 
-    describe('POST /api/auth/otp/forgot-password', () => {
-        it('should send forgot password OTP successfully', async () => {
+    describe('POST /api/auth/otp/password-reset', () => {
+        it('should send password reset OTP successfully', async () => {
             const email = TestDataHelper.generateRandomEmail();
 
-            mockEmailService.sendForgotPasswordOtp.mockResolvedValueOnce([
+            mockEmailService.sendPasswordResetOtp.mockResolvedValueOnce([
                 { statusCode: 202 },
                 {},
             ] as any);
 
             const response = await request(httpServer)
-                .post('/api/auth/otp/forgot-password')
+                .post('/api/auth/otp/password-reset')
                 .send({ email })
                 .expect(200);
 
             expect(response.body).toMatchObject({
                 message: 'Password reset OTP sent successfully. Please check your email.',
             });
-            expect(mockEmailService.sendForgotPasswordOtp).toHaveBeenCalled();
+            expect(mockEmailService.sendPasswordResetOtp).toHaveBeenCalled();
         });
 
         it('should return 400 for invalid email format', async () => {
             const response = await request(httpServer)
-                .post('/api/auth/otp/forgot-password')
+                .post('/api/auth/otp/password-reset')
                 .send({ email: 'invalid-email' })
                 .expect(400);
 
@@ -790,7 +798,7 @@ describe('Auth Integration Tests', () => {
 
         it('should return 400 when email is missing', async () => {
             const response = await request(httpServer)
-                .post('/api/auth/otp/forgot-password')
+                .post('/api/auth/otp/password-reset')
                 .send({})
                 .expect(400);
 
@@ -799,39 +807,109 @@ describe('Auth Integration Tests', () => {
             expect(body.statusCode).toBe(400);
         });
 
-        it('should handle multiple forgot password requests', async () => {
+        it('should handle multiple password reset requests', async () => {
             const email = TestDataHelper.generateRandomEmail();
 
-            mockEmailService.sendForgotPasswordOtp.mockResolvedValue([
+            mockEmailService.sendPasswordResetOtp.mockResolvedValue([
                 { statusCode: 202 },
                 {},
             ] as any);
 
             for (let i = 0; i < 3; i++) {
                 await request(httpServer)
-                    .post('/api/auth/otp/forgot-password')
+                    .post('/api/auth/otp/password-reset')
                     .send({ email })
                     .expect(200);
             }
 
-            expect(mockEmailService.sendForgotPasswordOtp).toHaveBeenCalledTimes(3);
+            expect(mockEmailService.sendPasswordResetOtp).toHaveBeenCalledTimes(3);
         });
 
         it('should handle SendGrid failures', async () => {
             const email = TestDataHelper.generateRandomEmail();
 
-            mockEmailService.sendForgotPasswordOtp.mockRejectedValueOnce(
+            mockEmailService.sendPasswordResetOtp.mockRejectedValueOnce(
                 new Error('SendGrid error'),
             );
 
             const response = await request(httpServer)
-                .post('/api/auth/otp/forgot-password')
+                .post('/api/auth/otp/password-reset')
                 .send({ email })
                 .expect(500);
 
             const body = response.body as ExceptionResponse;
 
             expect(body.message).toContain('Failed to send password reset OTP email');
+        });
+    });
+
+    describe('POST /api/auth/otp/email-reset', () => {
+        it('should send email reset OTP when authenticated', async () => {
+            const email = TestDataHelper.generateRandomEmail();
+
+            mockEmailService.sendEmailResetOtp.mockResolvedValueOnce([
+                { statusCode: 200 },
+                {},
+            ] as any);
+
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            const response = await request(httpServer)
+                .post('/api/auth/otp/email-reset')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send({ email })
+                .expect(200);
+
+            expect(response.body).toMatchObject({
+                message: 'Email reset OTP sent successfully. Please check your email.',
+            });
+            expect(mockEmailService.sendEmailResetOtp).toHaveBeenCalledWith(
+                email,
+                expect.any(String),
+                expect.any(String),
+            );
+        });
+
+        it('should return 401 when not authenticated', async () => {
+            const email = TestDataHelper.generateRandomEmail();
+
+            const response = await request(httpServer)
+                .post('/api/auth/otp/email-reset')
+                .send({ email })
+                .expect(401);
+
+            const body = response.body as ExceptionResponse;
+            expect(body.statusCode).toBe(401);
+        });
+
+        it('should return 400 for invalid email format', async () => {
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            const response = await request(httpServer)
+                .post('/api/auth/otp/email-reset')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send({ email: 'not-an-email' })
+                .expect(400);
+
+            const body = response.body as ExceptionResponse;
+            expect(body.statusCode).toBe(400);
+            expect(body.message).toContain('Invalid email format');
+        });
+
+        it('should handle SendGrid failures', async () => {
+            const email = TestDataHelper.generateRandomEmail();
+            mockEmailService.sendEmailResetOtp.mockRejectedValueOnce(new Error('SendGrid error'));
+
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            const response = await request(httpServer)
+                .post('/api/auth/otp/email-reset')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send({ email })
+                .expect(500);
+
+            const body = response.body as ExceptionResponse;
+            expect(body.message).toContain('Failed to send email reset OTP email');
         });
     });
 
@@ -961,6 +1039,85 @@ describe('Auth Integration Tests', () => {
                     purpose: 'registration',
                 })
                 .expect(400);
+        });
+
+        // success paths
+        it('should verify OTP successfully for registration flow', async () => {
+            const email = TestDataHelper.generateRandomEmail();
+
+            mockEmailService.sendRegistrationOtp.mockResolvedValueOnce([
+                { statusCode: 200 },
+                {},
+            ] as never);
+
+            await request(httpServer)
+                .post('/api/auth/otp/registration')
+                .send({ email })
+                .expect(200);
+
+            const [[, code]] = mockEmailService.sendRegistrationOtp.mock.calls as [
+                string,
+                string,
+            ][];
+
+            const response = await request(httpServer)
+                .post('/api/auth/otp/verify')
+                .send({ email, code, purpose: 'registration' })
+                .expect(200);
+
+            expect(response.body).toEqual({ message: 'OTP verified successfully.' });
+        });
+
+        it('should verify OTP successfully for password-reset flow', async () => {
+            const email = TestDataHelper.generateRandomEmail();
+
+            mockEmailService.sendPasswordResetOtp.mockResolvedValueOnce([
+                { statusCode: 200 },
+                {},
+            ] as never);
+
+            await request(httpServer)
+                .post('/api/auth/otp/password-reset')
+                .send({ email })
+                .expect(200);
+
+            const [[, code]] = mockEmailService.sendPasswordResetOtp.mock.calls as [
+                string,
+                string,
+            ][];
+
+            const response = await request(httpServer)
+                .post('/api/auth/otp/verify')
+                .send({ email, code, purpose: 'password-reset' })
+                .expect(200);
+
+            expect(response.body).toEqual({ message: 'OTP verified successfully.' });
+        });
+
+        it('should verify OTP successfully for email-reset flow', async () => {
+            const email = TestDataHelper.generateRandomEmail();
+
+            mockEmailService.sendEmailResetOtp.mockResolvedValueOnce([
+                { statusCode: 200 },
+                {},
+            ] as never);
+
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            await request(httpServer)
+                .post('/api/auth/otp/email-reset')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send({ email })
+                .expect(200);
+
+            const [[, code]] = mockEmailService.sendEmailResetOtp.mock.calls as [string, string][];
+
+            const response = await request(httpServer)
+                .post('/api/auth/otp/verify')
+                .send({ email, code, purpose: 'email-reset' })
+                .expect(200);
+
+            expect(response.body).toEqual({ message: 'OTP verified successfully.' });
         });
     });
 

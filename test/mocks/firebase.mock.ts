@@ -63,4 +63,6 @@ export const FirebaseAuthErrors = {
         createFirebaseAuthError('email-already-exists', 'Email already exists'),
     invalidPassword: () => createFirebaseAuthError('weak-password', 'Password is too weak'),
     invalidEmail: () => createFirebaseAuthError('invalid-email', 'Invalid email format'),
+    invalidIdToken: () => createFirebaseAuthError('invalid-id-token', 'Invalid token'),
+    idTokenExpired: () => createFirebaseAuthError('id-token-expired', 'Expired token'),
 };

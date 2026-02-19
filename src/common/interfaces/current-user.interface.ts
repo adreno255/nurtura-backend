@@ -1,4 +1,5 @@
 export interface CurrentUserPayload {
+    dbId: string;
     firebaseUid: string;
     email: string;
 }

@@ -50,3 +50,8 @@ docs
 Dockerfile
 docker-compose*
 .dockerignore
+
+# MQTT Local Files
+local-mqtt/data/
+local-mqtt/log/
+local-mqtt/config/password.txt

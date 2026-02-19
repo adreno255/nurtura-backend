@@ -1,4 +1,3 @@
-// test/e2e/setup.ts
 import { config } from 'dotenv';
 import { TestDatabaseHelper } from '../helpers/test-database.helper';
 

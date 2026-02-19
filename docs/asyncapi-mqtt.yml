@@ -1,0 +1,538 @@
+asyncapi: 3.0.0
+#region Info
+info:
+    title: Nurtura MQTT Service API
+    version: 1.0.0
+    description: |
+        MQTT-based communication protocol for Nurtura IoT-based smart indoor urban farming system.
+        This service handles bidirectional communication between ESP32 devices and the backend server.
+
+        **Architecture:**
+        - Transport Layer: MQTT broker (HiveMQ Cloud or local Mosquitto)
+        - Protocol: MQTT v3.1.1
+        - QoS: 1 (At least once delivery)
+        - Retain: false (real-time data only)
+
+        **Message Flow:**
+        1. ESP32 devices publish sensor data, status, and errors
+        2. Backend receives and processes messages via MqttService
+        3. Backend publishes commands to control devices
+        4. Automation rules trigger commands based on sensor data
+
+    tags:
+        - name: ESP32
+          description: Messages published by ESP32 devices
+        - name: Backend
+          description: Messages published by backend server
+        - name: Sensors
+          description: Environmental sensor data
+        - name: Commands
+          description: Device control commands
+        - name: Status
+          description: Device health and connectivity
+
+    contact:
+        name: LoamTech Solutions
+        url: https://nurturaloam.tech/api
+        email: lots.loamtechsolutions@gmail.com
+#endregion
+
+#region Servers
+servers:
+    production:
+        host: 7f8fd0f6e09646648c23332ffca10732.s1.eu.hivemq.cloud:8883
+        protocol: mqtts
+        description: Production MQTT broker (TLS)
+        security:
+            - $ref: '#/components/securitySchemes/mqttAuth'
+        tags:
+            - name: production
+              description: Production environment
+
+    staging:
+        host: e99410967d634f9987b63d2bca209fb6.s1.eu.hivemq.cloud:8883
+        protocol: mqtts
+        description: Staging MQTT broker (TLS)
+        security:
+            - $ref: '#/components/securitySchemes/mqttAuth'
+        tags:
+            - name: staging
+              description: Staging environment
+
+    development/test:
+        host: localhost:1883
+        protocol: mqtt
+        description: Development MQTT broker (no TLS)
+        tags:
+            - name: development
+              description: Local development
+            - name: test
+              description: Local testing
+
+defaultContentType: application/json
+#endregion
+
+#region Channels
+channels:
+    sensorData:
+        address: 'Topic: nurtura/rack/{macAddress}/sensors'
+        title: Sensor Data Channel
+        description: Real-time sensor readings from ESP32 devices
+        messages:
+            sensorReading:
+                $ref: '#/components/messages/SensorDataMessage'
+        parameters:
+            macAddress:
+                $ref: '#/components/parameters/MacAddress'
+        bindings:
+            mqtt:
+                qos: 1
+                retain: false
+
+    deviceStatus:
+        address: 'Topic: nurtura/rack/{macAddress}/status'
+        title: Device Status Channel
+        description: Device health and connectivity status
+        messages:
+            statusUpdate:
+                $ref: '#/components/messages/DeviceStatusMessage'
+        parameters:
+            macAddress:
+                $ref: '#/components/parameters/MacAddress'
+        bindings:
+            mqtt:
+                qos: 1
+                retain: true
+
+    deviceErrors:
+        address: 'Topic: nurtura/rack/{macAddress}/errors'
+        title: Device Errors Channel
+        description: Device error and warning messages
+        messages:
+            errorReport:
+                $ref: '#/components/messages/DeviceErrorMessage'
+        parameters:
+            macAddress:
+                $ref: '#/components/parameters/MacAddress'
+        bindings:
+            mqtt:
+                qos: 1
+                retain: false
+
+    wateringCommands:
+        address: 'Topic: nurtura/rack/{macAddress}/commands/watering'
+        title: Watering Commands Channel
+        description: Commands to control water pump
+        messages:
+            wateringCommand:
+                $ref: '#/components/messages/WateringCommandMessage'
+        parameters:
+            macAddress:
+                $ref: '#/components/parameters/MacAddress'
+        bindings:
+            mqtt:
+                qos: 1
+                retain: false
+
+    lightingCommands:
+        address: 'Topic: nurtura/rack/{macAddress}/commands/lighting'
+        title: Lighting Commands Channel
+        description: Commands to control grow lights
+        messages:
+            lightingCommand:
+                $ref: '#/components/messages/LightingCommandMessage'
+        parameters:
+            macAddress:
+                $ref: '#/components/parameters/MacAddress'
+        bindings:
+            mqtt:
+                qos: 1
+                retain: false
+#endregion
+
+#region Operations
+operations:
+    receiveSensorData:
+        action: receive
+        channel:
+            $ref: '#/channels/sensorData'
+        summary: Receive sensor data from ESP32 device
+        description: |
+            Backend subscribes to sensor data published by ESP32 devices.
+            Data is processed by SensorsService and stored in the database.
+            Automation rules are evaluated after each sensor reading.
+        traits:
+            - $ref: '#/components/operationTraits/mqtt'
+        messages:
+            - $ref: '#/channels/sensorData/messages/sensorReading'
+
+    receiveDeviceStatus:
+        action: receive
+        channel:
+            $ref: '#/channels/deviceStatus'
+        summary: Receive device status updates
+        description: |
+            Backend subscribes to status updates to track device health.
+            Status updates trigger device online/offline events and notifications.
+        traits:
+            - $ref: '#/components/operationTraits/mqtt'
+        messages:
+            - $ref: '#/channels/deviceStatus/messages/statusUpdate'
+
+    receiveDeviceErrors:
+        action: receive
+        channel:
+            $ref: '#/channels/deviceErrors'
+        summary: Receive device error reports
+        description: |
+            Backend subscribes to error messages for monitoring and alerting.
+            Critical errors trigger immediate notifications to users.
+        traits:
+            - $ref: '#/components/operationTraits/mqtt'
+        messages:
+            - $ref: '#/channels/deviceErrors/messages/errorReport'
+
+    sendWateringCommand:
+        action: send
+        channel:
+            $ref: '#/channels/wateringCommands'
+        summary: Send watering control commands to device
+        description: |
+            Backend publishes commands to control the water pump.
+            Commands can be triggered by users or automation rules.
+        traits:
+            - $ref: '#/components/operationTraits/mqtt'
+        messages:
+            - $ref: '#/channels/wateringCommands/messages/wateringCommand'
+
+    sendLightingCommand:
+        action: send
+        channel:
+            $ref: '#/channels/lightingCommands'
+        summary: Send lighting control commands to device
+        description: |
+            Backend publishes commands to control grow lights.
+            Commands can be triggered by users or automation rules.
+        traits:
+            - $ref: '#/components/operationTraits/mqtt'
+        messages:
+            - $ref: '#/channels/lightingCommands/messages/lightingCommand'
+#endregion
+
+components:
+    #region Messages
+    messages:
+        SensorDataMessage:
+            name: SensorData
+            title: Sensor Data
+            summary: Environmental sensor readings
+            contentType: application/json
+            tags:
+                - name: ESP32
+                  description: Published by ESP32 device
+            payload:
+                $ref: '#/components/schemas/SensorDataPayload'
+            examples:
+                - name: normalReading
+                  summary: Normal sensor reading
+                  payload:
+                      t: 25.5
+                      h: 65.2
+                      m: 45.8
+                      l: 850
+                      tm: '2025-02-05T14:30:00.000Z'
+                - name: automationEventReading
+                  summary: Sensor reading when automation rule is triggered
+                  payload:
+                      t: 25.5
+                      h: 65.2
+                      m: 45.8
+                      l: 850
+                      wu: 50
+                      tm: '2025-02-05T14:30:00.000Z'
+
+        DeviceStatusMessage:
+            name: DeviceStatus
+            title: Device Status
+            summary: Device health and connectivity information
+            contentType: application/json
+            tags:
+                - name: ESP32
+                  description: Published by ESP32 device
+            payload:
+                $ref: '#/components/schemas/DeviceStatusPayload'
+            examples:
+                - name: onlineStatus
+                  summary: Device online with metrics
+                  payload:
+                      o: true
+                      tm: 1707112200000
+                      v: '1.0.3'
+                      ip: '192.168.1.100'
+                      mac: 'AA:BB:CC:DD:EE:FF'
+                      s: -65
+                      u: 3600000
+                      fm: 45000
+
+        DeviceErrorMessage:
+            name: DeviceError
+            title: Device Error
+            summary: Error or warning from device
+            contentType: application/json
+            tags:
+                - name: ESP32
+                  description: Published by ESP32 device
+            payload:
+                $ref: '#/components/schemas/DeviceErrorPayload'
+            examples:
+                - name: sensorFailure
+                  summary: Sensor communication failure
+                  payload:
+                      c: 'SENSOR_FAILURE'
+                      m: 'BME280 sensor not responding'
+                      s: 'CRITICAL'
+                      tm: 1707112300000
+                      st: 'TEMPERATURE'
+                      d:
+                          ac: '3'
+                          lsr: 1707111600000
+                          ed: 'I2C communication timeout after 100ms'
+
+        WateringCommandMessage:
+            name: WateringCommand
+            title: Watering Command
+            summary: Command to control water pump
+            contentType: application/json
+            tags:
+                - name: Backend
+                  description: Published by backend server
+            payload:
+                $ref: '#/components/schemas/WateringCommandPayload'
+            examples:
+                - name: startWatering
+                  summary: Start watering for 5 seconds
+                  payload:
+                      action: 'start'
+                      duration: 5000
+                - name: stopWatering
+                  summary: Stop watering immediately
+                  payload:
+                      action: 'stop'
+
+        LightingCommandMessage:
+            name: LightingCommand
+            title: Lighting Command
+            summary: Command to control grow lights
+            contentType: application/json
+            tags:
+                - name: Backend
+                  description: Published by backend server
+            payload:
+                $ref: '#/components/schemas/LightingCommandPayload'
+            examples:
+                - name: turnOn
+                  summary: Turn lights on
+                  payload:
+                      action: 'on'
+                - name: turnOff
+                  summary: Turn lights off
+                  payload:
+                      action: 'off'
+    #endregion
+
+    #region Schemas
+    schemas:
+        SensorDataPayload:
+            type: object
+            required:
+                - t
+                - h
+                - m
+                - l
+            properties:
+                t:
+                    type: number
+                    description: Temperature in Celsius
+                    minimum: -50
+                    maximum: 100
+                    example: 25.5
+                h:
+                    type: number
+                    description: Humidity percentage
+                    minimum: 0
+                    maximum: 100
+                    example: 65.2
+                m:
+                    type: number
+                    description: Soil moisture percentage
+                    minimum: 0
+                    maximum: 100
+                    example: 45.8
+                l:
+                    type: number
+                    description: Light level in lux or raw LDR value
+                    minimum: 0
+                    example: 850
+                wu:
+                    type: number
+                    description: Amount of water used in milliliters (optional, included when watering occurs)
+                    minimum: 0
+                    example: 50
+                tm:
+                    type: string
+                    format: date-time
+                    description: Timestamp of the reading (ISO 8601)
+                    example: '2025-02-05T14:30:00.000Z'
+
+        DeviceStatusPayload:
+            type: object
+            required:
+                - o
+            properties:
+                o:
+                    type: boolean
+                    description: Whether the device is online
+                    example: true
+                tm:
+                    type: number
+                    description: Timestamp of the status update (milliseconds since epoch)
+                    example: 1707112200000
+                v:
+                    type: string
+                    description: Current firmware version of the device
+                    example: '1.0.3'
+                ip:
+                    type: string
+                    description: Current IP address of the device
+                    example: '192.168.1.100'
+                mac:
+                    type: string
+                    description: MAC address of the device
+                    example: 'AA:BB:CC:DD:EE:FF'
+                s:
+                    type: integer
+                    description: WiFi signal strength (RSSI)
+                    maximum: 0
+                    example: -65
+                u:
+                    type: integer
+                    description: Uptime in milliseconds
+                    minimum: 0
+                    example: 3600000
+                fm:
+                    type: integer
+                    description: Free heap memory in bytes
+                    minimum: 0
+                    example: 45000
+
+        DeviceErrorPayload:
+            type: object
+            required:
+                - c
+                - m
+                - s
+            properties:
+                c:
+                    type: string
+                    description: Error code
+                    example: 'SENSOR_FAILURE'
+                m:
+                    type: string
+                    description: Error message
+                    example: 'BME280 sensor not responding'
+                s:
+                    type: string
+                    enum:
+                        - LOW
+                        - MEDIUM
+                        - HIGH
+                        - CRITICAL
+                    description: Severity level
+                    example: 'CRITICAL'
+                tm:
+                    type: number
+                    description: Timestamp of the error occurrence (milliseconds since epoch)
+                    example: 1707112300000
+                st:
+                    type: string
+                    enum:
+                        - TEMPERATURE
+                        - HUMIDITY
+                        - MOISTURE
+                        - LIGHT
+                    description: Type of sensor involved in the error
+                    example: 'TEMPERATURE'
+                d:
+                    type: object
+                    description: Additional error details
+                    additionalProperties: false
+                    properties:
+                        ac:
+                            type: integer
+                            description: Number of retry attempts
+                            minimum: 0
+                            example: 3
+                        lsr:
+                            type: number
+                            description: Timestamp of last successful sensor read (milliseconds since epoch)
+                            example: 1707111600000
+                        ed:
+                            type: string
+                            description: Raw error data or stack trace
+                            example: 'I2C communication timeout after 100ms'
+
+        WateringCommandPayload:
+            type: object
+            required:
+                - action
+            properties:
+                action:
+                    type: string
+                    enum:
+                        - start
+                        - stop
+                    description: Action to perform
+                    example: 'start'
+                duration:
+                    type: integer
+                    description: Duration in milliseconds (required for "start")
+                    minimum: 1000
+                    maximum: 60000
+                    example: 5000
+
+        LightingCommandPayload:
+            type: object
+            required:
+                - action
+            properties:
+                action:
+                    type: string
+                    enum:
+                        - 'on'
+                        - 'off'
+                    description: Action to perform
+                    example: 'on'
+    #endregion
+
+    #region Parameters
+    parameters:
+        MacAddress:
+            description: |
+                ESP32 device MAC address (unique identifier).
+                Format: 6 pairs of hexadecimal digits separated by colons.
+    #endregion
+    #region Security Schemes
+    securitySchemes:
+        mqttAuth:
+            type: userPassword
+            description: MQTT username and password authentication
+    #endregion
+
+    #region Operation Traits
+    operationTraits:
+        mqtt:
+            bindings:
+                mqtt:
+                    qos: 1
+                    retain: false
+    #endregion

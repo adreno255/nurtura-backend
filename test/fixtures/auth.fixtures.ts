@@ -129,3 +129,13 @@ export const expectedOnboardingResponses = {
         message: 'User profile exists',
     },
 };
+
+/**
+ * Common test tokens
+ */
+export const testTokens = {
+    valid: 'valid-token-123',
+    invalid: 'invalid-token-456',
+    expired: 'expired-token-789',
+    bearer: 'Bearer valid-token-123',
+};

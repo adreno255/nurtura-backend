@@ -1,4 +1,19 @@
 services:
+    # MQTT Broker (Mosquitto)
+    mqtt:
+        image: eclipse-mosquitto:latest
+        container_name: nurtura-mqtt
+        restart: unless-stopped
+        ports:
+            - '1883:1883'
+            - '9001:9001'
+        volumes:
+            - ./local-mqtt/config:/mosquitto/config
+            - ./local-mqtt/data:/mosquitto/data
+            - ./local-mqtt/log:/mosquitto/log
+        networks:
+            - nurtura-network
+
     # PostgreSQL instance for all integration testing
     postgres:
         image: postgres:16-alpine

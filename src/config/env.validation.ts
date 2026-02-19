@@ -18,4 +18,10 @@ export const envValidationSchema = Joi.object({
 
     // Firebase Admin SDK
     FIREBASE_SERVICE_ACCOUNT: Joi.string().required(),
+
+    // MQTT Configuration
+    MQTT_HOST: Joi.string().required(),
+    MQTT_PORT: Joi.number().default(8883),
+    MQTT_USERNAME: Joi.string().required(),
+    MQTT_PASSWORD: Joi.string().required(),
 });
