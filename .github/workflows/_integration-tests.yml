@@ -22,6 +22,17 @@ jobs:
                 ports:
                     - 5432:5432
 
+            mqtt:
+                image: eclipse-mosquitto:latest
+                options: >-
+                    --health-cmd "nc -z localhost 1883 || exit 1"
+                    --health-interval 10s
+                    --health-timeout 5s
+                    --health-retries 5
+                ports:
+                    - 1883:1883
+                    - 9001:9001
+
         steps:
             - uses: actions/checkout@v4
 
@@ -48,7 +59,7 @@ jobs:
                   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/nurtura_test
                   NODE_ENV: test
                   PORT: 3001
-                  SENDGRID_API_KEY: SG.api_key_test
+                  SENDGRID_API_KEY: TEST_PLACEHOLDER_NOT_A_REAL_KEY
                   SENDGRID_FROM_EMAIL: noreply@yourdomain.com
                   SENDGRID_FROM_NAME: LoamTech Solutions
-                  FIREBASE_SERVICE_ACCOUNT: '{"type":"service_account","project_id":"test","private_key":"test","client_email":"test@test.com"}'
+                  FIREBASE_SERVICE_ACCOUNT: '{"type":"service_account","project_id":"test-project","private_key":"TEST_PLACEHOLDER","client_email":"test@test-project.iam.gserviceaccount.com"}'

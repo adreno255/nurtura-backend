@@ -47,31 +47,28 @@ jobs:
                       exit 1
                   fi
 
-            - name: Wait for deployment
-              if: steps.trigger.outcome == 'success'
-              run: |
-                  echo "Waiting 60s for Render deployment to start..."
-                  sleep 60
-
             - name: Verify deployment
+              if: steps.trigger.outcome == 'success'
               run: |
                   HEALTH_URL="${{ secrets.RENDER_SERVICE_URL }}/api"
                   MAX_RETRIES=10
                   RETRY_COUNT=0
 
+                  echo "Polling $HEALTH_URL for up to $((MAX_RETRIES * 30))s..."
+
                   while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-                    if curl -f -s "$HEALTH_URL" > /dev/null; then
-                      echo "Deployment successful! API is healthy."
-                      if [ "${{ inputs.new-release-version }}" != "unknown" ]; then
-                        echo "Version ${{ inputs.new-release-version }} deployed!"
+                      if curl -f -s "$HEALTH_URL" > /dev/null; then
+                          echo "Deployment successful! API is healthy."
+                          if [ "${{ inputs.new-release-version }}" != "unknown" ]; then
+                              echo "Version ${{ inputs.new-release-version }} deployed!"
+                          fi
+                          exit 0
                       fi
-                      exit 0
-                    fi
-                    
-                    RETRY_COUNT=$((RETRY_COUNT + 1))
-                    echo "Attempt $RETRY_COUNT/$MAX_RETRIES - API not ready yet, waiting..."
-                    sleep 30
+
+                      RETRY_COUNT=$((RETRY_COUNT + 1))
+                      echo "Attempt $RETRY_COUNT/$MAX_RETRIES — API not ready yet, waiting 30s..."
+                      sleep 30
                   done
 
-                  echo "Deployment verification failed after $MAX_RETRIES attempts"
+                  echo "::error::Deployment verification failed after $MAX_RETRIES attempts"
                   exit 1

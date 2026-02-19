@@ -12,6 +12,9 @@ on:
             FIREBASE_SERVICE_ACCOUNT_E2E:
                 description: 'Firebase service account JSON for testing'
                 required: true
+            SENDGRID_FROM_EMAIL_E2E:
+                description: 'Sender email address for E2E test emails'
+                required: true
 
 jobs:
     e2e:
@@ -44,6 +47,6 @@ jobs:
                   NODE_ENV: staging
                   PORT: 3002
                   SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY_E2E }}
-                  SENDGRID_FROM_EMAIL: lots.loamtechsolutions@gmail.com
+                  SENDGRID_FROM_EMAIL: ${{ secrets.SENDGRID_FROM_EMAIL_E2E }}
                   SENDGRID_FROM_NAME: LoamTech Solutions
                   FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_E2E }}

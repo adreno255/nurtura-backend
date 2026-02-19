@@ -21,80 +21,112 @@ jobs:
         name: Parse Commits
         uses: ./.github/workflows/_parse-commits.yml
 
-    # Job 2: Security audit (always runs)
+    # Job 2: Security audit (always runs, must pass before Docker build)
     security-audit:
         name: Security Audit
         uses: ./.github/workflows/_security-audit.yml
 
-    # Job 3: SemVer check (always runs)
+    # Job 3: SemVer check (always runs on any push/PR)
     semver-check:
         name: SemVer Check
         uses: ./.github/workflows/_semver-check.yml
         needs: [parse-commits]
 
-    # Job 4: Unit tests (skipped for docs/chore/test commits)
+    # Job 4: Unit tests — skipped only for non-release commits (docs/chore/ci/style/test)
     unit-tests:
         name: Unit Tests
         needs: [parse-commits]
         if: needs.parse-commits.outputs.skip-tests != 'true'
         uses: ./.github/workflows/_unit-tests.yml
 
-    # Job 5: Integration tests (runs for feat/fix/refactor or on releases)
+    # Job 5: Integration tests — runs for feat/fix/refactor or breaking changes
     integration-tests:
         name: Integration Tests
         needs: [parse-commits, unit-tests]
         if: |
-            needs.parse-commits.outputs.skip-tests != 'true' && 
-            (needs.parse-commits.outputs.has-breaking-change == 'true' || 
+            needs.parse-commits.outputs.skip-tests != 'true' &&
+            (needs.parse-commits.outputs.has-breaking-change == 'true' ||
              contains(fromJSON('["feat", "fix", "refactor"]'), needs.parse-commits.outputs.commit-type))
         uses: ./.github/workflows/_integration-tests.yml
 
-    # Job 6: E2E tests (runs on major releases only)
+    # Job 6: E2E tests — only on push to main for major releases / breaking changes.
     e2e-tests:
         name: E2E Tests
         needs: [parse-commits, unit-tests]
         if: |
-            needs.parse-commits.outputs.has-breaking-change == 'true' ||
-            needs.parse-commits.outputs.release-type == 'major'
+            github.event_name == 'push' &&
+            github.ref == 'refs/heads/main' &&
+            (needs.parse-commits.outputs.has-breaking-change == 'true' ||
+             needs.parse-commits.outputs.release-type == 'major')
         uses: ./.github/workflows/_e2e-tests.yml
-        secrets: inherit # Pass secrets for E2E test external services
+        secrets: inherit
 
-    # Job 7: Semantic release (only on push to main after tests pass)
+    # Job 7: Gate job — waits for all test jobs and resolves their skipped/cancelled
+    # states into a single clean signal for semantic-release to depend on.
+    tests-gate:
+        name: Tests Gate
+        runs-on: ubuntu-latest
+        needs: [parse-commits, unit-tests, integration-tests, e2e-tests]
+        # Always evaluate this job even if upstream jobs were skipped
+        if: always()
+        steps:
+            - name: Check test results
+              run: |
+                  UNIT="${{ needs.unit-tests.result }}"
+                  INTG="${{ needs.integration-tests.result }}"
+                  E2E="${{ needs.e2e-tests.result }}"
+
+                  echo "unit-tests:         $UNIT"
+                  echo "integration-tests:  $INTG"
+                  echo "e2e-tests:          $E2E"
+
+                  # A job that was intentionally skipped by its 'if' condition
+                  # is acceptable. A failed or unexpected-cancelled job is not.
+                  for result in "$UNIT" "$INTG" "$E2E"; do
+                      if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
+                          echo "::error::A required test job failed or was cancelled: $result"
+                          exit 1
+                      fi
+                  done
+
+                  echo "All test gates passed."
+
+    # Job 8: Semantic release — only on push to main after gate passes
     semantic-release:
         name: Semantic Release
-        needs: [parse-commits, unit-tests, integration-tests, e2e-tests]
+        needs: [parse-commits, tests-gate]
         if: |
-            github.event_name == 'push' && 
+            always() &&
+            github.event_name == 'push' &&
             github.ref == 'refs/heads/main' &&
             needs.parse-commits.outputs.release-type != 'none' &&
-            (needs.unit-tests.result == 'success' || needs.unit-tests.result == 'skipped') &&
-            (needs.integration-tests.result == 'success' || needs.integration-tests.result == 'skipped' || needs.integration-tests.result == 'cancelled') &&
-            (needs.e2e-tests.result == 'success' || needs.e2e-tests.result == 'skipped' || needs.e2e-tests.result == 'cancelled')
+            needs.tests-gate.result == 'success'
         uses: ./.github/workflows/_semantic-release.yml
-        secrets: inherit # Pass GITHUB_TOKEN
+        secrets: inherit
 
-    # Job 8: Build Docker image (only if release will be created)
+    # Job 9: Build Docker image — only after a release is confirmed published
     build-docker:
         name: Build Docker
         needs: [parse-commits, security-audit, semantic-release]
         if: |
-            needs.parse-commits.outputs.release-type != 'none' && 
+            needs.security-audit.result == 'success' &&
+            needs.parse-commits.outputs.release-type != 'none' &&
             needs.parse-commits.outputs.skip-tests != 'true' &&
             needs.semantic-release.outputs.new-release-published == 'true'
         uses: ./.github/workflows/_build-docker.yml
         with:
             new-release-version: ${{ needs.semantic-release.outputs.new-release-version }}
-        secrets: inherit # Pass GITHUB_TOKEN for registry
+        secrets: inherit
 
-    # Job 9: Deploy to Render (only if release was published)
+    # Job 10: Deploy to Render — only after Docker image is built and pushed
     deploy-render:
         name: Deploy to Render
         needs: [semantic-release, build-docker]
         if: |
             needs.semantic-release.outputs.new-release-published == 'true' &&
-            github.event_name == 'push' && 
+            github.event_name == 'push' &&
             github.ref == 'refs/heads/main'
         uses: ./.github/workflows/_deploy-render.yml
         with:
             new-release-version: ${{ needs.semantic-release.outputs.new-release-version }}
-        secrets: inherit # Pass Render secrets
+        secrets: inherit
