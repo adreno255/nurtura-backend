@@ -6,6 +6,7 @@ import {
     Delete,
     Body,
     Param,
+    Query,
     HttpCode,
     HttpStatus,
 } from '@nestjs/common';
@@ -23,6 +24,7 @@ import { AutomationService } from './automation.service';
 import { CreateAutomationRuleDto, UpdateAutomationRuleDto } from './dto';
 import { CurrentUser } from '../common/decorators';
 import { type CurrentUserPayload } from '../common/interfaces';
+import { type PaginationQueryDto } from '../common/dto/pagination-query.dto';
 
 @ApiTags('Automation')
 @ApiBearerAuth('firebase-jwt')
@@ -125,25 +127,47 @@ export class AutomationController {
     })
     @ApiResponse({
         status: HttpStatus.OK,
-        description: 'Automation rules retrieved successfully',
+        description: 'Automation rules retrieved successfully (paginated)',
         schema: {
-            type: 'array',
-            items: {
-                type: 'object',
-                properties: {
-                    id: { type: 'string', example: 'clx789xyz123' },
-                    rackId: { type: 'string', example: 'clx123abc456' },
-                    name: { type: 'string', example: 'Auto-water when dry' },
-                    description: { type: 'string', example: 'Waters plants when moisture is low' },
-                    conditions: { type: 'object', example: { moisture: { lessThan: 30 } } },
-                    actions: {
+            type: 'object',
+            properties: {
+                data: {
+                    type: 'array',
+                    items: {
                         type: 'object',
-                        example: { watering: { action: 'start', duration: 5000 } },
+                        properties: {
+                            id: { type: 'string', example: 'clx789xyz123' },
+                            rackId: { type: 'string', example: 'clx123abc456' },
+                            name: { type: 'string', example: 'Auto-water when dry' },
+                            description: {
+                                type: 'string',
+                                example: 'Waters plants when moisture is low',
+                            },
+                            conditions: { type: 'object', example: { moisture: { lessThan: 30 } } },
+                            actions: {
+                                type: 'object',
+                                example: { watering: { action: 'start', duration: 5000 } },
+                            },
+                            cooldownMinutes: { type: 'number', example: 30 },
+                            isEnabled: { type: 'boolean', example: true },
+                            lastTriggeredAt: {
+                                type: 'string',
+                                example: '2025-02-01T14:30:00.000Z',
+                            },
+                            triggerCount: { type: 'number', example: 15 },
+                        },
                     },
-                    cooldownMinutes: { type: 'number', example: 30 },
-                    isEnabled: { type: 'boolean', example: true },
-                    lastTriggeredAt: { type: 'string', example: '2025-02-01T14:30:00.000Z' },
-                    triggerCount: { type: 'number', example: 15 },
+                },
+                meta: {
+                    type: 'object',
+                    properties: {
+                        currentPage: { type: 'number', example: 1 },
+                        itemsPerPage: { type: 'number', example: 10 },
+                        totalItems: { type: 'number', example: 42 },
+                        totalPages: { type: 'number', example: 5 },
+                        hasNextPage: { type: 'boolean', example: true },
+                        hasPreviousPage: { type: 'boolean', example: false },
+                    },
                 },
             },
         },
@@ -172,8 +196,12 @@ export class AutomationController {
             },
         },
     })
-    async getRackRules(@Param('rackId') rackId: string, @CurrentUser() user: CurrentUserPayload) {
-        return this.automationService.findAll(rackId, user.dbId);
+    async getRackRules(
+        @Param('rackId') rackId: string,
+        @CurrentUser() user: CurrentUserPayload,
+        @Query() query: PaginationQueryDto,
+    ) {
+        return this.automationService.findAll(rackId, user.dbId, query);
     }
 
     @Put('rules/:ruleId')

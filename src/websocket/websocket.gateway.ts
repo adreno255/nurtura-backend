@@ -41,11 +41,11 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
         this.websocketService.setServer(server);
 
         // Setup authentication middleware
-        server.use((socket: Socket, next) => {
-            this.websocketService
+        server.use((socket: Socket, next): void => {
+            void this.websocketService
                 .validateConnection(socket as AuthenticatedSocket)
                 .then(() => next())
-                .catch((err) => {
+                .catch((err: unknown) => {
                     const error = err instanceof Error ? err : new Error(String(err));
                     next(error);
                 });

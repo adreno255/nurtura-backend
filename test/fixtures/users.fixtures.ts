@@ -3,10 +3,10 @@
  * Reusable test data for user-related tests
  */
 
+import { type CurrentUserPayload } from '../../src/common/interfaces';
 import { type CreateUserDto } from '../../src/users/dto/create-user.dto';
 import { type UpdateUserDto } from '../../src/users/dto/update-user.dto';
 import { type UserInfo, type User } from '../../src/users/interfaces/user.interface';
-import { type CurrentUserPayload } from '../../src/common/interfaces';
 
 /**
  * Valid CreateUserDto with all fields
@@ -157,8 +157,8 @@ export const testUser: CurrentUserPayload = {
 /**
  * Valid database user
  */
-export const validDbUser: CurrentUserPayload = {
-    dbId: 'user-123',
+export const validDbUser: Partial<User> = {
+    id: 'user-123',
     firebaseUid: 'firebase-uid-123',
     email: 'user@example.com',
 };
@@ -166,8 +166,8 @@ export const validDbUser: CurrentUserPayload = {
 /**
  * Alternative database user
  */
-export const alternativeDbUser: CurrentUserPayload = {
-    dbId: 'user-456',
+export const alternativeDbUser: Partial<User> = {
+    id: 'user-456',
     firebaseUid: 'firebase-uid-456',
     email: 'user2@example.com',
 };

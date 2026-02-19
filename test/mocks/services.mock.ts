@@ -3,6 +3,10 @@
  * Reusable mocks for Services that has minimal implementation
  */
 
+export const createMockLogRackActivityHelper = () => ({
+    logActivity: jest.fn().mockResolvedValue(undefined),
+});
+
 export const createMockEventEmitter = () => ({
     emit: jest.fn(),
     on: jest.fn(),

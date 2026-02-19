@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { WsException } from '@nestjs/websockets';
 import { Namespace } from 'socket.io';
 import { FirebaseService } from '../firebase/firebase.service';
@@ -77,7 +77,7 @@ export class WebsocketService {
                     `No corresponding user found in database for UID: ${decodedToken.uid}`,
                     'FirebaseJwtStrategy',
                 );
-                throw new UnauthorizedException('User not found');
+                throw new WsException('User not found');
             }
 
             socket.data.user = {

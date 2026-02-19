@@ -23,3 +23,6 @@ export * from './sensors.fixtures';
 
 // Racks fixtures
 export * from './racks.fixtures';
+
+// Automation fixtures
+export * from './automation.fixtures';

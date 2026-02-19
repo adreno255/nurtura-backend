@@ -25,16 +25,6 @@ export const mockNotification: Notification = {
 };
 
 /**
- * Mock automation event for broadcasting tests
- */
-export const mockAutomationEvent: AutomatedEventDto = {
-    rackId: 'rack-123',
-    ruleName: 'Temperature Threshold Monitor',
-    executedActions: ['alert: temperature_exceeded', 'notification: sent'],
-    timestamp: new Date('2026-02-01T10:00:00.000Z'),
-};
-
-/**
  * Alternative notification for diversity in tests
  */
 export const alternativeNotification: Notification = {
@@ -114,7 +104,7 @@ export const websocketErrorCodes = {
  * Valid Firebase token for testing
  */
 export const validFirebaseToken: DecodedIdToken = {
-    uid: 'firebase-uid-user-123',
+    uid: 'firebase-uid-123',
     iss: 'https://securetoken.google.com/nurtura-project',
     aud: 'nurtura-project',
     auth_time: Math.floor(Date.now() / 1000),

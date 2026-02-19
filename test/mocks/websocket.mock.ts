@@ -4,7 +4,6 @@
  */
 
 import { type Namespace } from 'socket.io';
-import type { WebsocketService } from '../../src/websocket/websocket.service';
 import { type AuthenticatedSocket } from '../../src/websocket/interfaces/websocket.interface';
 
 /**
@@ -130,21 +129,19 @@ export const createMockSocketWithBearerToken = (
 /**
  * Create mock WebsocketService
  */
-export const createMockWebsocketService = (): jest.Mocked<WebsocketService> => {
-    return {
-        setServer: jest.fn(),
-        validateConnection: jest.fn(),
-        addClient: jest.fn(),
-        removeClient: jest.fn(),
-        validatePayload: jest.fn(),
-        subscribeToRack: jest.fn(),
-        unsubscribeFromRack: jest.fn(),
-        getSubscribedRacks: jest.fn(),
-        getTotalConnections: jest.fn(),
-        getConnectionStats: jest.fn(),
-        broadcastSensorData: jest.fn(),
-        broadcastDeviceStatus: jest.fn(),
-        broadcastNotification: jest.fn(),
-        broadcastAutomationEvent: jest.fn(),
-    } as unknown as jest.Mocked<WebsocketService>;
-};
+export const createMockWebsocketService = () => ({
+    setServer: jest.fn(),
+    validateConnection: jest.fn(),
+    addClient: jest.fn(),
+    removeClient: jest.fn(),
+    validatePayload: jest.fn(),
+    subscribeToRack: jest.fn(),
+    unsubscribeFromRack: jest.fn(),
+    getSubscribedRacks: jest.fn(),
+    getTotalConnections: jest.fn(),
+    getConnectionStats: jest.fn(),
+    broadcastSensorData: jest.fn(),
+    broadcastDeviceStatus: jest.fn(),
+    broadcastNotification: jest.fn(),
+    broadcastAutomationEvent: jest.fn(),
+});

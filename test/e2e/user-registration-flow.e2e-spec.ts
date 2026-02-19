@@ -271,7 +271,7 @@ describe('E2E User Registration Flow', () => {
                 (crypto.randomInt as jest.Mock).mockReturnValue(1);
 
                 const response = await request(httpServer)
-                    .post('/api/auth/otp/forgot-password')
+                    .post('/api/auth/otp/password-reset')
                     .send({ email })
                     .expect(200);
 
@@ -288,7 +288,7 @@ describe('E2E User Registration Flow', () => {
                     .send({
                         email,
                         code,
-                        purpose: 'forgot-password',
+                        purpose: 'password-reset',
                     })
                     .expect(200);
 

@@ -3,6 +3,7 @@
  * Reusable data objects for sensor-related service and controller tests
  */
 
+import { type SensorData } from '../../src/automation/interfaces/automation.interface';
 import { type SensorReading } from '../../src/generated/prisma';
 
 /**
@@ -148,4 +149,56 @@ export const mockStatistics = {
     },
     totalReadings: 48,
     periodHours: 24,
+};
+
+/**
+ * Mock sensor data for testing rule evaluation
+ */
+export const highMoistureSensorData: SensorData = {
+    temperature: 25.5,
+    humidity: 65.2,
+    moisture: 75.0, // High moisture
+    lightLevel: 850,
+};
+
+export const lowTemperatureSensorData: SensorData = {
+    temperature: 15.0, // Low temperature
+    humidity: 65.2,
+    moisture: 45.0,
+    lightLevel: 850,
+};
+
+export const highTemperatureSensorData: SensorData = {
+    temperature: 35.0, // High temperature
+    humidity: 65.2,
+    moisture: 45.0,
+    lightLevel: 850,
+};
+
+export const lowHumiditySensorData: SensorData = {
+    temperature: 25.5,
+    humidity: 35.0, // Low humidity
+    moisture: 45.0,
+    lightLevel: 850,
+};
+
+export const highHumiditySensorData: SensorData = {
+    temperature: 25.5,
+    humidity: 85.0, // High humidity
+    moisture: 45.0,
+    lightLevel: 850,
+};
+
+export const lowLightSensorData: SensorData = {
+    temperature: 25.5,
+    humidity: 65.2,
+    moisture: 45.0,
+    lightLevel: 300, // Low light
+};
+
+export const highLightSensorData: SensorData = {
+    temperature: 25.5,
+    humidity: 65.2,
+    moisture: 45.0,
+    lightLevel: 1500, // High light
 };

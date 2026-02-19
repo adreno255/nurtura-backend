@@ -10,6 +10,8 @@ import { SensorData, RuleConditions, RuleActions } from './interfaces/automation
 import { type Prisma, ActivityEventType } from '../generated/prisma/client';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { LogRackActivityHelper } from '../common/utils/log-rack-activity.helper';
+import { PaginationHelper } from '../common/utils/pagination.helper';
+import { type PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import {
     AutomatedEventDto,
     CreateAutomationRuleDto,
@@ -360,9 +362,9 @@ export class AutomationService {
     }
 
     /**
-     * Get all automation rules for a rack
+     * Get all automation rules for a rack (paginated)
      */
-    async findAll(rackId: string, userId: string) {
+    async findAll(rackId: string, userId: string, query?: PaginationQueryDto) {
         try {
             // Verify rack ownership
             const rack = await this.databaseService.rack.findFirst({
@@ -377,17 +379,30 @@ export class AutomationService {
                 throw new NotFoundException('Rack not found');
             }
 
-            const rules = await this.databaseService.automationRule.findMany({
-                where: { rackId },
-                orderBy: { createdAt: 'desc' },
-            });
+            const { skip, take } = PaginationHelper.getPrismaOptions(
+                query ?? ({} as PaginationQueryDto),
+            );
+
+            const [rules, totalItems] = await Promise.all([
+                this.databaseService.automationRule.findMany({
+                    where: { rackId },
+                    skip,
+                    take,
+                    orderBy: { createdAt: 'desc' },
+                }),
+                this.databaseService.automationRule.count({ where: { rackId } }),
+            ]);
 
             this.logger.log(
-                `Retrieved ${rules.length} automation rules for rack: ${rackId}`,
+                `Retrieved ${rules.length} automation rules for rack: ${rackId} (page ${query?.page ?? 1})`,
                 'AutomationService',
             );
 
-            return rules;
+            return PaginationHelper.createResponse(
+                rules,
+                totalItems,
+                query ?? ({} as PaginationQueryDto),
+            );
         } catch (error) {
             if (error instanceof NotFoundException) {
                 throw error;

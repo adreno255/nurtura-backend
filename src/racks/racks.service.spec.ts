@@ -19,6 +19,7 @@ import {
     createMockDatabaseService,
     createMockEventEmitter,
     createMockLogger,
+    createMockLogRackActivityHelper,
 } from '../../test/mocks';
 
 import {
@@ -54,9 +55,7 @@ describe('RacksService', () => {
     const mockDatabaseService = createMockDatabaseService();
     const mockLoggerService = createMockLogger();
     const mockEventEmitter = createMockEventEmitter();
-    const mockLogRackActivityHelper = {
-        logActivity: jest.fn().mockResolvedValue(undefined),
-    };
+    const mockLogRackActivityHelper = createMockLogRackActivityHelper();
 
     beforeEach(async () => {
         jest.clearAllMocks();
