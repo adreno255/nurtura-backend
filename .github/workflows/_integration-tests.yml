@@ -63,3 +63,7 @@ jobs:
                   SENDGRID_FROM_EMAIL: noreply@yourdomain.com
                   SENDGRID_FROM_NAME: LoamTech Solutions
                   FIREBASE_SERVICE_ACCOUNT: '{"type":"service_account","project_id":"test-project","private_key":"TEST_PLACEHOLDER","client_email":"test@test-project.iam.gserviceaccount.com"}'
+                  MQTT_HOST: 'localhost'
+                  MQTT_PORT: 1883
+                  MQTT_USERNAME: 'my_user'
+                  MQTT_PASSWORD: 'my_pass'
