@@ -43,7 +43,7 @@ jobs:
 
             - name: Run semantic-release
               id: semantic
-              env:
+              env: # uses PAT token in GitHub
                   GITHUB_TOKEN: ${{ secrets.RELEASE_STEP_TOKEN }}
               run: |
                   npx semantic-release > release.log 2>&1 || true
