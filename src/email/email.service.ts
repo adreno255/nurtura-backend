@@ -62,7 +62,7 @@ export class EmailService {
                 email: fromEmail,
                 name: fromName,
             },
-            subject: 'OTP for your Nurtura authentication',
+            subject: 'Registration OTP for Nurtura',
             html: getRegistrationOtpTemplate(code, expiryTime),
             attachments: [
                 {
@@ -93,6 +93,50 @@ export class EmailService {
             );
 
             throw new InternalServerErrorException('Failed to send registration OTP email');
+        }
+    }
+
+    async sendForgotPasswordOtp(email: string, code: string, expiryTime: string): Promise<void> {
+        const fromEmail = this.configService.get<string>('SENDGRID_FROM_EMAIL')!;
+        const fromName = this.configService.get<string>('SENDGRID_FROM_NAME')!;
+
+        const msg = {
+            to: email,
+            from: {
+                email: fromEmail,
+                name: fromName,
+            },
+            subject: 'Forgot Password OTP for Nurtura',
+            html: getPasswordResetOtpTemplate(code, expiryTime),
+            attachments: [
+                {
+                    content: this.logoBase64,
+                    filename: 'Nurtura-Logo.png',
+                    type: 'image/png',
+                    disposition: 'inline',
+                    content_id: 'logo',
+                },
+                {
+                    content: this.facebookBase64,
+                    filename: 'Facebook-icon.png',
+                    type: 'image/png',
+                    disposition: 'inline',
+                    content_id: 'facebook',
+                },
+            ],
+        };
+
+        try {
+            await sgMail.send(msg);
+            this.logger.log(`Forgot password OTP email sent to ${email}`, 'EmailService');
+        } catch (error) {
+            this.logger.error(
+                `Failed to send forgot password OTP to ${email}`,
+                error instanceof Error ? error.message : String(error),
+                'EmailService',
+            );
+
+            throw new InternalServerErrorException('Failed to send forgot password OTP email');
         }
     }
 

@@ -97,6 +97,12 @@ export const mockForgotPasswordOtpRecord = {
     purpose: 'forgot-password' as const,
 };
 
+export const mockPasswordResetOtpRecord = {
+    code: '67890',
+    expiresAt: Date.now() + 15 * 60 * 1000,
+    purpose: 'password-reset' as const,
+};
+
 /**
  * Expected OTP response messages
  */
@@ -105,7 +111,13 @@ export const expectedOtpResponses = {
         message: 'Registration OTP sent successfully. Please check your email.',
     },
     forgotPasswordSent: {
+        message: 'Forgot Password OTP sent successfully. Please check your email.',
+    },
+    passwordResetSent: {
         message: 'Password reset OTP sent successfully. Please check your email.',
+    },
+    emailResetSent: {
+        message: 'Email reset OTP sent successfully. Please check your email.',
     },
     verified: {
         message: 'OTP verified successfully.',

@@ -73,7 +73,7 @@ export class UsersController {
             properties: {
                 statusCode: { type: 'number', example: 400 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/users' },
+                path: { type: 'string', example: '/api/users/exists' },
                 message: { type: 'string', example: 'Invalid email format' },
             },
         },
@@ -85,7 +85,7 @@ export class UsersController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/users' },
+                path: { type: 'string', example: '/api/users/exists' },
                 message: { type: 'string', example: 'Failed to check email availability' },
             },
         },

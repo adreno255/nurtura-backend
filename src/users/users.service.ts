@@ -227,9 +227,18 @@ export class UsersService {
                 throw new NotFoundException('User not found');
             }
 
-            if (dto.email) {
+            if (dto.email && dto.email !== existingUser.email) {
                 // Notify user that their email was changed
                 await this.emailService.sendEmailResetNotification(existingUser.email);
+
+                // Change email in Firebase Auth
+                const auth = this.firebaseService.getAuth();
+                const user = await auth.getUserByEmail(existingUser.email);
+
+                await auth.updateUser(user.uid, {
+                    email: dto.email,
+                });
+                this.logger.log(`Email changed for ${userId} in Firebase Auth`, 'UsersService');
             }
 
             if (dto.block && dto.street && dto.barangay && dto.city) {

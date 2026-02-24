@@ -4,7 +4,7 @@
  */
 
 import { type EmailQueryDto } from '../../src/auth/dto/email-query.dto';
-import { type ResetPasswordDto } from '../../src/auth/dto/reset-password.dto';
+import { type UpdatePasswordDto } from '../../src/auth/dto/update-password.dto';
 
 /**
  * Valid email query DTOs
@@ -20,12 +20,12 @@ export const alternativeEmailQueryDto: EmailQueryDto = {
 /**
  * Valid password reset DTOs
  */
-export const validResetPasswordDto: ResetPasswordDto = {
+export const validUpdatePasswordDto: UpdatePasswordDto = {
     email: 'test@example.com',
     newPassword: 'NewSecurePass123!',
 };
 
-export const alternativeResetPasswordDto: ResetPasswordDto = {
+export const alternativeResetPasswordDto: UpdatePasswordDto = {
     email: 'user@test.com',
     newPassword: 'AnotherPass456@',
 };
