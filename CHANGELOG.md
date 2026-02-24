@@ -1,3 +1,13 @@
+## [2.0.0](https://github.com/adreno255/nurtura-backend/compare/v1.0.0...v2.0.0) (2026-02-24)
+
+### ⚠ BREAKING CHANGES
+
+* change password reset endpoints
+
+### Code Refactoring
+
+* change password reset endpoints ([92cbaf6](https://github.com/adreno255/nurtura-backend/commit/92cbaf698fa0b8a580e991a5b89f2936b5facace))
+
 ## 1.0.0 (2026-02-19)
 
 ### ⚠ BREAKING CHANGES
