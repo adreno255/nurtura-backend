@@ -239,7 +239,7 @@ describe('E2E User Registration Flow', () => {
         });
 
         describe('forgot Password Endpoints', () => {
-            it('should check if account exists for password reset', async () => {
+            it('should check if account exists for forgot password', async () => {
                 const response = await request(httpServer)
                     .get('/api/users/exists')
                     .query({ email })
@@ -271,16 +271,16 @@ describe('E2E User Registration Flow', () => {
                 (crypto.randomInt as jest.Mock).mockReturnValue(1);
 
                 const response = await request(httpServer)
-                    .post('/api/auth/otp/password-reset')
+                    .post('/api/auth/otp/forgot-password')
                     .send({ email })
                     .expect(200);
 
                 expect(response.body).toEqual({
-                    message: 'Password reset OTP sent successfully. Please check your email.',
+                    message: 'Forgot password OTP sent successfully. Please check your email.',
                 });
             });
 
-            it('should verify sent OTP for password reset', async () => {
+            it('should verify sent OTP for forgot password', async () => {
                 const code = '11111';
 
                 const response = await request(httpServer)
@@ -288,12 +288,13 @@ describe('E2E User Registration Flow', () => {
                     .send({
                         email,
                         code,
-                        purpose: 'password-reset',
+                        purpose: 'forgot-password',
                     })
                     .expect(200);
 
                 expect(response.body).toEqual({
                     message: 'OTP verified successfully.',
+                    loginToken: expect.any(String) as string,
                 });
             });
         });
@@ -451,7 +452,7 @@ describe('E2E User Registration Flow', () => {
         });
 
         describe('forgot Password Endpoints', () => {
-            it('should check if account exists for password reset', async () => {
+            it('should check if account exists for forgot password', async () => {
                 const response = await request(httpServer)
                     .get('/api/users/exists')
                     .query({ email })

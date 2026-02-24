@@ -6,6 +6,7 @@ import {
     ApiBadRequestResponse,
     ApiInternalServerErrorResponse,
     ApiBearerAuth,
+    ApiNotFoundResponse,
 } from '@nestjs/swagger';
 import { OtpService } from './otp.service';
 import { SendOtpRequestDto } from './dto/send-otp-request.dto';
@@ -20,7 +21,7 @@ export class OtpController {
 
     @Public()
     @Post('registration')
-    @Throttle({ default: { limit: process.env.NODE_ENV === 'test' ? 15 : 3, ttl: 60000 } })
+    @Throttle({ default: { limit: process.env.NODE_ENV === 'test' ? 30 : 3, ttl: 60000 } })
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
         summary: 'Send registration OTP',
@@ -75,8 +76,64 @@ export class OtpController {
     }
 
     @Public()
+    @Post('forgot-password')
+    @Throttle({ default: { limit: process.env.NODE_ENV === 'test' ? 30 : 3, ttl: 60000 } })
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({
+        summary: 'Send forgot password OTP',
+        description:
+            'Sends a 5-digit OTP code to the provided email for forgot password verification',
+    })
+    @ApiResponse({
+        status: HttpStatus.OK,
+        description: 'Forgot password OTP sent successfully',
+        schema: {
+            type: 'object',
+            properties: {
+                message: {
+                    type: 'string',
+                    example: 'Forgot password OTP sent successfully. Please check your email.',
+                },
+            },
+        },
+    })
+    @ApiBadRequestResponse({
+        description: 'Invalid email format',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 400 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/auth/otp/forgot-password' },
+                message: {
+                    type: 'string',
+                    example: 'Invalid email format',
+                },
+            },
+        },
+    })
+    @ApiInternalServerErrorResponse({
+        description: 'Failed to send forgot password OTP',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 500 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/auth/otp/forgot-password' },
+                message: { type: 'string', example: 'Failed to send forgot password OTP email' },
+            },
+        },
+    })
+    async sendForgotPasswordOtp(@Body() dto: SendOtpRequestDto) {
+        await this.otpService.sendForgotPasswordOtp(dto);
+        return {
+            message: 'Forgot password OTP sent successfully. Please check your email.',
+        };
+    }
+
     @Post('password-reset')
-    @Throttle({ default: { limit: process.env.NODE_ENV === 'test' ? 15 : 3, ttl: 60000 } })
+    @ApiBearerAuth('firebase-jwt')
+    @Throttle({ default: { limit: process.env.NODE_ENV === 'test' ? 30 : 3, ttl: 60000 } })
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
         summary: 'Send password reset OTP',
@@ -103,7 +160,7 @@ export class OtpController {
             properties: {
                 statusCode: { type: 'number', example: 400 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/auth/otp/forgot-password' },
+                path: { type: 'string', example: '/api/auth/otp/password-reset' },
                 message: {
                     type: 'string',
                     example: 'Invalid email format',
@@ -118,7 +175,7 @@ export class OtpController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/auth/otp/forgot-password' },
+                path: { type: 'string', example: '/api/auth/otp/password-reset' },
                 message: { type: 'string', example: 'Failed to send password reset OTP email' },
             },
         },
@@ -132,7 +189,7 @@ export class OtpController {
 
     @Post('email-reset')
     @ApiBearerAuth('firebase-jwt')
-    @Throttle({ default: { limit: process.env.NODE_ENV === 'test' ? 15 : 3, ttl: 60000 } })
+    @Throttle({ default: { limit: process.env.NODE_ENV === 'test' ? 30 : 3, ttl: 60000 } })
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
         summary: 'Send email reset OTP',
@@ -191,17 +248,53 @@ export class OtpController {
     @ApiOperation({
         summary: 'Verify OTP',
         description:
-            'Verifies the OTP code for the given email and purpose (registration or forgot-password)',
+            'Verifies the OTP code for the given email and purpose (registration, forgot-password, password-reset, or email-reset)',
     })
     @ApiResponse({
         status: HttpStatus.OK,
         description: 'OTP verified successfully',
-        schema: {
-            type: 'object',
-            properties: {
-                message: {
-                    type: 'string',
-                    example: 'OTP verified successfully.',
+        content: {
+            'application/json': {
+                schema: {
+                    type: 'object',
+                    required: ['message'],
+                    properties: {
+                        message: {
+                            type: 'string',
+                            example: 'OTP verified successfully.',
+                        },
+                        loginToken: {
+                            type: 'string',
+                            example: 'abc123xyz',
+                        },
+                    },
+                },
+                examples: {
+                    registration: {
+                        summary: 'Registration OTP',
+                        value: {
+                            message: 'OTP verified successfully.',
+                        },
+                    },
+                    forgotPassword: {
+                        summary: 'Forgot password OTP',
+                        value: {
+                            message: 'OTP verified successfully.',
+                            loginToken: 'abc123xyz',
+                        },
+                    },
+                    passwordReset: {
+                        summary: 'Password reset OTP',
+                        value: {
+                            message: 'OTP verified successfully.',
+                        },
+                    },
+                    emailReset: {
+                        summary: 'Email reset OTP',
+                        value: {
+                            message: 'OTP verified successfully.',
+                        },
+                    },
                 },
             },
         },
@@ -276,17 +369,38 @@ export class OtpController {
                             statusCode: 400,
                             timestamp: '2025-12-27T10:30:00.000Z',
                             path: '/api/auth/otp/verify',
-                            message: 'Invalid email format, OTP code must be exactly 5 digits',
+                            message: 'Invalid email format, OTP code must be exactly 5 digits.',
                         },
                     },
                 },
             },
         },
     })
+    @ApiNotFoundResponse({
+        description: 'User not found when trying to create custom Firebase Token',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 404 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/auth/otp/verify' },
+                message: { type: 'string', example: 'User not found' },
+            },
+        },
+    })
+    @ApiInternalServerErrorResponse({
+        description: 'Failed to create custom Firebase Token',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 500 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/auth/otp/verify' },
+                message: { type: 'string', example: 'Failed to create login token for email' },
+            },
+        },
+    })
     verifyOtp(@Body() dto: VerifyOtpDto) {
-        this.otpService.verifyOtp(dto);
-        return {
-            message: 'OTP verified successfully.',
-        };
+        return this.otpService.verifyOtp(dto);
     }
 }

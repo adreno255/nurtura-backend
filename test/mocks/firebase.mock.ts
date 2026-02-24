@@ -9,6 +9,7 @@ export const createMockFirebaseAuth = () => ({
     createUser: jest.fn(),
     deleteUser: jest.fn(),
     verifyIdToken: jest.fn(),
+    createCustomToken: jest.fn(),
 });
 
 export const createMockFirebaseService = (mockAuth = createMockFirebaseAuth()) => ({

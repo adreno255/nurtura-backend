@@ -7,12 +7,12 @@ import {
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { type EmailQueryDto } from './dto/email-query.dto';
-import { type ResetPasswordDto } from './dto/reset-password.dto';
+import { type UpdatePasswordDto } from './dto/update-password.dto';
 import {
     expectedOnboardingResponses,
     expectedProviderResponses,
     validEmailQueryDto,
-    validResetPasswordDto,
+    validUpdatePasswordDto,
 } from '../../test/fixtures';
 
 describe('AuthController', () => {
@@ -21,7 +21,7 @@ describe('AuthController', () => {
     const mockAuthService = {
         getProviders: jest.fn(),
         getOnboardingStatus: jest.fn(),
-        resetPassword: jest.fn(),
+        updatePassword: jest.fn(),
     };
 
     beforeEach(async () => {
@@ -237,71 +237,71 @@ describe('AuthController', () => {
         });
     });
 
-    describe('resetPassword', () => {
-        const dto: ResetPasswordDto = validResetPasswordDto;
+    describe('updatePassword', () => {
+        const dto: UpdatePasswordDto = validUpdatePasswordDto;
 
         it('should reset password successfully', async () => {
             const mockResponse = { message: 'Password updated successfully' };
-            mockAuthService.resetPassword.mockResolvedValue(mockResponse);
+            mockAuthService.updatePassword.mockResolvedValue(mockResponse);
 
-            const result = await controller.resetPassword(dto);
+            const result = await controller.updatePassword(dto);
 
             expect(result).toEqual(mockResponse);
         });
 
-        it('should call AuthService.resetPassword with correct DTO', async () => {
-            mockAuthService.resetPassword.mockResolvedValue({
+        it('should call AuthService.updatePassword with correct DTO', async () => {
+            mockAuthService.updatePassword.mockResolvedValue({
                 message: 'Password updated successfully',
             });
 
-            await controller.resetPassword(dto);
+            await controller.updatePassword(dto);
 
-            expect(mockAuthService.resetPassword).toHaveBeenCalledWith(dto);
+            expect(mockAuthService.updatePassword).toHaveBeenCalledWith(dto);
         });
 
-        it('should call AuthService.resetPassword once', async () => {
-            mockAuthService.resetPassword.mockResolvedValue({
+        it('should call AuthService.updatePassword once', async () => {
+            mockAuthService.updatePassword.mockResolvedValue({
                 message: 'Password updated successfully',
             });
 
-            await controller.resetPassword(dto);
+            await controller.updatePassword(dto);
 
-            expect(mockAuthService.resetPassword).toHaveBeenCalledTimes(1);
+            expect(mockAuthService.updatePassword).toHaveBeenCalledTimes(1);
         });
 
         it('should work with different passwords', async () => {
             const passwords = ['Pass123!@#', 'MySecure456$', 'Strong789^&*'];
 
             for (const password of passwords) {
-                mockAuthService.resetPassword.mockResolvedValue({
+                mockAuthService.updatePassword.mockResolvedValue({
                     message: 'Password updated successfully',
                 });
 
-                const testDto: ResetPasswordDto = {
+                const testDto: UpdatePasswordDto = {
                     email: 'test@example.com',
                     newPassword: password,
                 };
 
-                await controller.resetPassword(testDto);
+                await controller.updatePassword(testDto);
 
-                expect(mockAuthService.resetPassword).toHaveBeenCalledWith(testDto);
+                expect(mockAuthService.updatePassword).toHaveBeenCalledWith(testDto);
             }
         });
 
         it('should propagate NotFoundException from service', async () => {
-            mockAuthService.resetPassword.mockRejectedValue(
+            mockAuthService.updatePassword.mockRejectedValue(
                 new NotFoundException('No user found for this email'),
             );
 
-            await expect(controller.resetPassword(dto)).rejects.toThrow(NotFoundException);
+            await expect(controller.updatePassword(dto)).rejects.toThrow(NotFoundException);
         });
 
         it('should propagate InternalServerErrorException from service', async () => {
-            mockAuthService.resetPassword.mockRejectedValue(
+            mockAuthService.updatePassword.mockRejectedValue(
                 new InternalServerErrorException('Failed to reset password'),
             );
 
-            await expect(controller.resetPassword(dto)).rejects.toThrow(
+            await expect(controller.updatePassword(dto)).rejects.toThrow(
                 InternalServerErrorException,
             );
         });
@@ -310,27 +310,27 @@ describe('AuthController', () => {
             const emails = ['user@example.com', 'test.user@domain.co.uk', 'name+tag@company.org'];
 
             for (const email of emails) {
-                mockAuthService.resetPassword.mockResolvedValue({
+                mockAuthService.updatePassword.mockResolvedValue({
                     message: 'Password updated successfully',
                 });
 
-                const testDto: ResetPasswordDto = {
+                const testDto: UpdatePasswordDto = {
                     email,
                     newPassword: 'NewPass123!',
                 };
 
-                await controller.resetPassword(testDto);
+                await controller.updatePassword(testDto);
 
-                expect(mockAuthService.resetPassword).toHaveBeenCalledWith(testDto);
+                expect(mockAuthService.updatePassword).toHaveBeenCalledWith(testDto);
             }
         });
 
         it('should return message in response', async () => {
-            mockAuthService.resetPassword.mockResolvedValue({
+            mockAuthService.updatePassword.mockResolvedValue({
                 message: 'Password updated successfully',
             });
 
-            const result = await controller.resetPassword(dto);
+            const result = await controller.updatePassword(dto);
 
             expect(result).toHaveProperty('message');
             expect(result.message).toBe('Password updated successfully');
@@ -358,12 +358,12 @@ describe('AuthController', () => {
             expect(typeof result.needsOnboarding).toBe('boolean');
         });
 
-        it('should return message for resetPassword', async () => {
-            mockAuthService.resetPassword.mockResolvedValue({
+        it('should return message for updatePassword', async () => {
+            mockAuthService.updatePassword.mockResolvedValue({
                 message: 'Password updated successfully',
             });
 
-            const result = await controller.resetPassword(validResetPasswordDto);
+            const result = await controller.updatePassword(validUpdatePasswordDto);
 
             expect(result).toHaveProperty('message');
             expect(typeof result.message).toBe('string');
@@ -376,17 +376,17 @@ describe('AuthController', () => {
             mockAuthService.getOnboardingStatus.mockResolvedValue(
                 expectedOnboardingResponses.onboardingComplete,
             );
-            mockAuthService.resetPassword.mockResolvedValue({
+            mockAuthService.updatePassword.mockResolvedValue({
                 message: 'Password updated successfully',
             });
 
             await controller.getProviders(validEmailQueryDto);
             await controller.getOnboardingStatus(validEmailQueryDto);
-            await controller.resetPassword(validResetPasswordDto);
+            await controller.updatePassword(validUpdatePasswordDto);
 
             expect(mockAuthService.getProviders).toHaveBeenCalled();
             expect(mockAuthService.getOnboardingStatus).toHaveBeenCalled();
-            expect(mockAuthService.resetPassword).toHaveBeenCalled();
+            expect(mockAuthService.updatePassword).toHaveBeenCalled();
         });
 
         it('should not add additional business logic', async () => {
@@ -429,11 +429,11 @@ describe('AuthController', () => {
             ).rejects.toThrow(BadRequestException);
         });
 
-        it('should not catch service errors in resetPassword', async () => {
+        it('should not catch service errors in updatePassword', async () => {
             const serviceError = new InternalServerErrorException('Reset failed');
-            mockAuthService.resetPassword.mockRejectedValue(serviceError);
+            mockAuthService.updatePassword.mockRejectedValue(serviceError);
 
-            await expect(controller.resetPassword(validResetPasswordDto)).rejects.toThrow(
+            await expect(controller.updatePassword(validUpdatePasswordDto)).rejects.toThrow(
                 InternalServerErrorException,
             );
         });
@@ -464,24 +464,24 @@ describe('AuthController', () => {
     });
 
     describe('POST body handling', () => {
-        it('should accept request body in resetPassword', async () => {
-            mockAuthService.resetPassword.mockResolvedValue({
+        it('should accept request body in updatePassword', async () => {
+            mockAuthService.updatePassword.mockResolvedValue({
                 message: 'Password updated successfully',
             });
 
-            await controller.resetPassword(validResetPasswordDto);
+            await controller.updatePassword(validUpdatePasswordDto);
 
-            expect(mockAuthService.resetPassword).toHaveBeenCalledWith(validResetPasswordDto);
+            expect(mockAuthService.updatePassword).toHaveBeenCalledWith(validUpdatePasswordDto);
         });
 
         it('should pass both email and password from body', async () => {
-            mockAuthService.resetPassword.mockResolvedValue({
+            mockAuthService.updatePassword.mockResolvedValue({
                 message: 'Password updated successfully',
             });
 
-            await controller.resetPassword(validResetPasswordDto);
+            await controller.updatePassword(validUpdatePasswordDto);
 
-            expect(mockAuthService.resetPassword).toHaveBeenCalledWith(
+            expect(mockAuthService.updatePassword).toHaveBeenCalledWith(
                 expect.objectContaining({
                     email: 'test@example.com',
                     newPassword: 'NewSecurePass123!',

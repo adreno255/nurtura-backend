@@ -15,6 +15,7 @@ export const createMockEventEmitter = () => ({
 
 export const createMockEmailService = () => ({
     sendRegistrationOtp: jest.fn(),
+    sendForgotPasswordOtp: jest.fn(),
     sendPasswordResetOtp: jest.fn(),
     sendEmailResetOtp: jest.fn(),
     sendEmailResetNotification: jest.fn(),
@@ -22,6 +23,7 @@ export const createMockEmailService = () => ({
 
 export const createMockOtpService = () => ({
     sendRegistrationOtp: jest.fn(),
+    sendForgotPasswordOtp: jest.fn(),
     sendPasswordResetOtp: jest.fn(),
     sendEmailResetOtp: jest.fn(),
     verifyOtp: jest.fn(),

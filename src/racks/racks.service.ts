@@ -50,11 +50,11 @@ export class RacksService {
         try {
             // Check if MAC address already exists
             const existingRack = await this.databaseService.rack.findUnique({
-                where: { macAddress: dto.macAddress },
+                where: { userId, macAddress: dto.macAddress },
             });
 
             if (existingRack) {
-                throw new ConflictException('MAC address already registered');
+                throw new ConflictException(`MAC address already registered to ${userId}`);
             }
 
             // Generate MQTT topic if not provided

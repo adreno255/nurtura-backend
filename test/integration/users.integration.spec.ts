@@ -372,6 +372,11 @@ describe('Users Integration Tests (HTTP Endpoints)', () => {
                 email: 'new@example.com',
             };
 
+            mockFirebaseService.getAuth().getUserByEmail.mockResolvedValueOnce({
+                uid: mockFirebaseJWT.uid,
+            });
+            mockFirebaseService.getAuth().updateUser(undefined);
+
             await request(httpServer)
                 .patch('/api/users')
                 .set('Authorization', `Bearer ${validAuthToken}`)
@@ -380,6 +385,42 @@ describe('Users Integration Tests (HTTP Endpoints)', () => {
 
             expect(mockEmailService.sendEmailResetNotification).toHaveBeenCalledWith(
                 'old@example.com',
+            );
+        });
+
+        it('should update email of Firebase user when email changes', async () => {
+            // seed existing user
+            await dbHelper.seedUser({
+                firebaseUid: mockFirebaseJWT.uid,
+                email: 'old@example.com',
+                firstName: 'Old',
+                lastName: 'User',
+                address: 'Block 1, Street, Barangay, City',
+            });
+
+            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
+
+            mockFirebaseService.getAuth().getUserByEmail.mockResolvedValueOnce({
+                uid: mockFirebaseJWT.uid,
+            });
+            mockFirebaseService.getAuth().updateUser(undefined);
+
+            const dto = {
+                email: 'new@example.com',
+            };
+
+            await request(httpServer)
+                .patch('/api/users')
+                .set('Authorization', `Bearer ${validAuthToken}`)
+                .send(dto)
+                .expect(200);
+
+            expect(mockFirebaseService.getAuth().getUserByEmail).toHaveBeenCalledWith(
+                'old@example.com',
+            );
+            expect(mockFirebaseService.getAuth().updateUser).toHaveBeenCalledWith(
+                mockFirebaseJWT.uid,
+                { email: dto.email },
             );
         });
     });

@@ -22,11 +22,12 @@ export class VerifyOtpDto {
     @ApiProperty({
         example: 'registration',
         description: 'Purpose of the OTP verification',
-        enum: ['registration', 'password-reset', 'email-reset'],
+        enum: ['registration', 'forgot-password', 'password-reset', 'email-reset'],
     })
     @IsString()
-    @IsIn(['registration', 'password-reset', 'email-reset'], {
-        message: 'Purpose must be either "registration", "password-reset", or "email-reset"',
+    @IsIn(['registration', 'forgot-password', 'password-reset', 'email-reset'], {
+        message:
+            'Purpose must be either "registration", "forgot-password", "password-reset", or "email-reset"',
     })
-    purpose!: 'registration' | 'password-reset' | 'email-reset';
+    purpose!: 'registration' | 'forgot-password' | 'password-reset' | 'email-reset';
 }

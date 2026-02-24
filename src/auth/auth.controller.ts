@@ -7,18 +7,19 @@ import {
     ApiNotFoundResponse,
     ApiInternalServerErrorResponse,
     ApiQuery,
+    ApiBearerAuth,
 } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { EmailQueryDto } from './dto/email-query.dto';
-import { ResetPasswordDto } from './dto/reset-password.dto';
+import { UpdatePasswordDto } from './dto/update-password.dto';
 import { Public } from '../common/decorators';
 
-@Public()
 @ApiTags('Authentication')
 @Controller('auth')
 export class AuthController {
     constructor(private readonly authService: AuthService) {}
 
+    @Public()
     @Get('providers')
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
@@ -87,6 +88,7 @@ export class AuthController {
         return this.authService.getProviders(dto);
     }
 
+    @Public()
     @Get('onboarding-status')
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
@@ -204,10 +206,11 @@ export class AuthController {
         return this.authService.getOnboardingStatus(dto);
     }
 
-    @Post('reset-password')
+    @ApiBearerAuth('firebase-jwt')
+    @Post('update-password')
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
-        summary: 'Reset user password',
+        summary: 'Updates user password',
         description: 'Updates the password for a user account in Firebase',
     })
     @ApiResponse({
@@ -230,7 +233,7 @@ export class AuthController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/auth/reset-password' },
+                path: { type: 'string', example: '/api/auth/update-password' },
                 message: { type: 'string', example: 'No user found for this email' },
             },
         },
@@ -244,7 +247,7 @@ export class AuthController {
                     properties: {
                         statusCode: { type: 'number', example: 400 },
                         timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                        path: { type: 'string', example: '/api/auth/reset-password' },
+                        path: { type: 'string', example: '/api/auth/update-password' },
                         message: { type: 'string' },
                     },
                 },
@@ -254,7 +257,7 @@ export class AuthController {
                         value: {
                             statusCode: 400,
                             timestamp: '2025-12-27T10:30:00.000Z',
-                            path: '/api/auth/reset-password',
+                            path: '/api/auth/update-password',
                             message: 'Invalid email format',
                         },
                     },
@@ -263,7 +266,7 @@ export class AuthController {
                         value: {
                             statusCode: 400,
                             timestamp: '2025-12-27T10:30:00.000Z',
-                            path: '/api/auth/reset-password',
+                            path: '/api/auth/update-password',
                             message:
                                 'Password must be at least 8 characters long, Password must contain at least one uppercase letter, one lowercase letter, one digit, and one symbol',
                         },
@@ -273,18 +276,18 @@ export class AuthController {
         },
     })
     @ApiInternalServerErrorResponse({
-        description: 'Failed to reset password',
+        description: 'Failed to update password',
         schema: {
             type: 'object',
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/auth/reset-password' },
-                message: { type: 'string', example: 'Failed to reset password' },
+                path: { type: 'string', example: '/api/auth/update-password' },
+                message: { type: 'string', example: 'Failed to update password' },
             },
         },
     })
-    async resetPassword(@Body() dto: ResetPasswordDto) {
-        return this.authService.resetPassword(dto);
+    async updatePassword(@Body() dto: UpdatePasswordDto) {
+        return this.authService.updatePassword(dto);
     }
 }

@@ -190,7 +190,7 @@ describe('EmailService', () => {
             expect(sendSpy).toHaveBeenCalledTimes(1);
         });
 
-        it('should use correct email configuration', async () => {
+        it('should use correct configuration and subject', async () => {
             (sgMail.send as jest.Mock).mockResolvedValueOnce([{ statusCode: 200 }, {}]);
             const sendSpy = jest.spyOn(sgMail, 'send');
 
@@ -203,7 +203,7 @@ describe('EmailService', () => {
                         email: mockConfigService.get('SENDGRID_FROM_EMAIL'),
                         name: mockConfigService.get('SENDGRID_FROM_NAME'),
                     },
-                    subject: 'OTP for your Nurtura authentication',
+                    subject: 'Registration OTP for Nurtura',
                 }),
             );
         });
@@ -282,8 +282,109 @@ describe('EmailService', () => {
         });
     });
 
-    describe('sendPasswordResetOtp', () => {
+    describe('sendForgotPasswordOtp', () => {
         it('should send forgot password OTP email successfully', async () => {
+            (sgMail.send as jest.Mock).mockResolvedValueOnce([{ statusCode: 200 }, {}]);
+            const sendSpy = jest.spyOn(sgMail, 'send');
+
+            await service.sendForgotPasswordOtp(testEmail, testCode, testExpiryTime);
+
+            expect(sendSpy).toHaveBeenCalledTimes(1);
+        });
+
+        it('should use correct email configuration', async () => {
+            (sgMail.send as jest.Mock).mockResolvedValueOnce([{ statusCode: 200 }, {}]);
+            const sendSpy = jest.spyOn(sgMail, 'send');
+
+            await service.sendForgotPasswordOtp(testEmail, testCode, testExpiryTime);
+
+            expect(sendSpy).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    to: testEmail,
+                    from: {
+                        email: mockConfigService.get('SENDGRID_FROM_EMAIL'),
+                        name: mockConfigService.get('SENDGRID_FROM_NAME'),
+                    },
+                    subject: 'Forgot Password OTP for Nurtura',
+                }),
+            );
+        });
+
+        it('should include email attachments', async () => {
+            (sgMail.send as jest.Mock).mockResolvedValueOnce([{ statusCode: 200 }, {}]);
+            const sendSpy = jest.spyOn(sgMail, 'send');
+
+            await service.sendForgotPasswordOtp(testEmail, testCode, testExpiryTime);
+
+            // Assert directly on the mock call
+            expect(sendSpy).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    attachments: [
+                        expect.objectContaining({
+                            filename: 'Nurtura-Logo.png',
+                            content_id: 'logo',
+                        }),
+                        expect.objectContaining({
+                            filename: 'Facebook-icon.png',
+                            content_id: 'facebook',
+                        }),
+                    ],
+                }),
+            );
+        });
+
+        it('should include HTML template', async () => {
+            (sgMail.send as jest.Mock).mockResolvedValueOnce([{ statusCode: 200 }, {}]);
+
+            await service.sendForgotPasswordOtp(testEmail, testCode, testExpiryTime);
+
+            const [callArgs] = (sgMail.send as jest.Mock).mock.calls[0] as [{ html: string }];
+            expect(callArgs.html).toBeDefined();
+            expect(typeof callArgs.html).toBe('string');
+            expect(callArgs.html.length).toBeGreaterThan(0);
+        });
+
+        it('should log success message', async () => {
+            (sgMail.send as jest.Mock).mockResolvedValueOnce([{ statusCode: 200 }, {}]);
+
+            await service.sendForgotPasswordOtp(testEmail, testCode, testExpiryTime);
+
+            expect(mockLoggerService.log).toHaveBeenCalledWith(
+                `Forgot password OTP email sent to ${testEmail}`,
+                'EmailService',
+            );
+        });
+
+        it('should throw InternalServerErrorException on send failure', async () => {
+            const sendError = new Error('SendGrid error');
+            (sgMail.send as jest.Mock).mockRejectedValue(sendError);
+
+            await expect(
+                service.sendForgotPasswordOtp(testEmail, testCode, testExpiryTime),
+            ).rejects.toThrow(InternalServerErrorException);
+            await expect(
+                service.sendForgotPasswordOtp(testEmail, testCode, testExpiryTime),
+            ).rejects.toThrow('Failed to send forgot password OTP email');
+        });
+
+        it('should log error on send failure', async () => {
+            const sendError = new Error('SendGrid error');
+            (sgMail.send as jest.Mock).mockRejectedValueOnce(sendError);
+
+            await expect(
+                service.sendForgotPasswordOtp(testEmail, testCode, testExpiryTime),
+            ).rejects.toThrow();
+
+            expect(mockLoggerService.error).toHaveBeenCalledWith(
+                `Failed to send forgot password OTP to ${testEmail}`,
+                'SendGrid error',
+                'EmailService',
+            );
+        });
+    });
+
+    describe('sendPasswordResetOtp', () => {
+        it('should send password reset OTP email successfully', async () => {
             (sgMail.send as jest.Mock).mockResolvedValueOnce([{ statusCode: 200 }, {}]);
             const sendSpy = jest.spyOn(sgMail, 'send');
 

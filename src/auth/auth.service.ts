@@ -7,12 +7,12 @@ import {
 import { FirebaseService } from '../firebase/firebase.service';
 import { DatabaseService } from '../database/database.service';
 import { EmailQueryDto } from './dto/email-query.dto';
-import { ResetPasswordDto } from './dto/reset-password.dto';
+import { UpdatePasswordDto } from './dto/update-password.dto';
 import { MyLoggerService } from '../my-logger/my-logger.service';
 import {
     AuthProvidersResponse,
     OnboardingStatusResponse,
-    PasswordResetResponse,
+    UpdatePasswordResponse,
 } from './interfaces';
 import { isFirebaseAuthError } from '../common/type-guards';
 
@@ -103,7 +103,7 @@ export class AuthService {
         }
     }
 
-    async resetPassword(dto: ResetPasswordDto): Promise<PasswordResetResponse> {
+    async updatePassword(dto: UpdatePasswordDto): Promise<UpdatePasswordResponse> {
         const { email, newPassword } = dto;
 
         try {
