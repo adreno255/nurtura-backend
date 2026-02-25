@@ -21,12 +21,10 @@ export const alternativeEmailQueryDto: EmailQueryDto = {
  * Valid password reset DTOs
  */
 export const validUpdatePasswordDto: UpdatePasswordDto = {
-    email: 'test@example.com',
     newPassword: 'NewSecurePass123!',
 };
 
 export const alternativeResetPasswordDto: UpdatePasswordDto = {
-    email: 'user@test.com',
     newPassword: 'AnotherPass456@',
 };
 

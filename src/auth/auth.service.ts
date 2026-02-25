@@ -15,6 +15,7 @@ import {
     UpdatePasswordResponse,
 } from './interfaces';
 import { isFirebaseAuthError } from '../common/type-guards';
+import { CurrentUserPayload } from '../common/interfaces';
 
 @Injectable()
 export class AuthService {
@@ -103,18 +104,19 @@ export class AuthService {
         }
     }
 
-    async updatePassword(dto: UpdatePasswordDto): Promise<UpdatePasswordResponse> {
-        const { email, newPassword } = dto;
+    async updatePassword(
+        user: CurrentUserPayload,
+        dto: UpdatePasswordDto,
+    ): Promise<UpdatePasswordResponse> {
+        const { newPassword } = dto;
 
         try {
             const auth = this.firebaseService.getAuth();
-            const user = await auth.getUserByEmail(email);
-
-            await auth.updateUser(user.uid, {
+            await auth.updateUser(user.firebaseUid, {
                 password: newPassword,
             });
 
-            this.logger.log(`Password reset successfully for ${email}`, 'AuthService');
+            this.logger.log(`Password reset successfully for ${user.email}`, 'AuthService');
             return { message: 'Password updated successfully' };
         } catch (error) {
             if (isFirebaseAuthError(error) && error.code === 'auth/user-not-found') {
@@ -122,7 +124,7 @@ export class AuthService {
             }
 
             this.logger.error(
-                `Error resetting password for ${email}`,
+                `Error resetting password for ${user.email}`,
                 error instanceof Error ? error.message : String(error),
                 'AuthService',
             );

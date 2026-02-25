@@ -25,7 +25,7 @@ async function main() {
         where: { email },
         update: {},
         create: {
-            firebaseUid: 'gnp8GZuJTBVSMH7vITeaXj0GmJO2',
+            firebaseUid: 'Ft1S6yUjNlNk6wSroDcF1tLPdT33',
             email: 'neonimo123@gmail.com',
             firstName: 'Neo',
             middleName: 'Isaiah',
