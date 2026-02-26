@@ -1,3 +1,17 @@
+## [3.0.0](https://github.com/adreno255/nurtura-backend/compare/v2.0.0...v3.0.0) (2026-02-26)
+
+### ⚠ BREAKING CHANGES
+
+* remove email field in update password request body
+
+### Features
+
+* remove email field in update password request body ([8b93351](https://github.com/adreno255/nurtura-backend/commit/8b93351b1093a65b17209370c566c90e59ae0718))
+
+### Code Refactoring
+
+* change automation module based on new schema ([6663869](https://github.com/adreno255/nurtura-backend/commit/6663869863c55a766aa71ce6c3a27ba6db3246b9))
+
 ## [2.0.0](https://github.com/adreno255/nurtura-backend/compare/v1.0.0...v2.0.0) (2026-02-24)
 
 ### ⚠ BREAKING CHANGES
