@@ -36,14 +36,23 @@ enum SoilType {
 }
 
 enum ActivityEventType {
+    // Rack events
     RACK_ADDED
     RACK_REMOVED
+    
+    // Plant events
+    PLANT_ADDED
+    PLANT_REMOVED
     PLANT_CHANGED
     PLANT_HARVESTED
+    
+    // Device control events
     LIGHT_ON
     LIGHT_OFF
     WATERING_ON
     WATERING_OFF
+    
+    // System events
     AUTOMATION_TRIGGERED
     DEVICE_ONLINE
     DEVICE_OFFLINE
