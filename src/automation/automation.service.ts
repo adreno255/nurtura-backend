@@ -30,8 +30,11 @@ export class AutomationService {
     ) {}
 
     /**
-     * Evaluates automation rules for a rack based on sensor data
-     * Called by SensorsService after saving sensor data
+     * Evaluates automation rules for a rack based on sensor data.
+     * Called by SensorsService after saving sensor data.
+     *
+     * Rules are now plant-scoped: we resolve the rack's current plant,
+     * then fetch all enabled rules associated with that plant.
      *
      * @param rackId - Rack ID
      * @param sensorData - Latest sensor reading
@@ -40,32 +43,50 @@ export class AutomationService {
         this.logger.log(`Evaluating automation rules for rack: ${rackId}`, 'AutomationService');
 
         try {
-            // Get all enabled automation rules for this rack
+            // Resolve the rack to get its macAddress and currentPlantId
+            const rack = await this.databaseService.rack.findUnique({
+                where: { id: rackId },
+                select: {
+                    macAddress: true,
+                    name: true,
+                    currentPlantId: true,
+                },
+            });
+
+            if (!rack) {
+                this.logger.warn(
+                    `Rack not found during rule evaluation: ${rackId}`,
+                    'AutomationService',
+                );
+                return;
+            }
+
+            if (!rack.currentPlantId) {
+                this.logger.log(
+                    `Rack ${rackId} has no current plant — skipping rule evaluation`,
+                    'AutomationService',
+                );
+                return;
+            }
+
+            // Get all enabled automation rules for the current plant
             const rules = await this.databaseService.automationRule.findMany({
                 where: {
-                    rackId,
+                    plantId: rack.currentPlantId,
                     isEnabled: true,
-                },
-                include: {
-                    rack: {
-                        select: {
-                            macAddress: true,
-                            name: true,
-                        },
-                    },
                 },
             });
 
             if (rules.length === 0) {
                 this.logger.warn(
-                    `No automation rules found for rack: ${rackId}`,
+                    `No automation rules found for plant: ${rack.currentPlantId} (rack: ${rackId})`,
                     'AutomationService',
                 );
                 return;
             }
 
             this.logger.log(
-                `Found ${rules.length} enabled automation rules for rack: ${rackId}`,
+                `Found ${rules.length} enabled automation rules for plant: ${rack.currentPlantId} (rack: ${rackId})`,
                 'AutomationService',
             );
 
@@ -97,9 +118,9 @@ export class AutomationService {
 
                     // Execute actions
                     const actions = rule.actions as RuleActions;
-                    await this.executeActions(rule.rack.macAddress, actions, rackId, rule.name);
+                    await this.executeActions(rack.macAddress, actions, rackId, rule.name);
 
-                    // Update rule trigger information
+                    // Update rule trigger tracking
                     await this.databaseService.automationRule.update({
                         where: { id: rule.id },
                         data: {
@@ -116,6 +137,7 @@ export class AutomationService {
                         {
                             ruleId: rule.id,
                             ruleName: rule.name,
+                            plantId: rack.currentPlantId,
                             conditions,
                             actions,
                             sensorData,
@@ -134,15 +156,15 @@ export class AutomationService {
                 error instanceof Error ? error.message : String(error),
                 'AutomationService',
             );
-            // Don't throw - automation failures shouldn't break sensor data processing
+            // Don't throw — automation failures shouldn't break sensor data processing
         }
     }
 
     /**
-     * Evaluates whether rule conditions are met based on sensor data
+     * Evaluates whether rule conditions are met based on sensor data.
+     * All conditions use AND logic — every specified condition must be satisfied.
      */
     private evaluateConditions(conditions: RuleConditions, sensorData: SensorData): boolean {
-        // All conditions must be true (AND logic)
         if (conditions.moisture) {
             if (
                 conditions.moisture.lessThan !== undefined &&
@@ -207,7 +229,7 @@ export class AutomationService {
     }
 
     /**
-     * Executes automation actions by publishing MQTT commands
+     * Executes automation actions by publishing MQTT commands via EventEmitter.
      */
     private async executeActions(
         macAddress: string,
@@ -231,7 +253,6 @@ export class AutomationService {
                     `watering:${actions.watering.action} for ${actions.watering.duration ?? 'default'}ms`,
                 );
 
-                // Log watering activity
                 await this.logRackActivityHelper.logActivity(
                     rackId,
                     actions.watering.action === 'start'
@@ -256,7 +277,6 @@ export class AutomationService {
 
                 executedActions.push(`growLight:${actions.growLight.action}`);
 
-                // Log lighting activity
                 await this.logRackActivityHelper.logActivity(
                     rackId,
                     actions.growLight.action === 'on'
@@ -277,7 +297,6 @@ export class AutomationService {
                 timestamp: new Date(),
             };
 
-            // Broadcast automation execution to WebSocket clients
             this.eventEmitter.emit('broadcastAutomationEvent', automatedEvents);
 
             this.logger.log(
@@ -295,21 +314,28 @@ export class AutomationService {
     }
 
     /**
-     * Create a new automation rule
+     * Creates a new automation rule for a plant.
+     * Ownership is verified by checking the plant exists and the user owns
+     * at least one active rack currently growing that plant.
      */
     async create(userId: string, createRuleDto: CreateAutomationRuleDto) {
         try {
-            // Verify rack ownership
-            const rack = await this.databaseService.rack.findFirst({
+            // Verify the plant exists and the user owns a rack with this plant
+            const plant = await this.databaseService.plant.findFirst({
                 where: {
-                    id: createRuleDto.rackId,
-                    userId,
+                    id: createRuleDto.plantId,
                     isActive: true,
+                    racks: {
+                        some: {
+                            userId,
+                            isActive: true,
+                        },
+                    },
                 },
             });
 
-            if (!rack) {
-                throw new NotFoundException('Rack not found');
+            if (!plant) {
+                throw new NotFoundException('Plant not found');
             }
 
             // Validate conditions and actions
@@ -319,7 +345,7 @@ export class AutomationService {
             // Create the rule
             const rule = await this.databaseService.automationRule.create({
                 data: {
-                    rackId: createRuleDto.rackId,
+                    plantId: createRuleDto.plantId,
                     name: createRuleDto.name,
                     description: createRuleDto.description,
                     conditions: createRuleDto.conditions as Prisma.InputJsonValue,
@@ -330,7 +356,7 @@ export class AutomationService {
             });
 
             this.logger.log(
-                `Automation rule created: ${rule.name} (${rule.id}) for rack: ${rack.name}`,
+                `Automation rule created: ${rule.name} (${rule.id}) for plant: ${plant.name}`,
                 'AutomationService',
             );
 
@@ -362,21 +388,27 @@ export class AutomationService {
     }
 
     /**
-     * Get all automation rules for a rack (paginated)
+     * Gets all automation rules for a plant (paginated).
+     * Ownership is verified by checking the user owns a rack currently growing the plant.
      */
-    async findAll(rackId: string, userId: string, query?: PaginationQueryDto) {
+    async findAll(plantId: string, userId: string, query?: PaginationQueryDto) {
         try {
-            // Verify rack ownership
-            const rack = await this.databaseService.rack.findFirst({
+            // Verify the plant exists and the user owns a rack with this plant
+            const plant = await this.databaseService.plant.findFirst({
                 where: {
-                    id: rackId,
-                    userId,
+                    id: plantId,
                     isActive: true,
+                    racks: {
+                        some: {
+                            userId,
+                            isActive: true,
+                        },
+                    },
                 },
             });
 
-            if (!rack) {
-                throw new NotFoundException('Rack not found');
+            if (!plant) {
+                throw new NotFoundException('Plant not found');
             }
 
             const { skip, take } = PaginationHelper.getPrismaOptions(
@@ -385,16 +417,16 @@ export class AutomationService {
 
             const [rules, totalItems] = await Promise.all([
                 this.databaseService.automationRule.findMany({
-                    where: { rackId },
+                    where: { plantId },
                     skip,
                     take,
                     orderBy: { createdAt: 'desc' },
                 }),
-                this.databaseService.automationRule.count({ where: { rackId } }),
+                this.databaseService.automationRule.count({ where: { plantId } }),
             ]);
 
             this.logger.log(
-                `Retrieved ${rules.length} automation rules for rack: ${rackId} (page ${query?.page ?? 1})`,
+                `Retrieved ${rules.length} automation rules for plant: ${plantId} (page ${query?.page ?? 1})`,
                 'AutomationService',
             );
 
@@ -409,7 +441,7 @@ export class AutomationService {
             }
 
             this.logger.error(
-                `Failed to get automation rules for rack: ${rackId}`,
+                `Failed to get automation rules for plant: ${plantId}`,
                 error instanceof Error ? error.message : String(error),
                 'AutomationService',
             );
@@ -419,24 +451,29 @@ export class AutomationService {
     }
 
     /**
-     * Update an automation rule
+     * Updates an automation rule.
+     * Ownership is verified by checking the user owns a rack currently growing
+     * the plant associated with the rule.
      */
     async update(ruleId: string, userId: string, updateData: UpdateAutomationRuleDto) {
         try {
-            // Verify rule ownership through rack
+            // Verify rule ownership through plant → racks
             const rule = await this.databaseService.automationRule.findUnique({
                 where: { id: ruleId },
                 include: {
-                    rack: {
+                    plant: {
                         select: {
-                            userId: true,
                             name: true,
+                            racks: {
+                                where: { userId, isActive: true },
+                                select: { id: true },
+                            },
                         },
                     },
                 },
             });
 
-            if (!rule || rule.rack.userId !== userId) {
+            if (!rule || rule.plant.racks.length === 0) {
                 throw new NotFoundException('Automation rule not found');
             }
 
@@ -448,7 +485,6 @@ export class AutomationService {
                 this.validateActions(updateData.actions);
             }
 
-            // Update the rule
             const updatedRule = await this.databaseService.automationRule.update({
                 where: { id: ruleId },
                 data: {
@@ -496,28 +532,32 @@ export class AutomationService {
     }
 
     /**
-     * Delete an automation rule
+     * Deletes an automation rule.
+     * Ownership is verified by checking the user owns a rack currently growing
+     * the plant associated with the rule.
      */
     async delete(ruleId: string, userId: string) {
         try {
-            // Verify rule ownership through rack
+            // Verify rule ownership through plant → racks
             const rule = await this.databaseService.automationRule.findUnique({
                 where: { id: ruleId },
                 include: {
-                    rack: {
+                    plant: {
                         select: {
-                            userId: true,
                             name: true,
+                            racks: {
+                                where: { userId, isActive: true },
+                                select: { id: true },
+                            },
                         },
                     },
                 },
             });
 
-            if (!rule || rule.rack.userId !== userId) {
+            if (!rule || rule.plant.racks.length === 0) {
                 throw new NotFoundException('Automation rule not found');
             }
 
-            // Delete the rule
             await this.databaseService.automationRule.delete({
                 where: { id: ruleId },
             });
@@ -546,7 +586,7 @@ export class AutomationService {
     }
 
     /**
-     * Validate rule conditions
+     * Validates rule conditions — at least one must be specified with valid thresholds.
      */
     private validateConditions(conditions: RuleConditions): void {
         const hasConditions =
@@ -559,7 +599,6 @@ export class AutomationService {
             throw new BadRequestException('At least one condition must be specified');
         }
 
-        // Validate moisture conditions
         if (conditions.moisture) {
             if (
                 conditions.moisture.lessThan !== undefined &&
@@ -575,7 +614,6 @@ export class AutomationService {
             }
         }
 
-        // Validate temperature conditions
         if (conditions.temperature) {
             if (
                 conditions.temperature.lessThan !== undefined &&
@@ -592,7 +630,6 @@ export class AutomationService {
             }
         }
 
-        // Validate humidity conditions
         if (conditions.humidity) {
             if (
                 conditions.humidity.lessThan !== undefined &&
@@ -608,7 +645,6 @@ export class AutomationService {
             }
         }
 
-        // Validate light level conditions
         if (conditions.lightLevel) {
             if (
                 conditions.lightLevel.lessThan !== undefined &&
@@ -626,7 +662,7 @@ export class AutomationService {
     }
 
     /**
-     * Validate rule actions
+     * Validates rule actions — at least one must be specified with valid values.
      */
     private validateActions(actions: RuleActions): void {
         const hasActions = actions.watering || actions.growLight;
@@ -635,7 +671,6 @@ export class AutomationService {
             throw new BadRequestException('At least one action must be specified');
         }
 
-        // Validate watering action
         if (actions.watering) {
             if (!['start', 'stop'].includes(actions.watering.action)) {
                 throw new BadRequestException('Watering action must be "start" or "stop"');
@@ -650,7 +685,6 @@ export class AutomationService {
             }
         }
 
-        // Validate grow light action
         if (actions.growLight) {
             if (!['on', 'off'].includes(actions.growLight.action)) {
                 throw new BadRequestException('Grow light action must be "on" or "off"');

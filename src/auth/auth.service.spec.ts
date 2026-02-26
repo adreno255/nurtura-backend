@@ -24,9 +24,12 @@ import {
     mockFirebaseUserWithMultipleProviders,
     mockFirebaseUserWithPassword,
     testEmails,
+    testFirebaseUids,
+    testUserIds,
     validEmailQueryDto,
     validUpdatePasswordDto,
 } from '../../test/fixtures';
+import { type CurrentUserPayload } from '../common/interfaces';
 
 describe('AuthService', () => {
     let service: AuthService;
@@ -302,44 +305,37 @@ describe('AuthService', () => {
     });
 
     describe('updatePassword', () => {
+        const currentUser: CurrentUserPayload = {
+            dbId: testUserIds.primary,
+            firebaseUid: testFirebaseUids.primary,
+            email: testEmails.valid,
+        };
         const dto: UpdatePasswordDto = UpdatePasswordDto;
 
         it('should reset password successfully', async () => {
-            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockFirebaseUserWithPassword);
             mockFirebaseAuth.updateUser.mockResolvedValue(undefined);
 
-            const result = await service.updatePassword(dto);
+            const result = await service.updatePassword(currentUser, dto);
 
             expect(result).toEqual({
                 message: 'Password updated successfully',
             });
         });
 
-        it('should call getUserByEmail with correct email', async () => {
-            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockFirebaseUserWithPassword);
-            mockFirebaseAuth.updateUser.mockResolvedValue(undefined);
-
-            await service.updatePassword(dto);
-
-            expect(mockFirebaseAuth.getUserByEmail).toHaveBeenCalledWith(testEmail);
-        });
-
         it('should call updateUser with correct uid and password', async () => {
-            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockFirebaseUserWithPassword);
             mockFirebaseAuth.updateUser.mockResolvedValue(undefined);
 
-            await service.updatePassword(dto);
+            await service.updatePassword(currentUser, dto);
 
-            expect(mockFirebaseAuth.updateUser).toHaveBeenCalledWith('test-uid', {
+            expect(mockFirebaseAuth.updateUser).toHaveBeenCalledWith('test-firebase-uid', {
                 password: dto.newPassword,
             });
         });
 
         it('should log success message', async () => {
-            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockFirebaseUserWithPassword);
             mockFirebaseAuth.updateUser.mockResolvedValue(undefined);
 
-            await service.updatePassword(dto);
+            await service.updatePassword(currentUser, dto);
 
             expect(mockLoggerService.log).toHaveBeenCalledWith(
                 `Password reset successfully for ${testEmail}`,
@@ -348,27 +344,33 @@ describe('AuthService', () => {
         });
 
         it('should throw NotFoundException if user not found', async () => {
-            mockFirebaseAuth.getUserByEmail.mockRejectedValue(FirebaseAuthErrors.userNotFound());
+            mockFirebaseAuth.updateUser.mockRejectedValue(FirebaseAuthErrors.userNotFound());
 
-            await expect(service.updatePassword(dto)).rejects.toThrow(NotFoundException);
-            await expect(service.updatePassword(dto)).rejects.toThrow(
+            await expect(service.updatePassword(currentUser, dto)).rejects.toThrow(
+                NotFoundException,
+            );
+            await expect(service.updatePassword(currentUser, dto)).rejects.toThrow(
                 'No user found for this email',
             );
         });
 
         it('should throw InternalServerErrorException for other errors', async () => {
             const genericError = new Error('Firebase error');
-            mockFirebaseAuth.getUserByEmail.mockRejectedValue(genericError);
+            mockFirebaseAuth.updateUser.mockRejectedValue(genericError);
 
-            await expect(service.updatePassword(dto)).rejects.toThrow(InternalServerErrorException);
-            await expect(service.updatePassword(dto)).rejects.toThrow('Failed to reset password');
+            await expect(service.updatePassword(currentUser, dto)).rejects.toThrow(
+                InternalServerErrorException,
+            );
+            await expect(service.updatePassword(currentUser, dto)).rejects.toThrow(
+                'Failed to reset password',
+            );
         });
 
         it('should log error on failure', async () => {
             const genericError = new Error('Firebase error');
-            mockFirebaseAuth.getUserByEmail.mockRejectedValue(genericError);
+            mockFirebaseAuth.updateUser.mockRejectedValue(genericError);
 
-            await expect(service.updatePassword(dto)).rejects.toThrow();
+            await expect(service.updatePassword(currentUser, dto)).rejects.toThrow();
 
             expect(mockLoggerService.error).toHaveBeenCalledWith(
                 `Error resetting password for ${testEmail}`,
@@ -378,17 +380,19 @@ describe('AuthService', () => {
         });
 
         it('should handle updateUser failure', async () => {
-            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockFirebaseUserWithPassword);
             mockFirebaseAuth.updateUser.mockRejectedValue(new Error('Update failed'));
 
-            await expect(service.updatePassword(dto)).rejects.toThrow(InternalServerErrorException);
+            await expect(service.updatePassword(currentUser, dto)).rejects.toThrow(
+                InternalServerErrorException,
+            );
         });
 
         it('should handle Firebase auth errors in updateUser', async () => {
-            mockFirebaseAuth.getUserByEmail.mockResolvedValue(mockFirebaseUserWithPassword);
             mockFirebaseAuth.updateUser.mockRejectedValue(FirebaseAuthErrors.invalidPassword());
 
-            await expect(service.updatePassword(dto)).rejects.toThrow(InternalServerErrorException);
+            await expect(service.updatePassword(currentUser, dto)).rejects.toThrow(
+                InternalServerErrorException,
+            );
         });
     });
 

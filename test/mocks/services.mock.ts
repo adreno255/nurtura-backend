@@ -13,6 +13,12 @@ export const createMockEventEmitter = () => ({
     removeListener: jest.fn(),
 });
 
+export const createMockAuthService = () => ({
+    getProviders: jest.fn(),
+    getOnboardingStatus: jest.fn(),
+    updatePassword: jest.fn(),
+});
+
 export const createMockEmailService = () => ({
     sendRegistrationOtp: jest.fn(),
     sendForgotPasswordOtp: jest.fn(),

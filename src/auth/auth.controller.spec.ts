@@ -11,17 +11,24 @@ import { type UpdatePasswordDto } from './dto/update-password.dto';
 import {
     expectedOnboardingResponses,
     expectedProviderResponses,
+    testEmails,
+    testFirebaseUids,
+    testUserIds,
     validEmailQueryDto,
     validUpdatePasswordDto,
 } from '../../test/fixtures';
+import { type CurrentUserPayload } from '../common/interfaces';
+import { createMockAuthService } from '../../test/mocks';
 
 describe('AuthController', () => {
     let controller: AuthController;
 
-    const mockAuthService = {
-        getProviders: jest.fn(),
-        getOnboardingStatus: jest.fn(),
-        updatePassword: jest.fn(),
+    const mockAuthService = createMockAuthService();
+
+    const currentUser: CurrentUserPayload = {
+        dbId: testUserIds.primary,
+        firebaseUid: testFirebaseUids.primary,
+        email: testEmails.valid,
     };
 
     beforeEach(async () => {
@@ -244,7 +251,7 @@ describe('AuthController', () => {
             const mockResponse = { message: 'Password updated successfully' };
             mockAuthService.updatePassword.mockResolvedValue(mockResponse);
 
-            const result = await controller.updatePassword(dto);
+            const result = await controller.updatePassword(currentUser, dto);
 
             expect(result).toEqual(mockResponse);
         });
@@ -254,9 +261,9 @@ describe('AuthController', () => {
                 message: 'Password updated successfully',
             });
 
-            await controller.updatePassword(dto);
+            await controller.updatePassword(currentUser, dto);
 
-            expect(mockAuthService.updatePassword).toHaveBeenCalledWith(dto);
+            expect(mockAuthService.updatePassword).toHaveBeenCalledWith(currentUser, dto);
         });
 
         it('should call AuthService.updatePassword once', async () => {
@@ -264,7 +271,7 @@ describe('AuthController', () => {
                 message: 'Password updated successfully',
             });
 
-            await controller.updatePassword(dto);
+            await controller.updatePassword(currentUser, dto);
 
             expect(mockAuthService.updatePassword).toHaveBeenCalledTimes(1);
         });
@@ -278,13 +285,12 @@ describe('AuthController', () => {
                 });
 
                 const testDto: UpdatePasswordDto = {
-                    email: 'test@example.com',
                     newPassword: password,
                 };
 
-                await controller.updatePassword(testDto);
+                await controller.updatePassword(currentUser, testDto);
 
-                expect(mockAuthService.updatePassword).toHaveBeenCalledWith(testDto);
+                expect(mockAuthService.updatePassword).toHaveBeenCalledWith(currentUser, testDto);
             }
         });
 
@@ -293,7 +299,9 @@ describe('AuthController', () => {
                 new NotFoundException('No user found for this email'),
             );
 
-            await expect(controller.updatePassword(dto)).rejects.toThrow(NotFoundException);
+            await expect(controller.updatePassword(currentUser, dto)).rejects.toThrow(
+                NotFoundException,
+            );
         });
 
         it('should propagate InternalServerErrorException from service', async () => {
@@ -301,27 +309,42 @@ describe('AuthController', () => {
                 new InternalServerErrorException('Failed to reset password'),
             );
 
-            await expect(controller.updatePassword(dto)).rejects.toThrow(
+            await expect(controller.updatePassword(currentUser, dto)).rejects.toThrow(
                 InternalServerErrorException,
             );
         });
 
-        it('should work with different email formats', async () => {
-            const emails = ['user@example.com', 'test.user@domain.co.uk', 'name+tag@company.org'];
+        it('should work with different users and emails', async () => {
+            const users = [
+                {
+                    dbId: testUserIds.primary,
+                    firebaseUid: testFirebaseUids.primary,
+                    email: testEmails.valid,
+                },
+                {
+                    dbId: testUserIds.secondary,
+                    firebaseUid: testFirebaseUids.secondary,
+                    email: testEmails.alternative,
+                },
+                {
+                    dbId: testUserIds.alternative,
+                    firebaseUid: testFirebaseUids.alternative,
+                    email: testEmails.subdomain,
+                },
+            ];
 
-            for (const email of emails) {
+            for (const user of users) {
                 mockAuthService.updatePassword.mockResolvedValue({
                     message: 'Password updated successfully',
                 });
 
                 const testDto: UpdatePasswordDto = {
-                    email,
                     newPassword: 'NewPass123!',
                 };
 
-                await controller.updatePassword(testDto);
+                await controller.updatePassword(user, testDto);
 
-                expect(mockAuthService.updatePassword).toHaveBeenCalledWith(testDto);
+                expect(mockAuthService.updatePassword).toHaveBeenCalledWith(user, testDto);
             }
         });
 
@@ -330,7 +353,7 @@ describe('AuthController', () => {
                 message: 'Password updated successfully',
             });
 
-            const result = await controller.updatePassword(dto);
+            const result = await controller.updatePassword(currentUser, dto);
 
             expect(result).toHaveProperty('message');
             expect(result.message).toBe('Password updated successfully');
@@ -363,7 +386,7 @@ describe('AuthController', () => {
                 message: 'Password updated successfully',
             });
 
-            const result = await controller.updatePassword(validUpdatePasswordDto);
+            const result = await controller.updatePassword(currentUser, validUpdatePasswordDto);
 
             expect(result).toHaveProperty('message');
             expect(typeof result.message).toBe('string');
@@ -382,7 +405,7 @@ describe('AuthController', () => {
 
             await controller.getProviders(validEmailQueryDto);
             await controller.getOnboardingStatus(validEmailQueryDto);
-            await controller.updatePassword(validUpdatePasswordDto);
+            await controller.updatePassword(currentUser, validUpdatePasswordDto);
 
             expect(mockAuthService.getProviders).toHaveBeenCalled();
             expect(mockAuthService.getOnboardingStatus).toHaveBeenCalled();
@@ -433,9 +456,9 @@ describe('AuthController', () => {
             const serviceError = new InternalServerErrorException('Reset failed');
             mockAuthService.updatePassword.mockRejectedValue(serviceError);
 
-            await expect(controller.updatePassword(validUpdatePasswordDto)).rejects.toThrow(
-                InternalServerErrorException,
-            );
+            await expect(
+                controller.updatePassword(currentUser, validUpdatePasswordDto),
+            ).rejects.toThrow(InternalServerErrorException);
         });
     });
 
@@ -469,21 +492,24 @@ describe('AuthController', () => {
                 message: 'Password updated successfully',
             });
 
-            await controller.updatePassword(validUpdatePasswordDto);
+            await controller.updatePassword(currentUser, validUpdatePasswordDto);
 
-            expect(mockAuthService.updatePassword).toHaveBeenCalledWith(validUpdatePasswordDto);
+            expect(mockAuthService.updatePassword).toHaveBeenCalledWith(
+                currentUser,
+                validUpdatePasswordDto,
+            );
         });
 
-        it('should pass both email and password from body', async () => {
+        it('should pass password from body', async () => {
             mockAuthService.updatePassword.mockResolvedValue({
                 message: 'Password updated successfully',
             });
 
-            await controller.updatePassword(validUpdatePasswordDto);
+            await controller.updatePassword(currentUser, validUpdatePasswordDto);
 
             expect(mockAuthService.updatePassword).toHaveBeenCalledWith(
+                currentUser,
                 expect.objectContaining({
-                    email: 'test@example.com',
                     newPassword: 'NewSecurePass123!',
                 }),
             );

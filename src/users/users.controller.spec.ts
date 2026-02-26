@@ -15,7 +15,7 @@ import {
     validEmailQueryDto,
     validUser,
     validUpdateUserDto,
-    testDbIds,
+    testUserIds,
 } from '../../test/fixtures';
 import { createMockUsersService } from '../../test/mocks';
 
@@ -377,7 +377,7 @@ describe('UsersController', () => {
     });
     describe('getUserById', () => {
         const currentUser: CurrentUserPayload = {
-            dbId: testDbIds.primary,
+            dbId: testUserIds.primary,
             firebaseUid: testFirebaseUids.primary,
             email: testEmails.valid,
         };
@@ -478,17 +478,17 @@ describe('UsersController', () => {
         it('should work with different DB IDs', async () => {
             const users = [
                 {
-                    dbId: testDbIds.primary,
+                    dbId: testUserIds.primary,
                     firebaseUid: testFirebaseUids.primary,
                     email: testEmails.valid,
                 },
                 {
-                    dbId: testDbIds.secondary,
+                    dbId: testUserIds.secondary,
                     firebaseUid: testFirebaseUids.secondary,
                     email: testEmails.alternative,
                 },
                 {
-                    dbId: testDbIds.alternative,
+                    dbId: testUserIds.alternative,
                     firebaseUid: testFirebaseUids.alternative,
                     email: testEmails.subdomain,
                 },

@@ -1,14 +1,7 @@
-import { IsEmail, IsString, MinLength, Matches } from 'class-validator';
+import { IsString, MinLength, Matches } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class UpdatePasswordDto {
-    @ApiProperty({
-        example: 'user@example.com',
-        description: 'Email address of the user',
-    })
-    @IsEmail({}, { message: 'Invalid email format' })
-    email!: string;
-
     @ApiProperty({
         example: 'NewSecurePass123!',
         description: 'New password for the user (minimum 8 characters)',

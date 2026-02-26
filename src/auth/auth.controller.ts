@@ -12,7 +12,8 @@ import {
 import { AuthService } from './auth.service';
 import { EmailQueryDto } from './dto/email-query.dto';
 import { UpdatePasswordDto } from './dto/update-password.dto';
-import { Public } from '../common/decorators';
+import { CurrentUser, Public } from '../common/decorators';
+import type { CurrentUserPayload } from '../common/interfaces';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -239,38 +240,17 @@ export class AuthController {
         },
     })
     @ApiBadRequestResponse({
-        description: 'Invalid email or password format',
-        content: {
-            'application/json': {
-                schema: {
-                    type: 'object',
-                    properties: {
-                        statusCode: { type: 'number', example: 400 },
-                        timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                        path: { type: 'string', example: '/api/auth/update-password' },
-                        message: { type: 'string' },
-                    },
-                },
-                examples: {
-                    invalidEmail: {
-                        summary: 'Invalid email format',
-                        value: {
-                            statusCode: 400,
-                            timestamp: '2025-12-27T10:30:00.000Z',
-                            path: '/api/auth/update-password',
-                            message: 'Invalid email format',
-                        },
-                    },
-                    weakPassword: {
-                        summary: 'Password validation failed',
-                        value: {
-                            statusCode: 400,
-                            timestamp: '2025-12-27T10:30:00.000Z',
-                            path: '/api/auth/update-password',
-                            message:
-                                'Password must be at least 8 characters long, Password must contain at least one uppercase letter, one lowercase letter, one digit, and one symbol',
-                        },
-                    },
+        description: 'Password validation failed',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 400 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/auth/update-password' },
+                message: {
+                    type: 'string',
+                    example:
+                        'Password must be at least 8 characters long, Password must contain at least one uppercase letter, one lowercase letter, one digit, and one symbol',
                 },
             },
         },
@@ -287,7 +267,7 @@ export class AuthController {
             },
         },
     })
-    async updatePassword(@Body() dto: UpdatePasswordDto) {
-        return this.authService.updatePassword(dto);
+    async updatePassword(@CurrentUser() user: CurrentUserPayload, @Body() dto: UpdatePasswordDto) {
+        return this.authService.updatePassword(user, dto);
     }
 }
