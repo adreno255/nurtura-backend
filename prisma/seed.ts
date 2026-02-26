@@ -649,7 +649,7 @@ async function main() {
         data: [
             {
                 rackId: rack.id,
-                eventType: ActivityEventType.PLANT_CHANGED,
+                eventType: ActivityEventType.PLANT_ADDED,
                 details: 'Planted 10x Lettuce',
                 metadata: { plantId: lettuce.id, quantity: 10 },
             },
