@@ -14,12 +14,12 @@ import { RuleConditionsDto } from './rule-conditions.dto';
 
 export class CreateAutomationRuleDto {
     @ApiProperty({
-        description: 'Rack ID',
+        description: 'Plant ID to associate the rule with',
         example: 'clx123abc456',
     })
     @IsNotEmpty()
     @IsString()
-    rackId!: string;
+    plantId!: string;
 
     @ApiProperty({
         description: 'Rule name',

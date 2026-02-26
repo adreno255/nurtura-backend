@@ -365,41 +365,34 @@ describe('Auth Integration Tests', () => {
     // It requires a valid Bearer token (protected by the Firebase JWT auth guard).
     describe('POST /api/auth/update-password', () => {
         it('should update password successfully for existing Firebase user', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-            const firebaseUid = TestDataHelper.generateFirebaseUid();
             const newPassword = TestDataHelper.generateStrongPassword();
 
             mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
-            mockAuth.getUserByEmail.mockResolvedValueOnce({
-                uid: firebaseUid,
-                email,
-            } as any);
             mockAuth.updateUser.mockResolvedValueOnce({
-                uid: firebaseUid,
-                email,
+                uid: mockFirebaseJWT.uid,
+                email: mockFirebaseJWT.email,
             } as any);
 
             const response = await request(httpServer)
                 .post('/api/auth/update-password')
                 .set('Authorization', `Bearer ${validAuthToken}`)
-                .send({ email, newPassword })
+                .send({ newPassword })
                 .expect(200);
 
             expect(response.body).toMatchObject({
                 message: 'Password updated successfully',
             });
-            expect(mockAuth.updateUser).toHaveBeenCalledWith(firebaseUid, {
+            expect(mockAuth.updateUser).toHaveBeenCalledWith(mockFirebaseJWT.uid, {
                 password: newPassword,
             });
         });
 
         it('should return 401 when not authenticated', async () => {
-            const email = TestDataHelper.generateRandomEmail();
             const newPassword = TestDataHelper.generateStrongPassword();
 
             const response = await request(httpServer)
                 .post('/api/auth/update-password')
-                .send({ email, newPassword })
+                .send({ newPassword })
                 .expect(401);
 
             const body = response.body as ExceptionResponse;
@@ -407,40 +400,21 @@ describe('Auth Integration Tests', () => {
         });
 
         it('should throw 404 when Firebase user does not exist', async () => {
-            const email = TestDataHelper.generateRandomEmail();
             const newPassword = TestDataHelper.generateStrongPassword();
 
             mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
-            mockAuth.getUserByEmail.mockRejectedValueOnce(FirebaseAuthErrors.userNotFound());
+            mockAuth.updateUser.mockRejectedValueOnce(FirebaseAuthErrors.userNotFound());
 
             const response = await request(httpServer)
                 .post('/api/auth/update-password')
                 .set('Authorization', `Bearer ${validAuthToken}`)
-                .send({ email, newPassword })
+                .send({ newPassword })
                 .expect(404);
 
             expect(response.body).toMatchObject({
                 statusCode: 404,
                 message: 'No user found for this email',
             });
-        });
-
-        it('should return 400 for invalid email format', async () => {
-            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
-
-            const response = await request(httpServer)
-                .post('/api/auth/update-password')
-                .set('Authorization', `Bearer ${validAuthToken}`)
-                .send({
-                    email: 'invalid-email',
-                    newPassword: 'ValidPass123!',
-                })
-                .expect(400);
-
-            const body = response.body as ExceptionResponse;
-
-            expect(body.statusCode).toBe(400);
-            expect(body.message).toContain('Invalid email format');
         });
 
         it('should return 400 for weak password', async () => {
@@ -450,7 +424,6 @@ describe('Auth Integration Tests', () => {
                 .post('/api/auth/update-password')
                 .set('Authorization', `Bearer ${validAuthToken}`)
                 .send({
-                    email: 'user@example.com',
                     newPassword: 'weak',
                 })
                 .expect(400);
@@ -468,7 +441,6 @@ describe('Auth Integration Tests', () => {
                 .post('/api/auth/update-password')
                 .set('Authorization', `Bearer ${validAuthToken}`)
                 .send({
-                    email: 'user@example.com',
                     newPassword: 'lowercase123!',
                 })
                 .expect(400);
@@ -486,7 +458,6 @@ describe('Auth Integration Tests', () => {
                 .post('/api/auth/update-password')
                 .set('Authorization', `Bearer ${validAuthToken}`)
                 .send({
-                    email: 'user@example.com',
                     newPassword: 'UPPERCASE123!',
                 })
                 .expect(400);
@@ -504,7 +475,6 @@ describe('Auth Integration Tests', () => {
                 .post('/api/auth/update-password')
                 .set('Authorization', `Bearer ${validAuthToken}`)
                 .send({
-                    email: 'user@example.com',
                     newPassword: 'NoDigits!',
                 })
                 .expect(400);
@@ -522,7 +492,6 @@ describe('Auth Integration Tests', () => {
                 .post('/api/auth/update-password')
                 .set('Authorization', `Bearer ${validAuthToken}`)
                 .send({
-                    email: 'user@example.com',
                     newPassword: 'NoSymbols123',
                 })
                 .expect(400);
@@ -540,7 +509,6 @@ describe('Auth Integration Tests', () => {
                 .post('/api/auth/update-password')
                 .set('Authorization', `Bearer ${validAuthToken}`)
                 .send({
-                    email: 'user@example.com',
                     newPassword: 'Short1!',
                 })
                 .expect(400);
@@ -549,22 +517,6 @@ describe('Auth Integration Tests', () => {
 
             expect(body.statusCode).toBe(400);
             expect(body.message).toContain('at least 8 characters');
-        });
-
-        it('should return 400 when email is missing', async () => {
-            mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
-
-            const response = await request(httpServer)
-                .post('/api/auth/update-password')
-                .set('Authorization', `Bearer ${validAuthToken}`)
-                .send({
-                    newPassword: 'ValidPass123!',
-                })
-                .expect(400);
-
-            const body = response.body as ExceptionResponse;
-
-            expect(body.statusCode).toBe(400);
         });
 
         it('should return 400 when newPassword is missing', async () => {
@@ -590,7 +542,6 @@ describe('Auth Integration Tests', () => {
                 .post('/api/auth/update-password')
                 .set('Authorization', `Bearer ${validAuthToken}`)
                 .send({
-                    email: 'user@example.com',
                     newPassword: 'ValidPass123!',
                     extraField: 'should-not-be-here',
                 })
@@ -603,25 +554,18 @@ describe('Auth Integration Tests', () => {
 
         it('should accept valid password with all requirements', async () => {
             const validPasswords = ['ValidPass1!', 'Secure@123', 'MyP@ssw0rd', 'C0mpl3x!Pass'];
-            const email = 'user@example.com';
-            const firebaseUid = TestDataHelper.generateFirebaseUid();
 
             for (const password of validPasswords) {
                 mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
-                mockAuth.getUserByEmail.mockResolvedValueOnce({
-                    uid: firebaseUid,
-                    email,
-                } as any);
                 mockAuth.updateUser.mockResolvedValueOnce({
-                    uid: firebaseUid,
-                    email,
+                    uid: mockFirebaseJWT.uid,
+                    email: mockFirebaseJWT.email,
                 } as any);
 
                 await request(httpServer)
                     .post('/api/auth/update-password')
                     .set('Authorization', `Bearer ${validAuthToken}`)
                     .send({
-                        email,
                         newPassword: password,
                     })
                     .expect(200);
@@ -629,16 +573,9 @@ describe('Auth Integration Tests', () => {
         });
 
         it('should handle multiple password updates for same user', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-            const firebaseUid = TestDataHelper.generateFirebaseUid();
-
-            mockAuth.getUserByEmail.mockResolvedValue({
-                uid: firebaseUid,
-                email,
-            } as any);
             mockAuth.updateUser.mockResolvedValue({
-                uid: firebaseUid,
-                email,
+                uid: mockFirebaseJWT.uid,
+                email: mockFirebaseJWT.email,
             } as any);
 
             // Update password multiple times
@@ -649,7 +586,7 @@ describe('Auth Integration Tests', () => {
                 await request(httpServer)
                     .post('/api/auth/update-password')
                     .set('Authorization', `Bearer ${validAuthToken}`)
-                    .send({ email, newPassword })
+                    .send({ newPassword })
                     .expect(200);
             }
 
@@ -657,21 +594,15 @@ describe('Auth Integration Tests', () => {
         });
 
         it('should handle Firebase updateUser failures', async () => {
-            const email = TestDataHelper.generateRandomEmail();
-            const firebaseUid = TestDataHelper.generateFirebaseUid();
             const newPassword = TestDataHelper.generateStrongPassword();
 
             mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
-            mockAuth.getUserByEmail.mockResolvedValueOnce({
-                uid: firebaseUid,
-                email,
-            } as any);
             mockAuth.updateUser.mockRejectedValueOnce(new Error('Firebase update failed'));
 
             const response = await request(httpServer)
                 .post('/api/auth/update-password')
                 .set('Authorization', `Bearer ${validAuthToken}`)
-                .send({ email, newPassword })
+                .send({ newPassword })
                 .expect(500);
 
             const body = response.body as ExceptionResponse;
@@ -1480,12 +1411,6 @@ describe('Auth Integration Tests', () => {
                     path: '/api/auth/onboarding-status',
                     query: { email: 'notfound@example.com' },
                 },
-                {
-                    method: 'post',
-                    path: '/api/auth/update-password',
-                    body: { email: 'notfound@example.com', newPassword: 'ValidPass123!' },
-                    auth: true,
-                },
             ];
 
             for (const endpoint of endpoints) {
@@ -1587,14 +1512,13 @@ describe('Auth Integration Tests', () => {
 
         it('should accept JSON content type', async () => {
             mockFirebaseService.getAuth().verifyIdToken.mockResolvedValueOnce(mockFirebaseJWT);
-            mockAuth.getUserByEmail.mockRejectedValueOnce(FirebaseAuthErrors.userNotFound());
+            mockAuth.updateUser.mockRejectedValueOnce(FirebaseAuthErrors.userNotFound());
 
             await request(httpServer)
                 .post('/api/auth/update-password')
                 .set('Authorization', `Bearer ${validAuthToken}`)
                 .set('Content-Type', 'application/json')
                 .send({
-                    email: 'test@example.com',
                     newPassword: 'ValidPass123!',
                 })
                 .expect(404);

@@ -149,7 +149,6 @@ model Rack {
     currentPlantId  String?   @map("current_plant_id")
     quantity        Int       @default(0)
     plantedAt       DateTime? @map("planted_at")
-    expectedHarvest DateTime? @map("expected_harvest")
     lastHarvestAt   DateTime? @map("last_harvest_at")
     harvestCount    Int       @default(0) @map("harvest_count")
 
@@ -279,7 +278,9 @@ model AutomationRule {
     actions    Json
     
     // Execution tracking
-    cooldownMinutes Int? @map("cooldown_minutes")
+    cooldownMinutes Int?        @map("cooldown_minutes")
+    lastTriggeredAt DateTime?   @map("last_triggered_at")
+    triggerCount    Int         @default(0) @map("trigger_count")
 
     // Timestamps
     createdAt DateTime @default(now()) @map("created_at")

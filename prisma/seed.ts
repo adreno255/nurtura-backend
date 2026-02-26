@@ -553,7 +553,6 @@ async function main() {
             currentPlantId: lettuce.id,
             quantity: 10,
             plantedAt: new Date(),
-            expectedHarvest: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
         },
     });
 
