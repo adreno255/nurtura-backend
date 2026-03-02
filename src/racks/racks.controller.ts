@@ -18,6 +18,7 @@ import {
     ApiBadRequestResponse,
     ApiNotFoundResponse,
     ApiConflictResponse,
+    ApiUnauthorizedResponse,
     ApiInternalServerErrorResponse,
     ApiParam,
     ApiQuery,
@@ -34,68 +35,6 @@ import { type CurrentUserPayload } from '../common/interfaces';
 @Controller('racks')
 export class RacksController {
     constructor(private readonly racksService: RacksService) {}
-
-    // CRUD Operations
-
-    @Post()
-    @HttpCode(HttpStatus.CREATED)
-    @ApiOperation({
-        summary: 'Register new rack',
-        description: 'Creates a new rack by registering an ESP32 device with its MAC address',
-    })
-    @ApiResponse({
-        status: HttpStatus.CREATED,
-        description: 'Rack registered successfully',
-        schema: {
-            type: 'object',
-            properties: {
-                message: { type: 'string', example: 'Rack registered successfully' },
-                rackId: { type: 'string', example: 'clx123abc456' },
-            },
-        },
-    })
-    @ApiBadRequestResponse({
-        description: 'Invalid MAC address format or validation error',
-        schema: {
-            type: 'object',
-            properties: {
-                statusCode: { type: 'number', example: 400 },
-                timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks' },
-                message: {
-                    type: 'string',
-                    example: 'MAC address must be in format XX:XX:XX:XX:XX:XX',
-                },
-            },
-        },
-    })
-    @ApiConflictResponse({
-        description: 'MAC address already registered',
-        schema: {
-            type: 'object',
-            properties: {
-                statusCode: { type: 'number', example: 409 },
-                timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks' },
-                message: { type: 'string', example: 'MAC address already registered' },
-            },
-        },
-    })
-    @ApiInternalServerErrorResponse({
-        description: 'Internal server error',
-        schema: {
-            type: 'object',
-            properties: {
-                statusCode: { type: 'number', example: 500 },
-                timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks' },
-                message: { type: 'string', example: 'Failed to register rack' },
-            },
-        },
-    })
-    async create(@CurrentUser() user: CurrentUserPayload, @Body() createRackDto: CreateRackDto) {
-        return this.racksService.create(user.dbId, createRackDto);
-    }
 
     @Get()
     @HttpCode(HttpStatus.OK)
@@ -150,6 +89,33 @@ export class RacksController {
             },
         },
     })
+    @ApiBadRequestResponse({
+        description: 'Invalid query error',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 400 },
+                timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/racks' },
+                message: {
+                    type: 'string',
+                    example: 'Page and limit query parameters must be positive integers',
+                },
+            },
+        },
+    })
+    @ApiUnauthorizedResponse({
+        description: 'Missing or invalid authentication token',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 401 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/racks' },
+                message: { type: 'string', example: 'Authentication required' },
+            },
+        },
+    })
     @ApiInternalServerErrorResponse({
         description: 'Internal server error',
         schema: {
@@ -201,6 +167,18 @@ export class RacksController {
             },
         },
     })
+    @ApiUnauthorizedResponse({
+        description: 'Missing or invalid authentication token',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 401 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/racks/clx123abc456' },
+                message: { type: 'string', example: 'Authentication required' },
+            },
+        },
+    })
     @ApiNotFoundResponse({
         description: 'Rack not found or access denied',
         schema: {
@@ -228,136 +206,6 @@ export class RacksController {
     async findOne(@CurrentUser() user: CurrentUserPayload, @Param('rackId') rackId: string) {
         return this.racksService.findById(rackId, user.dbId);
     }
-
-    @Patch(':rackId')
-    @HttpCode(HttpStatus.OK)
-    @ApiOperation({
-        summary: 'Update rack',
-        description: 'Updates rack information (name, description, MQTT topic)',
-    })
-    @ApiParam({
-        name: 'rackId',
-        description: 'Rack ID',
-        example: 'clx123abc456',
-    })
-    @ApiResponse({
-        status: HttpStatus.OK,
-        description: 'Rack updated successfully',
-        schema: {
-            type: 'object',
-            properties: {
-                message: { type: 'string', example: 'Rack updated successfully' },
-                rack: {
-                    type: 'object',
-                    properties: {
-                        id: { type: 'string', example: 'clx123abc456' },
-                        name: { type: 'string', example: 'Living Room Farm' },
-                        macAddress: { type: 'string', example: 'AA:BB:CC:DD:EE:FF' },
-                        mqttTopic: { type: 'string', example: 'nurtura/rack/living-room' },
-                        description: { type: 'string', example: 'Rack for growing herbs' },
-                        status: { type: 'string', example: 'ONLINE' },
-                        isActive: { type: 'boolean', example: true },
-                        lastSeenAt: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                        createdAt: { type: 'string', example: '2025-01-15T08:00:00.000Z' },
-                    },
-                },
-            },
-        },
-    })
-    @ApiNotFoundResponse({
-        description: 'Rack not found or access denied',
-        schema: {
-            type: 'object',
-            properties: {
-                statusCode: { type: 'number', example: 404 },
-                timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456' },
-                message: { type: 'string', example: 'Rack not found or access denied' },
-            },
-        },
-    })
-    @ApiBadRequestResponse({
-        description: 'Validation error',
-        schema: {
-            type: 'object',
-            properties: {
-                statusCode: { type: 'number', example: 400 },
-                timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456' },
-                message: { type: 'string', example: 'Validation failed' },
-            },
-        },
-    })
-    @ApiInternalServerErrorResponse({
-        description: 'Internal server error',
-        schema: {
-            type: 'object',
-            properties: {
-                statusCode: { type: 'number', example: 500 },
-                timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456' },
-                message: { type: 'string', example: 'Failed to update rack' },
-            },
-        },
-    })
-    async update(
-        @CurrentUser() user: CurrentUserPayload,
-        @Param('rackId') rackId: string,
-        @Body() updateRackDto: UpdateRackDto,
-    ) {
-        return this.racksService.update(rackId, user.dbId, updateRackDto);
-    }
-
-    @Delete(':rackId')
-    @HttpCode(HttpStatus.OK)
-    @ApiOperation({
-        summary: 'Delete rack',
-        description: 'Soft deletes a rack (sets isActive to false)',
-    })
-    @ApiParam({
-        name: 'rackId',
-        description: 'Rack ID',
-        example: 'clx123abc456',
-    })
-    @ApiResponse({
-        status: HttpStatus.OK,
-        description: 'Rack deleted successfully',
-        schema: {
-            type: 'object',
-            properties: {
-                message: { type: 'string', example: 'Rack deleted successfully' },
-            },
-        },
-    })
-    @ApiNotFoundResponse({
-        description: 'Rack not found or access denied',
-        schema: {
-            type: 'object',
-            properties: {
-                statusCode: { type: 'number', example: 404 },
-                timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456' },
-                message: { type: 'string', example: 'Rack not found or access denied' },
-            },
-        },
-    })
-    @ApiInternalServerErrorResponse({
-        description: 'Internal server error',
-        schema: {
-            type: 'object',
-            properties: {
-                statusCode: { type: 'number', example: 500 },
-                timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456' },
-                message: { type: 'string', example: 'Failed to delete rack' },
-            },
-        },
-    })
-    async remove(@CurrentUser() user: CurrentUserPayload, @Param('rackId') rackId: string) {
-        return this.racksService.delete(rackId, user.dbId);
-    }
-
-    // Current State & Control Operations
 
     @Get(':rackId/sensors/current')
     @HttpCode(HttpStatus.OK)
@@ -397,6 +245,18 @@ export class RacksController {
                     },
                     nullable: true,
                 },
+            },
+        },
+    })
+    @ApiUnauthorizedResponse({
+        description: 'Missing or invalid authentication token',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 401 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/racks/clx123abc456/sensors/current' },
+                message: { type: 'string', example: 'Authentication required' },
             },
         },
     })
@@ -455,6 +315,18 @@ export class RacksController {
             },
         },
     })
+    @ApiUnauthorizedResponse({
+        description: 'Missing or invalid authentication token',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 401 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/racks/clx123abc456/status' },
+                message: { type: 'string', example: 'Authentication required' },
+            },
+        },
+    })
     @ApiNotFoundResponse({
         description: 'Rack not found or access denied',
         schema: {
@@ -481,6 +353,230 @@ export class RacksController {
     })
     async getStatus(@CurrentUser() user: CurrentUserPayload, @Param('rackId') rackId: string) {
         return this.racksService.getDeviceStatus(rackId, user.dbId);
+    }
+
+    @Post()
+    @HttpCode(HttpStatus.CREATED)
+    @ApiOperation({
+        summary: 'Register new rack',
+        description: 'Creates a new rack by registering an ESP32 device with its MAC address',
+    })
+    @ApiResponse({
+        status: HttpStatus.CREATED,
+        description: 'Rack registered successfully',
+        schema: {
+            type: 'object',
+            properties: {
+                message: { type: 'string', example: 'Rack registered successfully' },
+                rackId: { type: 'string', example: 'clx123abc456' },
+            },
+        },
+    })
+    @ApiBadRequestResponse({
+        description: 'Invalid MAC address format or validation error',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 400 },
+                timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/racks' },
+                message: {
+                    type: 'string',
+                    example: 'MAC address must be in format XX:XX:XX:XX:XX:XX',
+                },
+            },
+        },
+    })
+    @ApiUnauthorizedResponse({
+        description: 'Missing or invalid authentication token',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 401 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/racks' },
+                message: { type: 'string', example: 'Authentication required' },
+            },
+        },
+    })
+    @ApiConflictResponse({
+        description: 'MAC address already registered',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 409 },
+                timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/racks' },
+                message: { type: 'string', example: 'MAC address already registered' },
+            },
+        },
+    })
+    @ApiInternalServerErrorResponse({
+        description: 'Internal server error',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 500 },
+                timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/racks' },
+                message: { type: 'string', example: 'Failed to register rack' },
+            },
+        },
+    })
+    async create(@CurrentUser() user: CurrentUserPayload, @Body() createRackDto: CreateRackDto) {
+        return this.racksService.create(user.dbId, createRackDto);
+    }
+
+    @Patch(':rackId')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({
+        summary: 'Update rack',
+        description: 'Updates rack information (name, description, MQTT topic)',
+    })
+    @ApiParam({
+        name: 'rackId',
+        description: 'Rack ID',
+        example: 'clx123abc456',
+    })
+    @ApiResponse({
+        status: HttpStatus.OK,
+        description: 'Rack updated successfully',
+        schema: {
+            type: 'object',
+            properties: {
+                message: { type: 'string', example: 'Rack updated successfully' },
+                rack: {
+                    type: 'object',
+                    properties: {
+                        id: { type: 'string', example: 'clx123abc456' },
+                        name: { type: 'string', example: 'Living Room Farm' },
+                        macAddress: { type: 'string', example: 'AA:BB:CC:DD:EE:FF' },
+                        mqttTopic: { type: 'string', example: 'nurtura/rack/living-room' },
+                        description: { type: 'string', example: 'Rack for growing herbs' },
+                        status: { type: 'string', example: 'ONLINE' },
+                        isActive: { type: 'boolean', example: true },
+                        lastSeenAt: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
+                        createdAt: { type: 'string', example: '2025-01-15T08:00:00.000Z' },
+                    },
+                },
+            },
+        },
+    })
+    @ApiBadRequestResponse({
+        description: 'Validation error',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 400 },
+                timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/racks/clx123abc456' },
+                message: { type: 'string', example: 'Validation failed' },
+            },
+        },
+    })
+    @ApiUnauthorizedResponse({
+        description: 'Missing or invalid authentication token',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 401 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/racks/clx123abc456' },
+                message: { type: 'string', example: 'Authentication required' },
+            },
+        },
+    })
+    @ApiNotFoundResponse({
+        description: 'Rack not found or access denied',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 404 },
+                timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/racks/clx123abc456' },
+                message: { type: 'string', example: 'Rack not found or access denied' },
+            },
+        },
+    })
+    @ApiInternalServerErrorResponse({
+        description: 'Internal server error',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 500 },
+                timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/racks/clx123abc456' },
+                message: { type: 'string', example: 'Failed to update rack' },
+            },
+        },
+    })
+    async update(
+        @CurrentUser() user: CurrentUserPayload,
+        @Param('rackId') rackId: string,
+        @Body() updateRackDto: UpdateRackDto,
+    ) {
+        return this.racksService.update(rackId, user.dbId, updateRackDto);
+    }
+
+    @Delete(':rackId')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({
+        summary: 'Delete rack',
+        description: 'Soft deletes a rack (sets isActive to false)',
+    })
+    @ApiParam({
+        name: 'rackId',
+        description: 'Rack ID',
+        example: 'clx123abc456',
+    })
+    @ApiResponse({
+        status: HttpStatus.OK,
+        description: 'Rack deleted successfully',
+        schema: {
+            type: 'object',
+            properties: {
+                message: { type: 'string', example: 'Rack deleted successfully' },
+            },
+        },
+    })
+    @ApiUnauthorizedResponse({
+        description: 'Missing or invalid authentication token',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 401 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/racks/clx123abc456' },
+                message: { type: 'string', example: 'Authentication required' },
+            },
+        },
+    })
+    @ApiNotFoundResponse({
+        description: 'Rack not found or access denied',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 404 },
+                timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/racks/clx123abc456' },
+                message: { type: 'string', example: 'Rack not found or access denied' },
+            },
+        },
+    })
+    @ApiInternalServerErrorResponse({
+        description: 'Internal server error',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 500 },
+                timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/racks/clx123abc456' },
+                message: { type: 'string', example: 'Failed to delete rack' },
+            },
+        },
+    })
+    async remove(@CurrentUser() user: CurrentUserPayload, @Param('rackId') rackId: string) {
+        return this.racksService.delete(rackId, user.dbId);
     }
 
     /*

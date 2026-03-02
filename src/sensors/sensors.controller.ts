@@ -8,6 +8,8 @@ import {
     ApiQuery,
     ApiNotFoundResponse,
     ApiInternalServerErrorResponse,
+    ApiUnauthorizedResponse,
+    ApiBadRequestResponse,
 } from '@nestjs/swagger';
 import { SensorsService } from './sensors.service';
 import { CurrentUser } from '../common/decorators';
@@ -48,6 +50,18 @@ export class SensorsController {
                 moisture: { type: 'number', example: 45.8 },
                 lightLevel: { type: 'number', example: 850 },
                 timestamp: { type: 'string', example: '2025-02-01T10:25:00.000Z' },
+            },
+        },
+    })
+    @ApiUnauthorizedResponse({
+        description: 'Missing or invalid authentication token',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 401 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/sensors/racks/clx123abc456/latest' },
+                message: { type: 'string', example: 'Authentication required' },
             },
         },
     })
@@ -131,6 +145,34 @@ export class SensorsController {
             },
         },
     })
+    @ApiBadRequestResponse({
+        description: 'Invalid query error',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 400 },
+                timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/sensors/racks/clx123abc456/history' },
+                message: {
+                    type: 'string',
+                    example:
+                        'Invalid query parameters: startDate must be a valid ISO 8601 date string',
+                },
+            },
+        },
+    })
+    @ApiUnauthorizedResponse({
+        description: 'Missing or invalid authentication token',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 401 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/sensors/racks/clx123abc456/history' },
+                message: { type: 'string', example: 'Authentication required' },
+            },
+        },
+    })
     @ApiInternalServerErrorResponse({
         description: 'Internal server error',
         schema: {
@@ -203,6 +245,33 @@ export class SensorsController {
                 },
                 count: { type: 'number', example: 24 },
                 periodHours: { type: 'number', example: 24 },
+            },
+        },
+    })
+    @ApiBadRequestResponse({
+        description: 'Invalid query error',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 400 },
+                timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/sensors/racks/clx123abc456/aggregated' },
+                message: {
+                    type: 'string',
+                    example: 'Invalid hours parameter: must be a positive integer',
+                },
+            },
+        },
+    })
+    @ApiUnauthorizedResponse({
+        description: 'Missing or invalid authentication token',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 401 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/sensors/racks/clx123abc456/aggregated' },
+                message: { type: 'string', example: 'Authentication required' },
             },
         },
     })
@@ -288,6 +357,33 @@ export class SensorsController {
                 },
                 count: { type: 'number', example: 48 },
                 periodHours: { type: 'number', example: 24 },
+            },
+        },
+    })
+    @ApiBadRequestResponse({
+        description: 'Invalid query error',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 400 },
+                timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/sensors/clx123abc456/history' },
+                message: {
+                    type: 'string',
+                    example: 'Invalid hours parameter: must be a positive integer',
+                },
+            },
+        },
+    })
+    @ApiUnauthorizedResponse({
+        description: 'Missing or invalid authentication token',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 401 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/sensors/racks/clx123abc456/history' },
+                message: { type: 'string', example: 'Authentication required' },
             },
         },
     })
@@ -404,6 +500,33 @@ export class SensorsController {
                     },
                     nullable: true,
                 },
+            },
+        },
+    })
+    @ApiBadRequestResponse({
+        description: 'Invalid query error',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 400 },
+                timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/sensors/clx123abc456/statistics' },
+                message: {
+                    type: 'string',
+                    example: 'Invalid hours parameter: must be a positive integer',
+                },
+            },
+        },
+    })
+    @ApiUnauthorizedResponse({
+        description: 'Missing or invalid authentication token',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 401 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/sensors/clx123abc456/statistics' },
+                message: { type: 'string', example: 'Authentication required' },
             },
         },
     })

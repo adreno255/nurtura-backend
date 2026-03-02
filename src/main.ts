@@ -21,9 +21,9 @@ async function bootstrap(): Promise<void> {
             whitelist: true,
             forbidNonWhitelisted: true,
             transform: true,
-            transformOptions: {
-                enableImplicitConversion: true,
-            },
+            // transformOptions: {
+            //     enableImplicitConversion: true,
+            // },
         }),
     );
 
@@ -52,8 +52,9 @@ async function bootstrap(): Promise<void> {
             .addTag('Authentication', 'User authentication and authorization endpoints')
             .addTag('Authentication - OTP', 'OTP verification and management')
             .addTag('Users', 'User profile management')
-            .addTag('Sensors', 'Device sensors data and statistics')
             .addTag('Racks', 'Rack management')
+            .addTag('Plants', 'Plant management')
+            .addTag('Sensors', 'Device sensors data and statistics')
             .addTag('Automation', 'Device commands and rulesets')
             .addBearerAuth(
                 {
@@ -72,6 +73,25 @@ async function bootstrap(): Promise<void> {
 
         SwaggerModule.setup('api/docs', app, document, {
             customSiteTitle: 'Nurtura API Docs',
+            swaggerOptions: {
+                operationsSorter: (
+                    a: { get: (key: string) => string },
+                    b: { get: (key: string) => string },
+                ) => {
+                    const methodsOrder = ['get', 'post', 'put', 'patch', 'delete'];
+
+                    const methodA = a.get('method');
+                    const methodB = b.get('method');
+
+                    let result = methodsOrder.indexOf(methodA) - methodsOrder.indexOf(methodB);
+
+                    if (result === 0) {
+                        result = a.get('path').localeCompare(b.get('path'));
+                    }
+
+                    return result;
+                },
+            },
         });
     }
 

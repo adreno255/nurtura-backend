@@ -1,10 +1,12 @@
-import { type DatabaseService } from '../../database/database.service';
-import { type MyLoggerService } from '../../my-logger/my-logger.service';
+import { DatabaseService } from '../../database/database.service';
+import { MyLoggerService } from '../../my-logger/my-logger.service';
 import { type Prisma, type ActivityEventType } from '../../generated/prisma';
+import { Injectable } from '@nestjs/common';
 
 /**
  * Helper class for saving rack activity to the database
  */
+@Injectable()
 export class LogRackActivityHelper {
     constructor(
         private readonly databaseService: DatabaseService,

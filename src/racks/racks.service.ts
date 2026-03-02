@@ -490,7 +490,7 @@ export class RacksService {
             // Verify ownership
             await this.verifyRackOwnership(rackId, userId);
 
-            const rack = await this.databaseService.rack.findUnique({
+            const rack = (await this.databaseService.rack.findUnique({
                 where: { id: rackId },
                 select: {
                     id: true,
@@ -498,11 +498,7 @@ export class RacksService {
                     status: true,
                     lastSeenAt: true,
                 },
-            });
-
-            if (!rack) {
-                throw new NotFoundException('Rack not found');
-            }
+            })) as Rack;
 
             const latestReading = await this.getLatestSensorReading(rackId);
 
@@ -538,17 +534,13 @@ export class RacksService {
             // Verify ownership
             await this.verifyRackOwnership(rackId, userId);
 
-            const rack = await this.databaseService.rack.findUnique({
+            const rack = (await this.databaseService.rack.findUnique({
                 where: { id: rackId },
                 select: {
                     status: true,
                     lastSeenAt: true,
                 },
-            });
-
-            if (!rack) {
-                throw new NotFoundException('Rack not found');
-            }
+            })) as Rack;
 
             return {
                 message: 'Device status retrieved successfully',
