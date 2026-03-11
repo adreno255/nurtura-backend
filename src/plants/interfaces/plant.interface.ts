@@ -1,4 +1,4 @@
-import { type Plant, type PlantType } from '../../generated/prisma';
+import { type Plant, type PlantCategory } from '../../generated/prisma';
 
 export interface PlantCreatedResponse {
     message: string;
@@ -20,6 +20,6 @@ export interface PlantDetailsResponse {
 }
 
 export interface PlantQueryParams {
-    type?: PlantType;
+    category?: PlantCategory;
     isActive?: boolean;
 }

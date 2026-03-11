@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsString, IsOptional, IsEnum, MaxLength, IsBoolean } from 'class-validator';
-import { PlantType, SoilType } from '../../generated/prisma';
+import { PlantCategory, SoilType } from '../../generated/prisma';
 
 export class UpdatePlantDto {
     @ApiPropertyOptional({ example: 'Basil', maxLength: 200 })
@@ -9,10 +9,10 @@ export class UpdatePlantDto {
     @MaxLength(200)
     name?: string;
 
-    @ApiPropertyOptional({ enum: PlantType, example: PlantType.HERBS })
+    @ApiPropertyOptional({ enum: PlantCategory, example: PlantCategory.HERBS })
     @IsOptional()
-    @IsEnum(PlantType)
-    type?: PlantType;
+    @IsEnum(PlantCategory)
+    category?: PlantCategory;
 
     @ApiPropertyOptional({ enum: SoilType, example: SoilType.PEATY })
     @IsOptional()

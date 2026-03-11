@@ -17,7 +17,7 @@ import {
     type PlantDeletedResponse,
     type PlantDetailsResponse,
 } from './interfaces/plant.interface';
-import { CreatePlantDto, UpdatePlantDto, AssignPlantToRackDto, PlantTypeQueryDto } from './dto';
+import { CreatePlantDto, UpdatePlantDto, AssignPlantToRackDto, PlantCategoryQueryDto } from './dto';
 import { RacksService } from '../racks/racks.service';
 
 @Injectable()
@@ -39,7 +39,7 @@ export class PlantsService {
             const plant = await this.databaseService.plant.create({
                 data: {
                     name: dto.name,
-                    type: dto.type,
+                    category: dto.category,
                     recommendedSoil: dto.recommendedSoil,
                     description: dto.description,
                 },
@@ -59,17 +59,17 @@ export class PlantsService {
     }
 
     /**
-     * Get all plants with optional filtering by type and pagination
+     * Get all plants with optional filtering by category and pagination
      */
-    async findAll(query: PlantTypeQueryDto): Promise<PaginatedResponse<Plant>> {
+    async findAll(query: PlantCategoryQueryDto): Promise<PaginatedResponse<Plant>> {
         try {
             this.logger.log(
-                `Fetching plants - type: ${query.type ?? 'all'}, isActive: ${query.isActive ?? 'all'}`,
+                `Fetching plants - category: ${query.category ?? 'all'}, isActive: ${query.isActive ?? 'all'}`,
                 'PlantsService',
             );
 
             const where = {
-                ...(query.type !== undefined && { type: query.type }),
+                ...(query.category !== undefined && { category: query.category }),
                 ...(query.isActive !== undefined && { isActive: query.isActive }),
             };
 
@@ -140,7 +140,7 @@ export class PlantsService {
                 where: { id: plantId },
                 data: {
                     name: dto.name,
-                    type: dto.type,
+                    category: dto.category,
                     recommendedSoil: dto.recommendedSoil,
                     description: dto.description,
                     isActive: dto.isActive,
@@ -508,7 +508,7 @@ export class PlantsService {
     async getRackHistory(
         rackId: string,
         userId: string,
-        query: PlantTypeQueryDto,
+        query: PlantCategoryQueryDto,
     ): Promise<PaginatedResponse<object>> {
         try {
             this.logger.log(`Fetching plant history for rack ${rackId}`, 'PlantsService');
@@ -520,7 +520,7 @@ export class PlantsService {
                     where: { rackId },
                     include: {
                         plant: {
-                            select: { id: true, name: true, type: true, recommendedSoil: true },
+                            select: { id: true, name: true, category: true, recommendedSoil: true },
                         },
                     },
                     orderBy: { plantedAt: 'desc' },

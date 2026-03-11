@@ -5,7 +5,7 @@ import {
     ActivityEventType,
     NotificationStatus,
     NotificationType,
-    PlantType,
+    PlantCategory,
     PrismaClient,
     SoilType,
 } from './../src/generated/prisma/client';
@@ -69,7 +69,7 @@ async function main() {
     const lettuce = await prisma.plant.create({
         data: {
             name: 'Lettuce',
-            type: PlantType.LEAFY_GREENS,
+            category: PlantCategory.LEAFY_GREENS,
             recommendedSoil: SoilType.LOAMY,
             description: 'Cool-season leafy green, ideal for salads',
             isActive: true,
@@ -137,7 +137,7 @@ async function main() {
     const malabarSpinach = await prisma.plant.create({
         data: {
             name: 'Malabar Spinach',
-            type: PlantType.TROPICAL_GREENS,
+            category: PlantCategory.TROPICAL_GREENS,
             recommendedSoil: SoilType.SILTY,
             description: 'Heat-loving tropical vine with edible leaves',
             isActive: true,
@@ -205,7 +205,7 @@ async function main() {
     const basil = await prisma.plant.create({
         data: {
             name: 'Basil',
-            type: PlantType.HERBS,
+            category: PlantCategory.HERBS,
             recommendedSoil: SoilType.PEATY,
             description: 'Aromatic herb, popular in Mediterranean cuisine',
             isActive: true,
@@ -262,7 +262,7 @@ async function main() {
     const oregano = await prisma.plant.create({
         data: {
             name: 'Oregano',
-            type: PlantType.HERBS,
+            category: PlantCategory.HERBS,
             recommendedSoil: SoilType.SANDY,
             description: 'Drought-tolerant Mediterranean herb',
             isActive: true,
@@ -319,7 +319,7 @@ async function main() {
     const rosemary = await prisma.plant.create({
         data: {
             name: 'Rosemary',
-            type: PlantType.HERBS,
+            category: PlantCategory.HERBS,
             recommendedSoil: SoilType.SANDY,
             description: 'Hardy evergreen herb with needle-like leaves',
             isActive: true,
@@ -376,7 +376,7 @@ async function main() {
     const cilantro = await prisma.plant.create({
         data: {
             name: 'Cilantro',
-            type: PlantType.ROOT_AND_STALK,
+            category: PlantCategory.ROOT_AND_STALK,
             recommendedSoil: SoilType.LOAMY,
             description: 'Fast-growing herb with distinctive flavor',
             isActive: true,
@@ -433,7 +433,7 @@ async function main() {
     const celery = await prisma.plant.create({
         data: {
             name: 'Celery',
-            type: PlantType.ROOT_AND_STALK,
+            category: PlantCategory.ROOT_AND_STALK,
             recommendedSoil: SoilType.LOAMY,
             description: 'Moisture-loving vegetable with crunchy stalks',
             isActive: true,
@@ -490,7 +490,7 @@ async function main() {
     const parsley = await prisma.plant.create({
         data: {
             name: 'Parsley',
-            type: PlantType.ROOT_AND_STALK,
+            category: PlantCategory.ROOT_AND_STALK,
             recommendedSoil: SoilType.LOAMY,
             description: 'Biennial herb, popular garnish and ingredient',
             isActive: true,

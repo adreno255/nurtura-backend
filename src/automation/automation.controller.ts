@@ -129,12 +129,12 @@ export class AutomationController {
             },
         },
     })
-    async getRackRules(
-        @Param('rackId') rackId: string,
+    async getPlantRules(
+        @Param('plantId') plantId: string,
         @CurrentUser() user: CurrentUserPayload,
         @Query() query: PaginationQueryDto,
     ) {
-        return this.automationService.findAll(rackId, user.dbId, query);
+        return this.automationService.findAll(plantId, user.dbId, query);
     }
 
     @Post('rules')

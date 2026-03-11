@@ -1020,6 +1020,7 @@ describe('RacksService', () => {
                     humidity: mockSensorReading.humidity,
                     moisture: mockSensorReading.moisture,
                     lightLevel: mockSensorReading.lightLevel,
+                    waterUsed: mockSensorReading.waterUsed,
                     timestamp: mockSensorReading.timestamp,
                 },
             });
@@ -1059,7 +1060,7 @@ describe('RacksService', () => {
         });
 
         it('should throw NotFoundException if rack not found', async () => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
+            mockDatabaseService.rack.findFirst.mockResolvedValue(null);
             mockDatabaseService.rack.findUnique.mockResolvedValue(null);
 
             await expect(service.getCurrentState(testRackId, testDbIds.primary)).rejects.toThrow(
@@ -1121,7 +1122,7 @@ describe('RacksService', () => {
         });
 
         it('should throw NotFoundException if rack not found', async () => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
+            mockDatabaseService.rack.findFirst.mockResolvedValue(null);
             mockDatabaseService.rack.findUnique.mockResolvedValue(null);
 
             await expect(service.getDeviceStatus(testRackId, testDbIds.primary)).rejects.toThrow(

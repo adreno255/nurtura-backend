@@ -1,18 +1,18 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsEnum, IsBoolean } from 'class-validator';
 import { Transform } from 'class-transformer';
-import { PlantType } from '../../generated/prisma';
+import { PlantCategory } from '../../generated/prisma';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 
-export class PlantTypeQueryDto extends PaginationQueryDto {
+export class PlantCategoryQueryDto extends PaginationQueryDto {
     @ApiPropertyOptional({
-        enum: PlantType,
-        example: PlantType.HERBS,
-        description: 'Filter plants by type',
+        enum: PlantCategory,
+        example: PlantCategory.HERBS,
+        description: 'Filter plants by category',
     })
     @IsOptional()
-    @IsEnum(PlantType)
-    type?: PlantType;
+    @IsEnum(PlantCategory)
+    category?: PlantCategory;
 
     @ApiPropertyOptional({ example: true, description: 'Filter by active status' })
     @IsOptional()

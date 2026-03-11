@@ -71,6 +71,18 @@ export const createMockRacksService = () => ({
     getRecentActivities: jest.fn(),
 });
 
+export const createMockPlantsService = () => ({
+    create: jest.fn(),
+    findAll: jest.fn(),
+    findOne: jest.fn(),
+    update: jest.fn(),
+    remove: jest.fn(),
+    assignToRack: jest.fn(),
+    removeFromRack: jest.fn(),
+    harvestFromRack: jest.fn(),
+    getRackHistory: jest.fn(),
+});
+
 export const createMockAutomationService = () => ({
     evaluateRules: jest.fn(),
     evaluateConditions: jest.fn(),

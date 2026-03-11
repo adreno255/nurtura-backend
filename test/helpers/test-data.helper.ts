@@ -276,12 +276,12 @@ export class TestDataHelper {
      */
     static generatePlantData() {
         const plantNames = ['Lettuce', 'Basil', 'Mint', 'Parsley', 'Spinach', 'Celery'];
-        const plantTypes = ['ASTERACEAE', 'LAMIACEAE', 'BASELLACEAE', 'APIACEAE'];
+        const PlantCategorys = ['ASTERACEAE', 'LAMIACEAE', 'BASELLACEAE', 'APIACEAE'];
         const soilTypes = ['LOAMY', 'SANDY', 'PEATY', 'SILTY'];
 
         return {
             name: plantNames[Math.floor(Math.random() * plantNames.length)],
-            type: plantTypes[Math.floor(Math.random() * plantTypes.length)],
+            type: PlantCategorys[Math.floor(Math.random() * PlantCategorys.length)],
             quantity: Math.floor(Math.random() * 10) + 1,
             recommendedSoil: soilTypes[Math.floor(Math.random() * soilTypes.length)],
             notes: `Test plant notes ${Math.random().toString(36).substring(7)}`,

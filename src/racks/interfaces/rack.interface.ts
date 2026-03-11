@@ -38,6 +38,7 @@ export interface RackCurrentStateResponse {
         humidity: number;
         moisture: number;
         lightLevel: number;
+        waterUsed: number | null;
         timestamp: Date;
     } | null;
 }

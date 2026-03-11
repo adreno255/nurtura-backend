@@ -154,6 +154,13 @@ export const mockStatistics = {
 /**
  * Mock sensor data for testing rule evaluation
  */
+export const lowMoistureSensorData: SensorData = {
+    temperature: 25.0,
+    humidity: 60.0,
+    moisture: 20.0, // Low moisture
+    lightLevel: 800,
+};
+
 export const highMoistureSensorData: SensorData = {
     temperature: 25.5,
     humidity: 65.2,

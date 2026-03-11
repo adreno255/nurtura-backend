@@ -15,13 +15,13 @@ datasource db {
 // ENUMS
 // ============================================
 
-enum PlantType {
+enum PlantCategory {
     LEAFY_GREENS      // Lettuce (ASTERACEAE)
     TROPICAL_GREENS   // Malabar spinach (BASELLACEAE)
     HERBS             // Basil, Oregano, Rosemary (LAMIACEAE)
     ROOT_AND_STALK    // Cilantro, Celery, Parsley (APIACEAE)
 
-    @@map("plant_type")
+    @@map("plant_category")
 }
 
 enum SoilType {
@@ -124,7 +124,7 @@ model Plant {
 
     // Plant information
     name            String     @db.VarChar(200)
-    type            PlantType?
+    category        PlantCategory? @map("category")
     recommendedSoil SoilType?  @map("recommended_soil")
     description     String?    @db.VarChar(1000)
 

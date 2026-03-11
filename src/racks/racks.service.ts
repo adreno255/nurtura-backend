@@ -511,6 +511,7 @@ export class RacksService {
                           humidity: latestReading.humidity,
                           moisture: latestReading.moisture,
                           lightLevel: latestReading.lightLevel,
+                          waterUsed: latestReading.waterUsed,
                           timestamp: latestReading.timestamp,
                       }
                     : null,

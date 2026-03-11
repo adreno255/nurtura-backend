@@ -26,8 +26,8 @@ import {
 import { PlantsService } from './plants.service';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { type CurrentUserPayload } from '../common/interfaces';
-import { CreatePlantDto, UpdatePlantDto, AssignPlantToRackDto, PlantTypeQueryDto } from './dto';
-import { PlantType } from '../generated/prisma';
+import { CreatePlantDto, UpdatePlantDto, AssignPlantToRackDto, PlantCategoryQueryDto } from './dto';
+import { PlantCategory } from '../generated/prisma';
 
 @ApiTags('Plants')
 @ApiBearerAuth('firebase-jwt')
@@ -43,10 +43,10 @@ export class PlantsController {
             'Retrieves a paginated list of plants with optional filtering by type and active status',
     })
     @ApiQuery({
-        name: 'type',
-        enum: PlantType,
+        name: 'category',
+        enum: PlantCategory,
         required: false,
-        description: 'Filter by plant type',
+        description: 'Filter by plant category',
     })
     @ApiQuery({
         name: 'isActive',
@@ -127,7 +127,7 @@ export class PlantsController {
                 message: {
                     type: 'string',
                     example:
-                        'Page and limit query parameters must be positive integers, and type must be a valid PlantType enum value',
+                        'Page and limit query parameters must be positive integers, and type must be a valid PlantCategory enum value',
                 },
             },
         },
@@ -156,7 +156,7 @@ export class PlantsController {
             },
         },
     })
-    async findAll(@Query() query: PlantTypeQueryDto) {
+    async findAll(@Query() query: PlantCategoryQueryDto) {
         return this.plantsService.findAll(query);
     }
 
@@ -296,7 +296,7 @@ export class PlantsController {
     })
     async getRackHistory(
         @Param('rackId') rackId: string,
-        @Query() query: PlantTypeQueryDto,
+        @Query() query: PlantCategoryQueryDto,
         @CurrentUser() user: CurrentUserPayload,
     ) {
         return this.plantsService.getRackHistory(rackId, user.dbId, query);
