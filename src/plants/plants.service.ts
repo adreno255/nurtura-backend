@@ -19,6 +19,7 @@ import {
 } from './interfaces/plant.interface';
 import { CreatePlantDto, UpdatePlantDto, AssignPlantToRackDto, PlantCategoryQueryDto } from './dto';
 import { RacksService } from '../racks/racks.service';
+import { ActivityQueryDto } from '../common/dto/activity-query.dto';
 
 @Injectable()
 export class PlantsService {
@@ -503,42 +504,246 @@ export class PlantsService {
     }
 
     /**
-     * Get planting history for a rack
+     * Get rack-plant assignment history for a specific rack (Planting Activity).
+     * Already covers the "Planting Activity" screen.
      */
-    async getRackHistory(
-        rackId: string,
+    /**
+     * Get Planting Activity — RackPlantHistory records across all user racks.
+     * Supports date range filtering on plantedAt.
+     * Returns paginated results + `amount` count within the date range.
+     */
+    async getPlantingActivities(
         userId: string,
-        query: PlantCategoryQueryDto,
-    ): Promise<PaginatedResponse<object>> {
+        query: ActivityQueryDto,
+    ): Promise<{ data: object[]; meta: object; amount: number }> {
         try {
-            this.logger.log(`Fetching plant history for rack ${rackId}`, 'PlantsService');
+            const userRacks = await this.databaseService.rack.findMany({
+                where: { userId },
+                select: { id: true },
+            });
+            const rackIds = userRacks.map((r) => r.id);
 
-            await this.racksService.verifyRackOwnership(rackId, userId);
+            const dateFilter =
+                query.startDate || query.endDate
+                    ? {
+                          plantedAt: {
+                              ...(query.startDate ? { gte: new Date(query.startDate) } : {}),
+                              ...(query.endDate ? { lte: new Date(query.endDate) } : {}),
+                          },
+                      }
+                    : {};
+
+            const where = {
+                rackId: { in: rackIds },
+                ...dateFilter,
+            };
+
+            const { skip, take } = PaginationHelper.getPrismaOptions(query);
 
             const [history, totalItems] = await Promise.all([
                 this.databaseService.rackPlantHistory.findMany({
-                    where: { rackId },
-                    include: {
-                        plant: {
-                            select: { id: true, name: true, category: true, recommendedSoil: true },
-                        },
-                    },
+                    where,
                     orderBy: { plantedAt: 'desc' },
-                    ...PaginationHelper.getPrismaOptions(query),
+                    skip,
+                    take,
+                    include: {
+                        plant: { select: { id: true, name: true, category: true } },
+                        rack: { select: { id: true, name: true, macAddress: true } },
+                    },
                 }),
-                this.databaseService.rackPlantHistory.count({ where: { rackId } }),
+                this.databaseService.rackPlantHistory.count({ where }),
             ]);
 
-            return PaginationHelper.createResponse(history, totalItems, query);
-        } catch (error) {
-            if (error instanceof NotFoundException) throw error;
+            this.logger.log(
+                `Retrieved ${history.length} planting activity records for user ${userId}`,
+                'PlantsService',
+            );
 
+            return {
+                ...PaginationHelper.createResponse(history, totalItems, query),
+                amount: totalItems,
+            };
+        } catch (error) {
             this.logger.error(
-                `Error fetching rack history for rack ${rackId}`,
+                `Error fetching planting activities for user ${userId}`,
                 error instanceof Error ? error.message : String(error),
                 'PlantsService',
             );
-            throw new InternalServerErrorException('Failed to fetch rack plant history');
+            throw new InternalServerErrorException('Failed to fetch planting activities');
+        }
+    }
+
+    /**
+     * Get Plant Care Activity — watering and grow light events across all user racks.
+     * Event types: WATERING_ON, WATERING_OFF, LIGHT_ON, LIGHT_OFF.
+     * Includes associated rack and current plant info.
+     * Returns paginated results + `amount` count within the date range.
+     */
+    async getPlantCareActivities(
+        userId: string,
+        query: ActivityQueryDto,
+    ): Promise<{ data: object[]; meta: object; amount: number }> {
+        try {
+            const userRacks = await this.databaseService.rack.findMany({
+                where: { userId },
+                select: { id: true },
+            });
+            const rackIds = userRacks.map((r) => r.id);
+
+            const dateFilter =
+                query.startDate || query.endDate
+                    ? {
+                          timestamp: {
+                              ...(query.startDate ? { gte: new Date(query.startDate) } : {}),
+                              ...(query.endDate ? { lte: new Date(query.endDate) } : {}),
+                          },
+                      }
+                    : {};
+
+            const where = {
+                rackId: { in: rackIds },
+                eventType: {
+                    in: [
+                        ActivityEventType.WATERING_ON,
+                        ActivityEventType.WATERING_OFF,
+                        ActivityEventType.LIGHT_ON,
+                        ActivityEventType.LIGHT_OFF,
+                    ],
+                },
+                ...dateFilter,
+            };
+
+            const { skip, take } = PaginationHelper.getPrismaOptions(query);
+
+            const [activities, totalItems] = await Promise.all([
+                this.databaseService.activity.findMany({
+                    where,
+                    orderBy: { timestamp: 'desc' },
+                    skip,
+                    take,
+                    include: {
+                        rack: {
+                            select: {
+                                id: true,
+                                name: true,
+                                macAddress: true,
+                                currentPlantId: true,
+                                currentPlant: {
+                                    select: { id: true, name: true, category: true },
+                                },
+                            },
+                        },
+                    },
+                }),
+                this.databaseService.activity.count({ where }),
+            ]);
+
+            this.logger.log(
+                `Retrieved ${activities.length} plant care activities for user ${userId}`,
+                'PlantsService',
+            );
+
+            return {
+                ...PaginationHelper.createResponse(activities, totalItems, query),
+                amount: totalItems,
+            };
+        } catch (error) {
+            this.logger.error(
+                `Error fetching plant care activities for user ${userId}`,
+                error instanceof Error ? error.message : String(error),
+                'PlantsService',
+            );
+            throw new InternalServerErrorException('Failed to fetch plant care activities');
+        }
+    }
+
+    /**
+     * Get Harvest Activity — PLANT_HARVESTED events across all user racks.
+     * Returns paginated results + `amount` count within the date range
+     * + `totalHarvestCount` summed from activity metadata.
+     */
+    async getHarvestActivities(
+        userId: string,
+        query: ActivityQueryDto,
+    ): Promise<{ data: object[]; meta: object; amount: number; totalHarvestCount: number }> {
+        try {
+            const userRacks = await this.databaseService.rack.findMany({
+                where: { userId },
+                select: { id: true },
+            });
+            const rackIds = userRacks.map((r) => r.id);
+
+            const dateFilter =
+                query.startDate || query.endDate
+                    ? {
+                          timestamp: {
+                              ...(query.startDate ? { gte: new Date(query.startDate) } : {}),
+                              ...(query.endDate ? { lte: new Date(query.endDate) } : {}),
+                          },
+                      }
+                    : {};
+
+            const where = {
+                rackId: { in: rackIds },
+                eventType: ActivityEventType.PLANT_HARVESTED,
+                ...dateFilter,
+            };
+
+            const { skip, take } = PaginationHelper.getPrismaOptions(query);
+
+            const [activities, totalItems] = await Promise.all([
+                this.databaseService.activity.findMany({
+                    where,
+                    orderBy: { timestamp: 'desc' },
+                    skip,
+                    take,
+                    include: {
+                        rack: {
+                            select: {
+                                id: true,
+                                name: true,
+                                macAddress: true,
+                                currentPlantId: true,
+                                currentPlant: {
+                                    select: { id: true, name: true, category: true },
+                                },
+                            },
+                        },
+                    },
+                }),
+                this.databaseService.activity.count({ where }),
+            ]);
+
+            // Sum the quantity from metadata across all harvest events in the date range
+            // to give the frontend a total pieces/heads harvested count
+            const allInRange = await this.databaseService.activity.findMany({
+                where,
+                select: { metadata: true },
+            });
+
+            const totalHarvestCount = allInRange.reduce((sum, act) => {
+                const meta = act.metadata as Record<string, unknown> | null;
+                const qty = typeof meta?.['quantity'] === 'number' ? meta['quantity'] : 0;
+                return sum + qty;
+            }, 0);
+
+            this.logger.log(
+                `Retrieved ${activities.length} harvest activities for user ${userId} (total count: ${totalHarvestCount})`,
+                'PlantsService',
+            );
+
+            return {
+                ...PaginationHelper.createResponse(activities, totalItems, query),
+                amount: totalItems,
+                totalHarvestCount,
+            };
+        } catch (error) {
+            this.logger.error(
+                `Error fetching harvest activities for user ${userId}`,
+                error instanceof Error ? error.message : String(error),
+                'PlantsService',
+            );
+            throw new InternalServerErrorException('Failed to fetch harvest activities');
         }
     }
 }

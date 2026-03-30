@@ -29,12 +29,91 @@ import { UpdateRackDto } from './dto/update-rack.dto';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { CurrentUser } from '../common/decorators';
 import { type CurrentUserPayload } from '../common/interfaces';
+import { ActivityQueryDto } from '../common/dto/activity-query.dto';
 
 @ApiTags('Racks')
 @ApiBearerAuth('firebase-jwt')
 @Controller('racks')
 export class RacksController {
     constructor(private readonly racksService: RacksService) {}
+
+    @Get('activities')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({
+        summary: 'Get rack management activities',
+        description:
+            'Returns RACK_ADDED and RACK_REMOVED activities for all racks owned by the user, with optional date range filter and pagination. The `amount` field reflects the total count within the filtered date range.',
+    })
+    @ApiQuery({
+        name: 'startDate',
+        required: false,
+        type: String,
+        description: 'Filter activities from this date (ISO 8601)',
+        example: '2025-09-29T00:00:00.000Z',
+    })
+    @ApiQuery({
+        name: 'endDate',
+        required: false,
+        type: String,
+        description: 'Filter activities up to this date (ISO 8601)',
+        example: '2025-10-02T23:59:59.999Z',
+    })
+    @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
+    @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
+    @ApiResponse({
+        status: HttpStatus.OK,
+        description: 'Rack activities retrieved successfully',
+        schema: {
+            type: 'object',
+            properties: {
+                data: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            id: { type: 'string', example: 'clx789act123' },
+                            rackId: { type: 'string', example: 'clx123abc456' },
+                            eventType: { type: 'string', example: 'RACK_ADDED' },
+                            details: {
+                                type: 'string',
+                                example: 'Rack "Living Room Farm" registered',
+                            },
+                            metadata: { type: 'object' },
+                            timestamp: { type: 'string', example: '2025-10-01T08:30:00.000Z' },
+                            rack: {
+                                type: 'object',
+                                properties: {
+                                    id: { type: 'string', example: 'clx123abc456' },
+                                    name: { type: 'string', example: 'Living Room Farm' },
+                                    macAddress: { type: 'string', example: 'AA:BB:CC:DD:EE:FF' },
+                                },
+                            },
+                        },
+                    },
+                },
+                meta: {
+                    type: 'object',
+                    properties: {
+                        currentPage: { type: 'number', example: 1 },
+                        itemsPerPage: { type: 'number', example: 10 },
+                        totalItems: { type: 'number', example: 5 },
+                        totalPages: { type: 'number', example: 1 },
+                        hasNextPage: { type: 'boolean', example: false },
+                        hasPreviousPage: { type: 'boolean', example: false },
+                    },
+                },
+                amount: {
+                    type: 'number',
+                    example: 5,
+                    description: 'Total count within date range',
+                },
+            },
+        },
+    })
+    @ApiInternalServerErrorResponse({ description: 'Internal server error' })
+    async getActivities(@CurrentUser() user: CurrentUserPayload, @Query() query: ActivityQueryDto) {
+        return this.racksService.getRackActivities(user.dbId, query);
+    }
 
     @Get()
     @HttpCode(HttpStatus.OK)

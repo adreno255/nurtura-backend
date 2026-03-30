@@ -1,4 +1,19 @@
-import { type Rack, type DeviceStatus } from '../../generated/prisma/client';
+import {
+    type Rack,
+    type DeviceStatus,
+    type PlantCategory,
+    type SoilType,
+} from '../../generated/prisma/client';
+
+export interface RackWithPlant extends Rack {
+    currentPlant: {
+        id: string;
+        name: string;
+        category: PlantCategory | null;
+        recommendedSoil: SoilType | null;
+        description: string | null;
+    } | null;
+}
 
 export interface RackCreatedResponse {
     message: string;

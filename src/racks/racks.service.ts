@@ -19,6 +19,7 @@ import {
     type RackDetailsResponse,
     type DeviceStatusResponse,
     type RackCurrentStateResponse,
+    RackWithPlant,
 } from './interfaces/rack.interface';
 import { type PaginatedResponse } from '../common/interfaces/pagination.interface';
 import { type Rack } from '../generated/prisma/client';
@@ -27,6 +28,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DeviceErrorDto, DeviceStatusDto, ErrorSeverity } from './dto';
 import { NotificationType, Prisma } from '../generated/prisma';
 import { LogRackActivityHelper } from '../common/utils/log-rack-activity.helper';
+import { ActivityQueryDto } from '../common/dto/activity-query.dto';
 
 @Injectable()
 export class RacksService {
@@ -48,7 +50,6 @@ export class RacksService {
      */
     async create(userId: string, dto: CreateRackDto): Promise<RackCreatedResponse> {
         try {
-            // Check if MAC address already exists
             const existingRack = await this.databaseService.rack.findUnique({
                 where: { userId, macAddress: dto.macAddress },
             });
@@ -57,7 +58,6 @@ export class RacksService {
                 throw new ConflictException(`MAC address already registered to ${userId}`);
             }
 
-            // Generate MQTT topic if not provided
             const mqttTopic =
                 dto.mqttTopic || `nurtura/rack/${dto.macAddress.replace(/:/g, '-').toLowerCase()}`;
 
@@ -74,6 +74,14 @@ export class RacksService {
             this.logger.log(
                 `Rack created successfully: ${rack.id} for user ${userId}`,
                 'RacksService',
+            );
+
+            // Log RACK_ADDED activity (non-critical — don't let it fail the response)
+            await this.logRackActivityHelper.logActivity(
+                rack.id,
+                ActivityEventType.RACK_ADDED,
+                `Rack "${rack.name}" registered`,
+                { rackId: rack.id, macAddress: rack.macAddress, userId },
             );
 
             return {
@@ -100,7 +108,10 @@ export class RacksService {
      * @param userId - User ID
      * @returns Array of racks
      */
-    async findAll(userId: string, query: PaginationQueryDto): Promise<PaginatedResponse<Rack>> {
+    async findAll(
+        userId: string,
+        query: PaginationQueryDto,
+    ): Promise<PaginatedResponse<RackWithPlant>> {
         try {
             const { skip, take } = PaginationHelper.getPrismaOptions(query);
 
@@ -110,10 +121,19 @@ export class RacksService {
                     skip,
                     take,
                     orderBy: { createdAt: 'desc' },
+                    include: {
+                        currentPlant: {
+                            select: {
+                                id: true,
+                                name: true,
+                                category: true,
+                                recommendedSoil: true,
+                                description: true,
+                            },
+                        },
+                    },
                 }),
-                this.databaseService.rack.count({
-                    where: { userId },
-                }),
+                this.databaseService.rack.count({ where: { userId } }),
             ]);
 
             this.logger.log(
@@ -142,9 +162,17 @@ export class RacksService {
     async findById(rackId: string, userId: string): Promise<RackDetailsResponse> {
         try {
             const rack = await this.databaseService.rack.findFirst({
-                where: {
-                    id: rackId,
-                    userId,
+                where: { id: rackId, userId },
+                include: {
+                    currentPlant: {
+                        select: {
+                            id: true,
+                            name: true,
+                            category: true,
+                            recommendedSoil: true,
+                            description: true,
+                        },
+                    },
                 },
             });
 
@@ -154,14 +182,9 @@ export class RacksService {
 
             this.logger.log(`Rack details fetched: ${rackId}`, 'RacksService');
 
-            return {
-                message: 'Rack details retrieved successfully',
-                rack,
-            };
+            return { message: 'Rack details retrieved successfully', rack };
         } catch (error) {
-            if (error instanceof NotFoundException) {
-                throw error;
-            }
+            if (error instanceof NotFoundException) throw error;
 
             this.logger.error(
                 `Error fetching rack ${rackId}`,
@@ -239,10 +262,14 @@ export class RacksService {
      */
     async delete(rackId: string, userId: string): Promise<RackDeletedResponse> {
         try {
-            // Verify ownership
-            await this.verifyRackOwnership(rackId, userId);
+            const rack = await this.databaseService.rack.findFirst({
+                where: { id: rackId, userId },
+            });
 
-            // Soft delete - set isActive to false
+            if (!rack) {
+                throw new NotFoundException('Rack not found or access denied');
+            }
+
             await this.databaseService.rack.update({
                 where: { id: rackId },
                 data: { isActive: false },
@@ -250,13 +277,17 @@ export class RacksService {
 
             this.logger.log(`Rack soft deleted: ${rackId}`, 'RacksService');
 
-            return {
-                message: 'Rack deleted successfully',
-            };
+            // Log RACK_REMOVED activity
+            await this.logRackActivityHelper.logActivity(
+                rackId,
+                ActivityEventType.RACK_REMOVED,
+                `Rack "${rack.name}" removed`,
+                { rackId, macAddress: rack.macAddress, userId },
+            );
+
+            return { message: 'Rack deleted successfully' };
         } catch (error) {
-            if (error instanceof NotFoundException) {
-                throw error;
-            }
+            if (error instanceof NotFoundException) throw error;
 
             this.logger.error(
                 `Error deleting rack ${rackId}`,
@@ -487,7 +518,6 @@ export class RacksService {
 
     async getCurrentState(rackId: string, userId: string): Promise<RackCurrentStateResponse> {
         try {
-            // Verify ownership
             await this.verifyRackOwnership(rackId, userId);
 
             const rack = (await this.databaseService.rack.findUnique({
@@ -497,8 +527,11 @@ export class RacksService {
                     name: true,
                     status: true,
                     lastSeenAt: true,
+                    currentPlant: {
+                        select: { id: true, name: true, category: true, recommendedSoil: true },
+                    },
                 },
-            })) as Rack;
+            })) as RackCurrentStateResponse['rack'];
 
             const latestReading = await this.getLatestSensorReading(rackId);
 
@@ -517,9 +550,7 @@ export class RacksService {
                     : null,
             };
         } catch (error) {
-            if (error instanceof NotFoundException) {
-                throw error;
-            }
+            if (error instanceof NotFoundException) throw error;
 
             this.logger.error(
                 `Error fetching current state for rack ${rackId}`,
@@ -623,6 +654,71 @@ export class RacksService {
                 'RacksService',
             );
             throw new InternalServerErrorException('Failed to fetch activities');
+        }
+    }
+
+    async getRackActivities(
+        userId: string,
+        query: ActivityQueryDto,
+    ): Promise<{
+        data: object[];
+        meta: object;
+        amount: number;
+    }> {
+        try {
+            const dateFilter =
+                query.startDate || query.endDate
+                    ? {
+                          timestamp: {
+                              ...(query.startDate ? { gte: new Date(query.startDate) } : {}),
+                              ...(query.endDate ? { lte: new Date(query.endDate) } : {}),
+                          },
+                      }
+                    : {};
+
+            // Only show rack-level events for racks belonging to this user
+            const userRacks = await this.databaseService.rack.findMany({
+                where: { userId },
+                select: { id: true },
+            });
+            const rackIds = userRacks.map((r) => r.id);
+
+            const where = {
+                rackId: { in: rackIds },
+                eventType: { in: [ActivityEventType.RACK_ADDED, ActivityEventType.RACK_REMOVED] },
+                ...dateFilter,
+            };
+
+            const { skip, take } = PaginationHelper.getPrismaOptions(query);
+
+            const [activities, totalItems] = await Promise.all([
+                this.databaseService.activity.findMany({
+                    where,
+                    orderBy: { timestamp: 'desc' },
+                    skip,
+                    take,
+                    include: {
+                        rack: { select: { id: true, name: true, macAddress: true } },
+                    },
+                }),
+                this.databaseService.activity.count({ where }),
+            ]);
+
+            const paginatedResult = PaginationHelper.createResponse(activities, totalItems, query);
+
+            this.logger.log(
+                `Retrieved ${activities.length} rack activities for user ${userId}`,
+                'RacksService',
+            );
+
+            return { ...paginatedResult, amount: totalItems };
+        } catch (error) {
+            this.logger.error(
+                `Error fetching rack activities for user ${userId}`,
+                error instanceof Error ? error.message : String(error),
+                'RacksService',
+            );
+            throw new InternalServerErrorException('Failed to fetch rack activities');
         }
     }
 }

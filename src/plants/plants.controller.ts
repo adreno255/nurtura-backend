@@ -28,6 +28,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { type CurrentUserPayload } from '../common/interfaces';
 import { CreatePlantDto, UpdatePlantDto, AssignPlantToRackDto, PlantCategoryQueryDto } from './dto';
 import { PlantCategory } from '../generated/prisma';
+import { ActivityQueryDto } from '../common/dto/activity-query.dto';
 
 @ApiTags('Plants')
 @ApiBearerAuth('firebase-jwt')
@@ -160,14 +161,27 @@ export class PlantsController {
         return this.plantsService.findAll(query);
     }
 
-    @Get('racks/:rackId/history')
+    @Get('activities/planting')
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
-        summary: 'Get planting history for a rack',
+        summary: 'Get planting activity',
         description:
-            'Retrieves a paginated list of all plant assignments for a specific rack, including harvest records',
+            'Retrieves plant assignment history (RackPlantHistory) across all racks owned by the authenticated user. Supports date range filtering on plantedAt.',
     })
-    @ApiParam({ name: 'rackId', description: 'Rack ID', example: 'clx2def456' })
+    @ApiQuery({
+        name: 'startDate',
+        required: false,
+        type: String,
+        description: 'Filter records planted from this date (ISO 8601)',
+        example: '2025-02-01T00:00:00.000Z',
+    })
+    @ApiQuery({
+        name: 'endDate',
+        required: false,
+        type: String,
+        description: 'Filter records planted up to this date (ISO 8601)',
+        example: '2025-02-28T23:59:59.999Z',
+    })
     @ApiQuery({
         name: 'page',
         required: false,
@@ -179,12 +193,12 @@ export class PlantsController {
         name: 'limit',
         required: false,
         type: Number,
-        description: 'Number of items per page',
+        description: 'Items per page (max 100)',
         example: 10,
     })
     @ApiResponse({
         status: HttpStatus.OK,
-        description: 'Rack plant history retrieved successfully',
+        description: 'Planting activities retrieved successfully',
         schema: {
             type: 'object',
             properties: {
@@ -193,37 +207,31 @@ export class PlantsController {
                     items: {
                         type: 'object',
                         properties: {
-                            id: { type: 'string', example: 'clx9xyz789' },
-                            rackId: { type: 'string', example: 'clx2def456' },
-                            plantId: { type: 'string', example: 'clx1abc123' },
+                            id: { type: 'string', example: 'clx999hist001' },
+                            rackId: { type: 'string', example: 'clx123abc456' },
+                            plantId: { type: 'string', example: 'clx000plant123' },
                             quantity: { type: 'number', example: 10 },
-                            plantedAt: {
-                                type: 'string',
-                                format: 'date-time',
-                                example: '2026-01-01T08:00:00.000Z',
-                            },
+                            plantedAt: { type: 'string', example: '2025-01-01T08:00:00.000Z' },
                             harvestedAt: {
                                 type: 'string',
-                                format: 'date-time',
+                                example: '2025-02-01T08:00:00.000Z',
                                 nullable: true,
-                                example: '2026-02-01T08:00:00.000Z',
                             },
-                            harvestCount: { type: 'number', example: 1 },
+                            harvestCount: { type: 'number', example: 3 },
                             plant: {
                                 type: 'object',
                                 properties: {
-                                    id: { type: 'string', example: 'clx1abc123' },
+                                    id: { type: 'string' },
                                     name: { type: 'string', example: 'Lettuce' },
-                                    type: {
-                                        type: 'string',
-                                        nullable: true,
-                                        example: 'LEAFY_GREENS',
-                                    },
-                                    recommendedSoil: {
-                                        type: 'string',
-                                        nullable: true,
-                                        example: 'LOAMY',
-                                    },
+                                    category: { type: 'string', example: 'LEAFY_GREENS' },
+                                },
+                            },
+                            rack: {
+                                type: 'object',
+                                properties: {
+                                    id: { type: 'string' },
+                                    name: { type: 'string', example: 'Living Room Farm' },
+                                    macAddress: { type: 'string', example: 'AA:BB:CC:DD:EE:FF' },
                                 },
                             },
                         },
@@ -240,45 +248,11 @@ export class PlantsController {
                         hasPreviousPage: { type: 'boolean', example: false },
                     },
                 },
-            },
-        },
-    })
-    @ApiBadRequestResponse({
-        description: 'Invalid query error',
-        schema: {
-            type: 'object',
-            properties: {
-                statusCode: { type: 'number', example: 400 },
-                timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/plants/racks/clx2def456/history' },
-                message: {
-                    type: 'string',
-                    example: 'Page and limit query parameters must be positive integers',
+                amount: {
+                    type: 'number',
+                    description: 'Total number of planting records in the filtered date range',
+                    example: 5,
                 },
-            },
-        },
-    })
-    @ApiUnauthorizedResponse({
-        description: 'Missing or invalid authentication token',
-        schema: {
-            type: 'object',
-            properties: {
-                statusCode: { type: 'number', example: 401 },
-                timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/plants/racks/clx2def456/history' },
-                message: { type: 'string', example: 'Authentication required' },
-            },
-        },
-    })
-    @ApiNotFoundResponse({
-        description: 'Rack not found or access denied',
-        schema: {
-            type: 'object',
-            properties: {
-                statusCode: { type: 'number', example: 404 },
-                timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/plants/racks/clx2def456/history' },
-                message: { type: 'string', example: 'Rack not found or does not belong to you' },
             },
         },
     })
@@ -288,18 +262,17 @@ export class PlantsController {
             type: 'object',
             properties: {
                 statusCode: { type: 'number', example: 500 },
-                timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/plants/racks/clx2def456/history' },
-                message: { type: 'string', example: 'Failed to fetch rack plant history' },
+                timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/plants/activities/planting' },
+                message: { type: 'string', example: 'Failed to fetch planting activities' },
             },
         },
     })
-    async getRackHistory(
-        @Param('rackId') rackId: string,
-        @Query() query: PlantCategoryQueryDto,
+    async getPlantingActivities(
         @CurrentUser() user: CurrentUserPayload,
+        @Query() query: ActivityQueryDto,
     ) {
-        return this.plantsService.getRackHistory(rackId, user.dbId, query);
+        return this.plantsService.getPlantingActivities(user.dbId, query);
     }
 
     @Get(':id')
@@ -379,6 +352,251 @@ export class PlantsController {
     })
     async findOne(@Param('id') id: string) {
         return this.plantsService.findOne(id);
+    }
+
+    @Get('activities/care')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({
+        summary: 'Get plant care activity',
+        description:
+            'Retrieves watering and grow light activities (WATERING_ON, WATERING_OFF, LIGHT_ON, LIGHT_OFF) across all racks owned by the authenticated user. Supports date range filtering.',
+    })
+    @ApiQuery({
+        name: 'startDate',
+        required: false,
+        type: String,
+        description: 'Filter from this date (ISO 8601)',
+        example: '2025-02-01T00:00:00.000Z',
+    })
+    @ApiQuery({
+        name: 'endDate',
+        required: false,
+        type: String,
+        description: 'Filter up to this date (ISO 8601)',
+        example: '2025-02-28T23:59:59.999Z',
+    })
+    @ApiQuery({
+        name: 'page',
+        required: false,
+        type: Number,
+        description: 'Page number (1-based)',
+        example: 1,
+    })
+    @ApiQuery({
+        name: 'limit',
+        required: false,
+        type: Number,
+        description: 'Items per page (max 100)',
+        example: 10,
+    })
+    @ApiResponse({
+        status: HttpStatus.OK,
+        description: 'Plant care activities retrieved successfully',
+        schema: {
+            type: 'object',
+            properties: {
+                data: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            id: { type: 'string', example: 'clx789def012' },
+                            rackId: { type: 'string', example: 'clx123abc456' },
+                            eventType: { type: 'string', example: 'WATERING_ON' },
+                            details: {
+                                type: 'string',
+                                example: 'Watering started - Moisture below threshold',
+                            },
+                            metadata: { type: 'object', nullable: true },
+                            timestamp: { type: 'string', example: '2025-02-05T14:30:00.000Z' },
+                            rack: {
+                                type: 'object',
+                                properties: {
+                                    id: { type: 'string', example: 'clx123abc456' },
+                                    name: { type: 'string', example: 'Living Room Farm' },
+                                    macAddress: { type: 'string', example: 'AA:BB:CC:DD:EE:FF' },
+                                    currentPlant: {
+                                        type: 'object',
+                                        nullable: true,
+                                        properties: {
+                                            id: { type: 'string', example: 'clx000plant123' },
+                                            name: { type: 'string', example: 'Lettuce' },
+                                            category: { type: 'string', example: 'LEAFY_GREENS' },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+                meta: {
+                    type: 'object',
+                    properties: {
+                        currentPage: { type: 'number', example: 1 },
+                        itemsPerPage: { type: 'number', example: 10 },
+                        totalItems: { type: 'number', example: 42 },
+                        totalPages: { type: 'number', example: 5 },
+                        hasNextPage: { type: 'boolean', example: true },
+                        hasPreviousPage: { type: 'boolean', example: false },
+                    },
+                },
+                amount: {
+                    type: 'number',
+                    description: 'Total number of plant care events in the filtered date range',
+                    example: 42,
+                },
+            },
+        },
+    })
+    @ApiInternalServerErrorResponse({
+        description: 'Internal server error',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 500 },
+                timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/plants/activities/care' },
+                message: { type: 'string', example: 'Failed to fetch plant care activities' },
+            },
+        },
+    })
+    async getPlantCareActivities(
+        @CurrentUser() user: CurrentUserPayload,
+        @Query() query: ActivityQueryDto,
+    ) {
+        return this.plantsService.getPlantCareActivities(user.dbId, query);
+    }
+
+    @Get('activities/harvest')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({
+        summary: 'Get harvest activity',
+        description:
+            'Retrieves harvest activities (PLANT_HARVESTED) across all racks owned by the authenticated user. Supports date range filtering. Also returns `totalHarvestCount` — the sum of harvested quantities within the date range.',
+    })
+    @ApiQuery({
+        name: 'startDate',
+        required: false,
+        type: String,
+        description: 'Filter from this date (ISO 8601)',
+        example: '2025-02-01T00:00:00.000Z',
+    })
+    @ApiQuery({
+        name: 'endDate',
+        required: false,
+        type: String,
+        description: 'Filter up to this date (ISO 8601)',
+        example: '2025-02-28T23:59:59.999Z',
+    })
+    @ApiQuery({
+        name: 'page',
+        required: false,
+        type: Number,
+        description: 'Page number (1-based)',
+        example: 1,
+    })
+    @ApiQuery({
+        name: 'limit',
+        required: false,
+        type: Number,
+        description: 'Items per page (max 100)',
+        example: 10,
+    })
+    @ApiResponse({
+        status: HttpStatus.OK,
+        description: 'Harvest activities retrieved successfully',
+        schema: {
+            type: 'object',
+            properties: {
+                data: {
+                    type: 'array',
+                    items: {
+                        type: 'object',
+                        properties: {
+                            id: { type: 'string', example: 'clx789def012' },
+                            rackId: { type: 'string', example: 'clx123abc456' },
+                            eventType: { type: 'string', example: 'PLANT_HARVESTED' },
+                            details: {
+                                type: 'string',
+                                example: 'Harvest #3 of "Lettuce" from rack "Living Room Farm"',
+                            },
+                            metadata: {
+                                type: 'object',
+                                properties: {
+                                    plantId: { type: 'string' },
+                                    plantName: { type: 'string' },
+                                    rackId: { type: 'string' },
+                                    rackName: { type: 'string' },
+                                    harvestCount: { type: 'number' },
+                                    quantity: {
+                                        type: 'number',
+                                        description: 'Number of plants/heads harvested',
+                                    },
+                                },
+                                nullable: true,
+                            },
+                            timestamp: { type: 'string', example: '2025-02-05T14:30:00.000Z' },
+                            rack: {
+                                type: 'object',
+                                properties: {
+                                    id: { type: 'string', example: 'clx123abc456' },
+                                    name: { type: 'string', example: 'Living Room Farm' },
+                                    macAddress: { type: 'string', example: 'AA:BB:CC:DD:EE:FF' },
+                                    currentPlant: {
+                                        type: 'object',
+                                        nullable: true,
+                                        properties: {
+                                            id: { type: 'string', example: 'clx000plant123' },
+                                            name: { type: 'string', example: 'Lettuce' },
+                                            category: { type: 'string', example: 'LEAFY_GREENS' },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+                meta: {
+                    type: 'object',
+                    properties: {
+                        currentPage: { type: 'number', example: 1 },
+                        itemsPerPage: { type: 'number', example: 10 },
+                        totalItems: { type: 'number', example: 15 },
+                        totalPages: { type: 'number', example: 2 },
+                        hasNextPage: { type: 'boolean', example: true },
+                        hasPreviousPage: { type: 'boolean', example: false },
+                    },
+                },
+                amount: {
+                    type: 'number',
+                    description: 'Total number of harvest events in the filtered date range',
+                    example: 15,
+                },
+                totalHarvestCount: {
+                    type: 'number',
+                    description: 'Total pieces/heads harvested across all events in the date range',
+                    example: 150,
+                },
+            },
+        },
+    })
+    @ApiInternalServerErrorResponse({
+        description: 'Internal server error',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 500 },
+                timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/plants/activities/harvest' },
+                message: { type: 'string', example: 'Failed to fetch harvest activities' },
+            },
+        },
+    })
+    async getHarvestActivities(
+        @CurrentUser() user: CurrentUserPayload,
+        @Query() query: ActivityQueryDto,
+    ) {
+        return this.plantsService.getHarvestActivities(user.dbId, query);
     }
 
     @Post()
