@@ -7,7 +7,7 @@ import {
 import { DatabaseService } from '../database/database.service';
 import { MyLoggerService } from '../my-logger/my-logger.service';
 import { SensorData, RuleConditions, RuleActions } from './interfaces/automation.interface';
-import { type Prisma, ActivityEventType } from '../generated/prisma/client';
+import { type Prisma, ActivityEventType, Rack } from '../generated/prisma/client';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { LogRackActivityHelper } from '../common/utils/log-rack-activity.helper';
 import { PaginationHelper } from '../common/utils/pagination.helper';
@@ -118,7 +118,7 @@ export class AutomationService {
 
                     // Execute actions
                     const actions = rule.actions as RuleActions;
-                    await this.executeActions(rack.macAddress, actions, rackId, rule.name);
+                    await this.executeActions(rack.macAddress, actions, rack, rule.id, rule.name);
 
                     // Update rule trigger tracking
                     await this.databaseService.automationRule.update({
@@ -135,6 +135,8 @@ export class AutomationService {
                         ActivityEventType.AUTOMATION_TRIGGERED,
                         `Automation rule "${rule.name}" triggered`,
                         {
+                            rackName: rack.name,
+                            macAddress: rack.macAddress,
                             ruleId: rule.id,
                             ruleName: rule.name,
                             plantId: rack.currentPlantId,
@@ -234,7 +236,8 @@ export class AutomationService {
     private async executeActions(
         macAddress: string,
         actions: RuleActions,
-        rackId: string,
+        rack: Partial<Rack>,
+        ruleId: string,
         ruleName: string,
     ): Promise<void> {
         const executedActions: string[] = [];
@@ -254,13 +257,16 @@ export class AutomationService {
                 );
 
                 await this.logRackActivityHelper.logActivity(
-                    rackId,
+                    rack.id!,
                     actions.watering.action === 'start'
                         ? ActivityEventType.WATERING_ON
                         : ActivityEventType.WATERING_OFF,
                     `Watering ${actions.watering.action} triggered by automation rule "${ruleName}"`,
                     {
+                        rackName: rack.name,
+                        macAddress: rack.macAddress,
                         source: 'automation',
+                        ruleId,
                         ruleName,
                         duration: actions.watering.duration,
                     } as Prisma.InputJsonValue,
@@ -278,20 +284,23 @@ export class AutomationService {
                 executedActions.push(`growLight:${actions.growLight.action}`);
 
                 await this.logRackActivityHelper.logActivity(
-                    rackId,
+                    rack.id!,
                     actions.growLight.action === 'on'
                         ? ActivityEventType.LIGHT_ON
                         : ActivityEventType.LIGHT_OFF,
                     `Grow light ${actions.growLight.action} triggered by automation rule "${ruleName}"`,
                     {
+                        rackName: rack.name,
+                        macAddress: rack.macAddress,
                         source: 'automation',
+                        ruleId,
                         ruleName,
                     } as Prisma.InputJsonValue,
                 );
             }
 
             const automatedEvents: AutomatedEventDto = {
-                rackId,
+                rackId: rack.id!,
                 ruleName,
                 executedActions,
                 timestamp: new Date(),

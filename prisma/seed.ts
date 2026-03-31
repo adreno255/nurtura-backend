@@ -20,8 +20,13 @@ const prisma = new PrismaClient({ adapter });
 async function main() {
     const email = 'neonimo123@gmail.com';
     const macAddress = '00:1B:44:11:3A:B7';
+    const macAddress2 = '00:1B:44:11:3A:B8';
+    const macAddress3 = '00:1B:44:11:3A:B9';
 
-    // Create/Update User
+    // ============================================
+    // USER
+    // ============================================
+
     const user = await prisma.user.upsert({
         where: { email },
         update: {},
@@ -37,35 +42,73 @@ async function main() {
 
     console.log('✓ User created/updated');
 
-    // Create/Update Rack
+    // ============================================
+    // RACKS
+    // ============================================
+
     const rack = await prisma.rack.upsert({
         where: { macAddress },
         update: {},
         create: {
             userId: user.id,
             name: 'My First Rack',
-            macAddress: '00:1B:44:11:3A:B7',
+            macAddress,
+            mqttTopic: 'nurtura/rack/00-1b-44-11-3a-b7',
         },
     });
 
-    console.log('✓ Rack created/updated');
+    const rack2 = await prisma.rack.upsert({
+        where: { macAddress: macAddress2 },
+        update: {},
+        create: {
+            userId: user.id,
+            name: 'Kitchen Herb Rack',
+            macAddress: macAddress2,
+            mqttTopic: 'nurtura/rack/00-1b-44-11-3a-b8',
+            description: 'Dedicated rack for growing herbs in the kitchen',
+        },
+    });
 
-    // Clean up existing data
-    await prisma.notification.deleteMany({ where: { rackId: rack.id } });
-    await prisma.activity.deleteMany({ where: { rackId: rack.id } });
-    await prisma.rackPlantingHistory.deleteMany({ where: { rackId: rack.id } });
+    const rack3 = await prisma.rack.upsert({
+        where: { macAddress: macAddress3 },
+        update: {},
+        create: {
+            userId: user.id,
+            name: 'Balcony Rack',
+            macAddress: macAddress3,
+            mqttTopic: 'nurtura/rack/00-1b-44-11-3a-b9',
+            description: 'Empty rack on the balcony, ready for planting',
+        },
+    });
+
+    console.log('✓ Racks created/updated');
+
+    // ============================================
+    // CLEAN UP
+    // ============================================
+
+    await prisma.notification.deleteMany({ where: { userId: user.id } });
+    await prisma.activity.deleteMany({
+        where: { rackId: { in: [rack.id, rack2.id, rack3.id] } },
+    });
+    await prisma.rackPlantingHistory.deleteMany({
+        where: { rackId: { in: [rack.id, rack2.id, rack3.id] } },
+    });
     await prisma.automationRule.deleteMany({});
-    await prisma.aggregatedSensorReading.deleteMany({ where: { rackId: rack.id } });
-    await prisma.sensorReading.deleteMany({ where: { rackId: rack.id } });
+    await prisma.aggregatedSensorReading.deleteMany({
+        where: { rackId: { in: [rack.id, rack2.id, rack3.id] } },
+    });
+    await prisma.sensorReading.deleteMany({
+        where: { rackId: { in: [rack.id, rack2.id, rack3.id] } },
+    });
     await prisma.plant.deleteMany({});
 
     console.log('✓ Old data cleaned up');
 
     // ============================================
-    // CREATE PLANTS WITH AUTOMATION RULES
+    // PLANTS WITH AUTOMATION RULES
     // ============================================
 
-    // 1. LETTUCE
     const lettuce = await prisma.plant.create({
         data: {
             name: 'Lettuce',
@@ -83,12 +126,8 @@ async function main() {
                 name: 'Lettuce - Low Moisture Alert',
                 description: 'Start watering when moisture drops below 60%',
                 isEnabled: true,
-                conditions: {
-                    moisture: { lessThan: 60 },
-                },
-                actions: {
-                    watering: { action: 'start', duration: 5000 },
-                },
+                conditions: { moisture: { lessThan: 60 } },
+                actions: { watering: { action: 'start', duration: 5000 } },
                 cooldownMinutes: 60,
             },
             {
@@ -96,12 +135,8 @@ async function main() {
                 name: 'Lettuce - High Moisture Stop',
                 description: 'Stop watering when moisture exceeds 80%',
                 isEnabled: true,
-                conditions: {
-                    moisture: { greaterThan: 80 },
-                },
-                actions: {
-                    watering: { action: 'stop' },
-                },
+                conditions: { moisture: { greaterThan: 80 } },
+                actions: { watering: { action: 'stop' } },
                 cooldownMinutes: 30,
             },
             {
@@ -109,9 +144,7 @@ async function main() {
                 name: 'Lettuce - Temperature Too High',
                 description: 'Alert when temperature exceeds 18°C',
                 isEnabled: true,
-                conditions: {
-                    temperature: { greaterThan: 18 },
-                },
+                conditions: { temperature: { greaterThan: 18 } },
                 actions: {},
                 cooldownMinutes: 120,
             },
@@ -120,12 +153,8 @@ async function main() {
                 name: 'Lettuce - Low Light',
                 description: 'Turn on grow lights when light drops below 16,000 lux',
                 isEnabled: true,
-                conditions: {
-                    lightLevel: { lessThan: 16000 },
-                },
-                actions: {
-                    growLight: { action: 'on' },
-                },
+                conditions: { lightLevel: { lessThan: 16000 } },
+                actions: { growLight: { action: 'on' } },
                 cooldownMinutes: 30,
             },
         ],
@@ -133,7 +162,6 @@ async function main() {
 
     console.log('✓ Lettuce created with automation rules');
 
-    // 2. MALABAR SPINACH
     const malabarSpinach = await prisma.plant.create({
         data: {
             name: 'Malabar Spinach',
@@ -151,12 +179,8 @@ async function main() {
                 name: 'Malabar Spinach - Low Moisture',
                 description: 'Start watering when moisture drops below 70%',
                 isEnabled: true,
-                conditions: {
-                    moisture: { lessThan: 70 },
-                },
-                actions: {
-                    watering: { action: 'start', duration: 7000 },
-                },
+                conditions: { moisture: { lessThan: 70 } },
+                actions: { watering: { action: 'start', duration: 7000 } },
                 cooldownMinutes: 60,
             },
             {
@@ -164,12 +188,8 @@ async function main() {
                 name: 'Malabar Spinach - High Moisture Stop',
                 description: 'Stop watering when moisture exceeds 90%',
                 isEnabled: true,
-                conditions: {
-                    moisture: { greaterThan: 90 },
-                },
-                actions: {
-                    watering: { action: 'stop' },
-                },
+                conditions: { moisture: { greaterThan: 90 } },
+                actions: { watering: { action: 'stop' } },
                 cooldownMinutes: 30,
             },
             {
@@ -177,9 +197,7 @@ async function main() {
                 name: 'Malabar Spinach - Temperature Too Low',
                 description: 'Alert when temperature drops below 24°C',
                 isEnabled: true,
-                conditions: {
-                    temperature: { lessThan: 24 },
-                },
+                conditions: { temperature: { lessThan: 24 } },
                 actions: {},
                 cooldownMinutes: 120,
             },
@@ -188,12 +206,8 @@ async function main() {
                 name: 'Malabar Spinach - Low Light',
                 description: 'Turn on grow lights when light drops below 80,000 lux',
                 isEnabled: true,
-                conditions: {
-                    lightLevel: { lessThan: 80000 },
-                },
-                actions: {
-                    growLight: { action: 'on' },
-                },
+                conditions: { lightLevel: { lessThan: 80000 } },
+                actions: { growLight: { action: 'on' } },
                 cooldownMinutes: 30,
             },
         ],
@@ -201,7 +215,6 @@ async function main() {
 
     console.log('✓ Malabar Spinach created with automation rules');
 
-    // 3. BASIL
     const basil = await prisma.plant.create({
         data: {
             name: 'Basil',
@@ -219,12 +232,8 @@ async function main() {
                 name: 'Basil - Low Moisture',
                 description: 'Start watering when moisture drops below 50%',
                 isEnabled: true,
-                conditions: {
-                    moisture: { lessThan: 50 },
-                },
-                actions: {
-                    watering: { action: 'start', duration: 4000 },
-                },
+                conditions: { moisture: { lessThan: 50 } },
+                actions: { watering: { action: 'start', duration: 4000 } },
                 cooldownMinutes: 60,
             },
             {
@@ -232,12 +241,8 @@ async function main() {
                 name: 'Basil - High Moisture Stop',
                 description: 'Stop watering when moisture exceeds 70%',
                 isEnabled: true,
-                conditions: {
-                    moisture: { greaterThan: 70 },
-                },
-                actions: {
-                    watering: { action: 'stop' },
-                },
+                conditions: { moisture: { greaterThan: 70 } },
+                actions: { watering: { action: 'stop' } },
                 cooldownMinutes: 30,
             },
             {
@@ -245,12 +250,8 @@ async function main() {
                 name: 'Basil - Low Light',
                 description: 'Turn on grow lights when light drops below 15,000 lux',
                 isEnabled: true,
-                conditions: {
-                    lightLevel: { lessThan: 15000 },
-                },
-                actions: {
-                    growLight: { action: 'on' },
-                },
+                conditions: { lightLevel: { lessThan: 15000 } },
+                actions: { growLight: { action: 'on' } },
                 cooldownMinutes: 30,
             },
         ],
@@ -258,7 +259,6 @@ async function main() {
 
     console.log('✓ Basil created with automation rules');
 
-    // 4. OREGANO
     const oregano = await prisma.plant.create({
         data: {
             name: 'Oregano',
@@ -276,12 +276,8 @@ async function main() {
                 name: 'Oregano - Low Moisture',
                 description: 'Start watering when moisture drops below 30%',
                 isEnabled: true,
-                conditions: {
-                    moisture: { lessThan: 30 },
-                },
-                actions: {
-                    watering: { action: 'start', duration: 3000 },
-                },
+                conditions: { moisture: { lessThan: 30 } },
+                actions: { watering: { action: 'start', duration: 3000 } },
                 cooldownMinutes: 120,
             },
             {
@@ -289,12 +285,8 @@ async function main() {
                 name: 'Oregano - High Moisture Stop',
                 description: 'Stop watering when moisture exceeds 50%',
                 isEnabled: true,
-                conditions: {
-                    moisture: { greaterThan: 50 },
-                },
-                actions: {
-                    watering: { action: 'stop' },
-                },
+                conditions: { moisture: { greaterThan: 50 } },
+                actions: { watering: { action: 'stop' } },
                 cooldownMinutes: 30,
             },
             {
@@ -302,12 +294,8 @@ async function main() {
                 name: 'Oregano - Low Light',
                 description: 'Turn on grow lights when light drops below 32,000 lux',
                 isEnabled: true,
-                conditions: {
-                    lightLevel: { lessThan: 32000 },
-                },
-                actions: {
-                    growLight: { action: 'on' },
-                },
+                conditions: { lightLevel: { lessThan: 32000 } },
+                actions: { growLight: { action: 'on' } },
                 cooldownMinutes: 30,
             },
         ],
@@ -315,7 +303,6 @@ async function main() {
 
     console.log('✓ Oregano created with automation rules');
 
-    // 5. ROSEMARY
     const rosemary = await prisma.plant.create({
         data: {
             name: 'Rosemary',
@@ -333,12 +320,8 @@ async function main() {
                 name: 'Rosemary - Low Moisture',
                 description: 'Start watering when moisture drops below 20%',
                 isEnabled: true,
-                conditions: {
-                    moisture: { lessThan: 20 },
-                },
-                actions: {
-                    watering: { action: 'start', duration: 3000 },
-                },
+                conditions: { moisture: { lessThan: 20 } },
+                actions: { watering: { action: 'start', duration: 3000 } },
                 cooldownMinutes: 180,
             },
             {
@@ -346,12 +329,8 @@ async function main() {
                 name: 'Rosemary - High Moisture Stop',
                 description: 'Stop watering when moisture exceeds 40%',
                 isEnabled: true,
-                conditions: {
-                    moisture: { greaterThan: 40 },
-                },
-                actions: {
-                    watering: { action: 'stop' },
-                },
+                conditions: { moisture: { greaterThan: 40 } },
+                actions: { watering: { action: 'stop' } },
                 cooldownMinutes: 30,
             },
             {
@@ -359,12 +338,8 @@ async function main() {
                 name: 'Rosemary - Low Light',
                 description: 'Turn on grow lights when light drops below 30,000 lux',
                 isEnabled: true,
-                conditions: {
-                    lightLevel: { lessThan: 30000 },
-                },
-                actions: {
-                    growLight: { action: 'on' },
-                },
+                conditions: { lightLevel: { lessThan: 30000 } },
+                actions: { growLight: { action: 'on' } },
                 cooldownMinutes: 30,
             },
         ],
@@ -372,7 +347,6 @@ async function main() {
 
     console.log('✓ Rosemary created with automation rules');
 
-    // 6. CILANTRO
     const cilantro = await prisma.plant.create({
         data: {
             name: 'Cilantro',
@@ -390,12 +364,8 @@ async function main() {
                 name: 'Cilantro - Low Moisture',
                 description: 'Start watering when moisture drops below 50%',
                 isEnabled: true,
-                conditions: {
-                    moisture: { lessThan: 50 },
-                },
-                actions: {
-                    watering: { action: 'start', duration: 4000 },
-                },
+                conditions: { moisture: { lessThan: 50 } },
+                actions: { watering: { action: 'start', duration: 4000 } },
                 cooldownMinutes: 60,
             },
             {
@@ -403,12 +373,8 @@ async function main() {
                 name: 'Cilantro - High Moisture Stop',
                 description: 'Stop watering when moisture exceeds 70%',
                 isEnabled: true,
-                conditions: {
-                    moisture: { greaterThan: 70 },
-                },
-                actions: {
-                    watering: { action: 'stop' },
-                },
+                conditions: { moisture: { greaterThan: 70 } },
+                actions: { watering: { action: 'stop' } },
                 cooldownMinutes: 30,
             },
             {
@@ -416,12 +382,8 @@ async function main() {
                 name: 'Cilantro - Low Light',
                 description: 'Turn on grow lights when light drops below 32,000 lux',
                 isEnabled: true,
-                conditions: {
-                    lightLevel: { lessThan: 32000 },
-                },
-                actions: {
-                    growLight: { action: 'on' },
-                },
+                conditions: { lightLevel: { lessThan: 32000 } },
+                actions: { growLight: { action: 'on' } },
                 cooldownMinutes: 30,
             },
         ],
@@ -429,7 +391,6 @@ async function main() {
 
     console.log('✓ Cilantro created with automation rules');
 
-    // 7. CELERY
     const celery = await prisma.plant.create({
         data: {
             name: 'Celery',
@@ -447,12 +408,8 @@ async function main() {
                 name: 'Celery - Low Moisture',
                 description: 'Start watering when moisture drops below 70%',
                 isEnabled: true,
-                conditions: {
-                    moisture: { lessThan: 70 },
-                },
-                actions: {
-                    watering: { action: 'start', duration: 6000 },
-                },
+                conditions: { moisture: { lessThan: 70 } },
+                actions: { watering: { action: 'start', duration: 6000 } },
                 cooldownMinutes: 60,
             },
             {
@@ -460,12 +417,8 @@ async function main() {
                 name: 'Celery - High Moisture Stop',
                 description: 'Stop watering when moisture exceeds 90%',
                 isEnabled: true,
-                conditions: {
-                    moisture: { greaterThan: 90 },
-                },
-                actions: {
-                    watering: { action: 'stop' },
-                },
+                conditions: { moisture: { greaterThan: 90 } },
+                actions: { watering: { action: 'stop' } },
                 cooldownMinutes: 30,
             },
             {
@@ -473,12 +426,8 @@ async function main() {
                 name: 'Celery - Low Light',
                 description: 'Turn on grow lights when light drops below 80,000 lux',
                 isEnabled: true,
-                conditions: {
-                    lightLevel: { lessThan: 80000 },
-                },
-                actions: {
-                    growLight: { action: 'on' },
-                },
+                conditions: { lightLevel: { lessThan: 80000 } },
+                actions: { growLight: { action: 'on' } },
                 cooldownMinutes: 30,
             },
         ],
@@ -486,7 +435,6 @@ async function main() {
 
     console.log('✓ Celery created with automation rules');
 
-    // 8. PARSLEY
     const parsley = await prisma.plant.create({
         data: {
             name: 'Parsley',
@@ -504,12 +452,8 @@ async function main() {
                 name: 'Parsley - Low Moisture',
                 description: 'Start watering when moisture drops below 50%',
                 isEnabled: true,
-                conditions: {
-                    moisture: { lessThan: 50 },
-                },
-                actions: {
-                    watering: { action: 'start', duration: 5000 },
-                },
+                conditions: { moisture: { lessThan: 50 } },
+                actions: { watering: { action: 'start', duration: 5000 } },
                 cooldownMinutes: 60,
             },
             {
@@ -517,12 +461,8 @@ async function main() {
                 name: 'Parsley - High Moisture Stop',
                 description: 'Stop watering when moisture exceeds 70%',
                 isEnabled: true,
-                conditions: {
-                    moisture: { greaterThan: 70 },
-                },
-                actions: {
-                    watering: { action: 'stop' },
-                },
+                conditions: { moisture: { greaterThan: 70 } },
+                actions: { watering: { action: 'stop' } },
                 cooldownMinutes: 30,
             },
             {
@@ -530,12 +470,8 @@ async function main() {
                 name: 'Parsley - Low Light',
                 description: 'Turn on grow lights when light drops below 80,000 lux',
                 isEnabled: true,
-                conditions: {
-                    lightLevel: { lessThan: 80000 },
-                },
-                actions: {
-                    growLight: { action: 'on' },
-                },
+                conditions: { lightLevel: { lessThan: 80000 } },
+                actions: { growLight: { action: 'on' } },
                 cooldownMinutes: 30,
             },
         ],
@@ -544,22 +480,344 @@ async function main() {
     console.log('✓ Parsley created with automation rules');
 
     // ============================================
-    // PLANT LETTUCE IN THE RACK (Example)
+    // RACK 1 — Lettuce planted, with history
     // ============================================
+
+    const rack1PlantedAt = new Date('2026-01-10T08:00:00.000Z');
+    const rack1HarvestedAt = new Date('2026-02-10T08:00:00.000Z');
+    const rack1ReplantedAt = new Date('2026-02-15T08:00:00.000Z');
 
     await prisma.rack.update({
         where: { id: rack.id },
         data: {
             currentPlantId: lettuce.id,
             quantity: 10,
-            plantedAt: new Date(),
+            plantedAt: rack1ReplantedAt,
+            harvestCount: 1,
+            lastHarvestAt: rack1HarvestedAt,
+            lastActivityAt: rack1ReplantedAt,
+            status: 'ONLINE',
         },
     });
 
-    console.log('✓ Lettuce planted in rack');
+    // History: first cycle harvested, second cycle active
+    await prisma.rackPlantingHistory.createMany({
+        data: [
+            {
+                rackId: rack.id,
+                plantId: lettuce.id,
+                quantity: 10,
+                plantedAt: rack1PlantedAt,
+                harvestedAt: rack1HarvestedAt,
+                harvestCount: 1,
+            },
+            {
+                rackId: rack.id,
+                plantId: lettuce.id,
+                quantity: 10,
+                plantedAt: rack1ReplantedAt,
+                harvestedAt: null,
+                harvestCount: 0,
+            },
+        ],
+    });
+
+    await prisma.activity.createMany({
+        data: [
+            // Rack registered
+            {
+                rackId: rack.id,
+                eventType: ActivityEventType.RACK_ADDED,
+                details: `Rack "${rack.name}" registered`,
+                metadata: {
+                    rackName: rack.name,
+                    macAddress: rack.macAddress,
+                    userId: user.id,
+                },
+                timestamp: new Date('2026-01-09T08:00:00.000Z'),
+            },
+            // First planting
+            {
+                rackId: rack.id,
+                eventType: ActivityEventType.PLANT_ADDED,
+                details: `Plant "Lettuce" added to rack`,
+                metadata: {
+                    rackName: rack.name,
+                    macAddress: rack.macAddress,
+                    plantId: lettuce.id,
+                    plantName: 'Lettuce',
+                    quantity: 10,
+                    plantedAt: rack1PlantedAt.toISOString(),
+                },
+                timestamp: rack1PlantedAt,
+            },
+            // Watering on — automation
+            {
+                rackId: rack.id,
+                eventType: ActivityEventType.WATERING_ON,
+                details:
+                    'Watering start triggered by automation rule "Lettuce - Low Moisture Alert"',
+                metadata: {
+                    rackName: rack.name,
+                    macAddress: rack.macAddress,
+                    source: 'automation',
+                    ruleId: 'rule-lettuce-low-moisture',
+                    ruleName: 'Lettuce - Low Moisture Alert',
+                    duration: 5000,
+                },
+                timestamp: new Date('2026-01-15T10:00:00.000Z'),
+            },
+            // Watering off — automation
+            {
+                rackId: rack.id,
+                eventType: ActivityEventType.WATERING_OFF,
+                details:
+                    'Watering stop triggered by automation rule "Lettuce - High Moisture Stop"',
+                metadata: {
+                    rackName: rack.name,
+                    macAddress: rack.macAddress,
+                    source: 'automation',
+                    ruleId: 'rule-lettuce-high-moisture',
+                    ruleName: 'Lettuce - High Moisture Stop',
+                    duration: 5000,
+                },
+                timestamp: new Date('2026-01-15T10:05:00.000Z'),
+            },
+            // Light on — automation
+            {
+                rackId: rack.id,
+                eventType: ActivityEventType.LIGHT_ON,
+                details: 'Grow light on triggered by automation rule "Lettuce - Low Light"',
+                metadata: {
+                    rackName: rack.name,
+                    macAddress: rack.macAddress,
+                    source: 'automation',
+                    ruleId: 'rule-lettuce-low-light',
+                    ruleName: 'Lettuce - Low Light',
+                },
+                timestamp: new Date('2026-01-20T06:00:00.000Z'),
+            },
+            // Light off — automation
+            {
+                rackId: rack.id,
+                eventType: ActivityEventType.LIGHT_OFF,
+                details: 'Grow light off triggered by automation rule "Lettuce - Low Light"',
+                metadata: {
+                    rackName: rack.name,
+                    macAddress: rack.macAddress,
+                    source: 'automation',
+                    ruleId: 'rule-lettuce-low-light',
+                    ruleName: 'Lettuce - Low Light',
+                },
+                timestamp: new Date('2026-01-20T18:00:00.000Z'),
+            },
+            // Harvest
+            {
+                rackId: rack.id,
+                eventType: ActivityEventType.PLANT_HARVESTED,
+                details: `Plant "Lettuce" harvested from rack`,
+                metadata: {
+                    rackName: rack.name,
+                    macAddress: rack.macAddress,
+                    plantId: lettuce.id,
+                    plantName: 'Lettuce',
+                    harvestCount: 1,
+                    quantity: 10,
+                    harvestedAt: rack1HarvestedAt.toISOString(),
+                },
+                timestamp: rack1HarvestedAt,
+            },
+            // Replant after harvest
+            {
+                rackId: rack.id,
+                eventType: ActivityEventType.PLANT_ADDED,
+                details: `Plant "Lettuce" added to rack`,
+                metadata: {
+                    rackName: rack.name,
+                    macAddress: rack.macAddress,
+                    plantId: lettuce.id,
+                    plantName: 'Lettuce',
+                    quantity: 10,
+                    plantedAt: rack1ReplantedAt.toISOString(),
+                },
+                timestamp: rack1ReplantedAt,
+            },
+        ],
+    });
+
+    console.log('✓ Rack 1 (Lettuce) activities and history created');
 
     // ============================================
-    // CREATE SENSOR READINGS
+    // RACK 2 — Basil planted, with crop rotation
+    // ============================================
+
+    const rack2FirstPlantedAt = new Date('2026-01-05T08:00:00.000Z');
+    const rack2ChangedAt = new Date('2026-02-01T08:00:00.000Z');
+
+    await prisma.rack.update({
+        where: { id: rack2.id },
+        data: {
+            currentPlantId: basil.id,
+            quantity: 8,
+            plantedAt: rack2ChangedAt,
+            harvestCount: 0,
+            lastActivityAt: rack2ChangedAt,
+            status: 'ONLINE',
+        },
+    });
+
+    // History: oregano removed (crop rotation), basil active
+    await prisma.rackPlantingHistory.createMany({
+        data: [
+            {
+                rackId: rack2.id,
+                plantId: oregano.id,
+                quantity: 6,
+                plantedAt: rack2FirstPlantedAt,
+                harvestedAt: null, // removed, not harvested
+                harvestCount: 0,
+            },
+            {
+                rackId: rack2.id,
+                plantId: basil.id,
+                quantity: 8,
+                plantedAt: rack2ChangedAt,
+                harvestedAt: null,
+                harvestCount: 0,
+            },
+        ],
+    });
+
+    await prisma.activity.createMany({
+        data: [
+            // Rack registered
+            {
+                rackId: rack2.id,
+                eventType: ActivityEventType.RACK_ADDED,
+                details: `Rack "${rack2.name}" registered`,
+                metadata: {
+                    rackName: rack2.name,
+                    macAddress: rack2.macAddress,
+                    userId: user.id,
+                },
+                timestamp: new Date('2026-01-04T08:00:00.000Z'),
+            },
+            // Oregano planted
+            {
+                rackId: rack2.id,
+                eventType: ActivityEventType.PLANT_ADDED,
+                details: `Plant "Oregano" added to rack`,
+                metadata: {
+                    rackName: rack2.name,
+                    macAddress: rack2.macAddress,
+                    plantId: oregano.id,
+                    plantName: 'Oregano',
+                    quantity: 6,
+                    plantedAt: rack2FirstPlantedAt.toISOString(),
+                },
+                timestamp: rack2FirstPlantedAt,
+            },
+            // Crop rotation — oregano removed
+            {
+                rackId: rack2.id,
+                eventType: ActivityEventType.PLANT_REMOVED,
+                details: 'Plant removed from rack (replaced during crop rotation)',
+                metadata: {
+                    rackName: rack2.name,
+                    macAddress: rack2.macAddress,
+                    removedPlantId: oregano.id,
+                    removedPlantName: 'Oregano',
+                    replacedByPlantId: basil.id,
+                    replacedByPlantName: 'Basil',
+                },
+                timestamp: rack2ChangedAt,
+            },
+            // Crop rotation — basil assigned
+            {
+                rackId: rack2.id,
+                eventType: ActivityEventType.PLANT_CHANGED,
+                details: `Plant changed from previous to "Basil"`,
+                metadata: {
+                    rackName: rack2.name,
+                    macAddress: rack2.macAddress,
+                    previousPlantId: oregano.id,
+                    previousPlantName: 'Oregano',
+                    newPlantId: basil.id,
+                    newPlantName: 'Basil',
+                    quantity: 8,
+                },
+                timestamp: rack2ChangedAt,
+            },
+            // Watering on
+            {
+                rackId: rack2.id,
+                eventType: ActivityEventType.WATERING_ON,
+                details: 'Watering start triggered by automation rule "Basil - Low Moisture"',
+                metadata: {
+                    rackName: rack2.name,
+                    macAddress: rack2.macAddress,
+                    source: 'automation',
+                    ruleId: 'rule-basil-low-moisture',
+                    ruleName: 'Basil - Low Moisture',
+                    duration: 4000,
+                },
+                timestamp: new Date('2026-02-10T09:00:00.000Z'),
+            },
+            // Watering off
+            {
+                rackId: rack2.id,
+                eventType: ActivityEventType.WATERING_OFF,
+                details: 'Watering stop triggered by automation rule "Basil - High Moisture Stop"',
+                metadata: {
+                    rackName: rack2.name,
+                    macAddress: rack2.macAddress,
+                    source: 'automation',
+                    ruleId: 'rule-basil-high-moisture',
+                    ruleName: 'Basil - High Moisture Stop',
+                    duration: 4000,
+                },
+                timestamp: new Date('2026-02-10T09:04:00.000Z'),
+            },
+        ],
+    });
+
+    console.log('✓ Rack 2 (Basil, crop rotation from Oregano) activities and history created');
+
+    // ============================================
+    // RACK 3 — Empty, only rack-level activity
+    // ============================================
+
+    await prisma.rack.update({
+        where: { id: rack3.id },
+        data: {
+            currentPlantId: null,
+            quantity: 0,
+            plantedAt: null,
+            status: 'OFFLINE',
+            lastActivityAt: new Date('2026-03-01T08:00:00.000Z'),
+        },
+    });
+
+    await prisma.activity.createMany({
+        data: [
+            {
+                rackId: rack3.id,
+                eventType: ActivityEventType.RACK_ADDED,
+                details: `Rack "${rack3.name}" registered`,
+                metadata: {
+                    rackName: rack3.name,
+                    macAddress: rack3.macAddress,
+                    userId: user.id,
+                },
+                timestamp: new Date('2026-03-01T08:00:00.000Z'),
+            },
+        ],
+    });
+
+    console.log('✓ Rack 3 (empty) activity created');
+
+    // ============================================
+    // SENSOR READINGS (Rack 1 and Rack 2)
     // ============================================
 
     await prisma.sensorReading.createMany({
@@ -585,20 +843,34 @@ async function main() {
                 moisture: 68.2,
                 lightLevel: 22000,
             },
+            {
+                rackId: rack2.id,
+                temperature: 22.1,
+                humidity: 55.0,
+                moisture: 52.3,
+                lightLevel: 14000,
+            },
+            {
+                rackId: rack2.id,
+                temperature: 23.4,
+                humidity: 57.0,
+                moisture: 48.0,
+                lightLevel: 13000,
+            },
         ],
     });
 
     console.log('✓ Sensor readings created');
 
     // ============================================
-    // CREATE AGGREGATED SENSOR READINGS
+    // AGGREGATED SENSOR READINGS (Rack 1 and Rack 2)
     // ============================================
 
     await prisma.aggregatedSensorReading.createMany({
         data: [
             {
                 rackId: rack.id,
-                hour: new Date('2026-01-01T08:00:00.000Z'),
+                hour: new Date('2026-01-15T08:00:00.000Z'),
                 avgTemperature: 15.5,
                 avgHumidity: 60.2,
                 avgMoisture: 65.1,
@@ -611,7 +883,7 @@ async function main() {
             },
             {
                 rackId: rack.id,
-                hour: new Date('2026-01-01T09:00:00.000Z'),
+                hour: new Date('2026-01-15T09:00:00.000Z'),
                 avgTemperature: 14.8,
                 avgHumidity: 59.0,
                 avgMoisture: 64.0,
@@ -623,17 +895,17 @@ async function main() {
                 readingCount: 3,
             },
             {
-                rackId: rack.id,
-                hour: new Date('2026-01-01T10:00:00.000Z'),
-                avgTemperature: 16.2,
-                avgHumidity: 61.5,
-                avgMoisture: 66.5,
-                avgLightLevel: 21000,
-                minTemperature: 15.0,
-                maxTemperature: 17.2,
-                minMoisture: 64.0,
-                maxMoisture: 69.0,
-                readingCount: 3,
+                rackId: rack2.id,
+                hour: new Date('2026-02-10T09:00:00.000Z'),
+                avgTemperature: 22.8,
+                avgHumidity: 56.0,
+                avgMoisture: 50.2,
+                avgLightLevel: 13500,
+                minTemperature: 22.1,
+                maxTemperature: 23.4,
+                minMoisture: 48.0,
+                maxMoisture: 52.3,
+                readingCount: 2,
             },
         ],
         skipDuplicates: true,
@@ -642,42 +914,7 @@ async function main() {
     console.log('✓ Aggregated sensor readings created');
 
     // ============================================
-    // CREATE ACTIVITIES
-    // ============================================
-
-    await prisma.activity.createMany({
-        data: [
-            {
-                rackId: rack.id,
-                eventType: ActivityEventType.PLANT_ADDED,
-                details: 'Planted 10x Lettuce',
-                metadata: { plantId: lettuce.id, quantity: 10 },
-            },
-            {
-                rackId: rack.id,
-                eventType: ActivityEventType.WATERING_ON,
-                details: 'Watering started - Moisture below threshold',
-                metadata: { triggeredBy: 'Automation Rule: Lettuce - Low Moisture Alert' },
-            },
-            {
-                rackId: rack.id,
-                eventType: ActivityEventType.DEVICE_ONLINE,
-                details: 'Device came online',
-                metadata: { device: 'ESP32 Sensor Unit' },
-            },
-            {
-                rackId: rack.id,
-                eventType: ActivityEventType.AUTOMATION_TRIGGERED,
-                details: 'Automation rule triggered: Low Light',
-                metadata: { rule: 'Lettuce - Low Light', action: 'Grow light turned on' },
-            },
-        ],
-    });
-
-    console.log('✓ Activities created');
-
-    // ============================================
-    // CREATE NOTIFICATIONS
+    // NOTIFICATIONS
     // ============================================
 
     await prisma.notification.createMany({
@@ -689,16 +926,16 @@ async function main() {
                 status: NotificationStatus.UNREAD,
                 title: 'Lettuce Planted',
                 message: 'Successfully planted 10 Lettuce plants in My First Rack',
-                metadata: { plantId: lettuce.id, quantity: 10 },
+                metadata: { plantId: lettuce.id, plantName: 'Lettuce', quantity: 10 },
             },
             {
                 userId: user.id,
                 rackId: rack.id,
                 type: NotificationType.INFO,
-                status: NotificationStatus.UNREAD,
-                title: 'Automation Active',
-                message: 'Watering automation triggered - Moisture was below 60%',
-                metadata: { rule: 'Lettuce - Low Moisture Alert' },
+                status: NotificationStatus.READ,
+                title: 'Watering Triggered',
+                message: 'Watering automation triggered — Moisture was below 60%',
+                metadata: { ruleName: 'Lettuce - Low Moisture Alert' },
             },
             {
                 userId: user.id,
@@ -706,8 +943,44 @@ async function main() {
                 type: NotificationType.ALERT,
                 status: NotificationStatus.UNREAD,
                 title: 'Light Level Low',
-                message: 'Grow lights turned on automatically - Light was below 16,000 lux',
-                metadata: { rule: 'Lettuce - Low Light' },
+                message: 'Grow lights turned on automatically — Light was below 16,000 lux',
+                metadata: { ruleName: 'Lettuce - Low Light' },
+            },
+            {
+                userId: user.id,
+                rackId: rack.id,
+                type: NotificationType.SUCCESS,
+                status: NotificationStatus.READ,
+                title: 'Harvest Recorded',
+                message: 'Lettuce successfully harvested from My First Rack',
+                metadata: {
+                    plantId: lettuce.id,
+                    plantName: 'Lettuce',
+                    harvestCount: 1,
+                    quantity: 10,
+                },
+            },
+            {
+                userId: user.id,
+                rackId: rack2.id,
+                type: NotificationType.INFO,
+                status: NotificationStatus.UNREAD,
+                title: 'Plant Changed',
+                message: 'Kitchen Herb Rack switched from Oregano to Basil',
+                metadata: {
+                    previousPlantId: oregano.id,
+                    newPlantId: basil.id,
+                    newPlantName: 'Basil',
+                },
+            },
+            {
+                userId: user.id,
+                rackId: rack3.id,
+                type: NotificationType.INFO,
+                status: NotificationStatus.UNREAD,
+                title: 'Rack Registered',
+                message: 'Balcony Rack has been registered and is ready for planting',
+                metadata: { rackId: rack3.id, rackName: rack3.name, macAddress: rack3.macAddress },
             },
         ],
     });
@@ -720,12 +993,14 @@ async function main() {
 
     const plantCount = await prisma.plant.count();
     const ruleCount = await prisma.automationRule.count();
+    const activityCount = await prisma.activity.count();
 
-    console.log('\n Seed completed successfully!');
+    console.log('\n✓ Seed completed successfully!');
     console.log(`   - ${plantCount} plants created`);
     console.log(`   - ${ruleCount} automation rules created`);
-    console.log(`   - 1 rack with Lettuce planted`);
-    console.log(`   - Sample sensor readings, activities, and notifications added`);
+    console.log(`   - 3 racks (Rack 1: Lettuce active, Rack 2: Basil active, Rack 3: empty)`);
+    console.log(`   - ${activityCount} activity records created`);
+    console.log(`   - Sample sensor readings, aggregated readings, and notifications added`);
 }
 
 main()

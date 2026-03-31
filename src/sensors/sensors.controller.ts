@@ -276,14 +276,17 @@ export class SensorsController {
         },
     })
     @ApiNotFoundResponse({
-        description: 'Rack not found or access denied',
+        description: 'Rack clx123abc456 not found or access denied',
         schema: {
             type: 'object',
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
                 path: { type: 'string', example: '/api/sensors/clx123abc456/aggregated' },
-                message: { type: 'string', example: 'Rack not found or access denied' },
+                message: {
+                    type: 'string',
+                    example: 'Rack clx123abc456 not found or access denied',
+                },
             },
         },
     })
@@ -388,14 +391,17 @@ export class SensorsController {
         },
     })
     @ApiNotFoundResponse({
-        description: 'Rack not found or access denied',
+        description: 'Rack clx123abc456 not found or access denied',
         schema: {
             type: 'object',
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
                 path: { type: 'string', example: '/api/sensors/clx123abc456/history' },
-                message: { type: 'string', example: 'Rack not found or access denied' },
+                message: {
+                    type: 'string',
+                    example: 'Rack clx123abc456 not found or access denied',
+                },
             },
         },
     })
@@ -531,14 +537,17 @@ export class SensorsController {
         },
     })
     @ApiNotFoundResponse({
-        description: 'Rack not found or access denied',
+        description: 'Rack clx123abc456 not found or access denied',
         schema: {
             type: 'object',
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
                 path: { type: 'string', example: '/api/sensors/clx123abc456/statistics' },
-                message: { type: 'string', example: 'Rack not found or access denied' },
+                message: {
+                    type: 'string',
+                    example: 'Rack clx123abc456 not found or access denied',
+                },
             },
         },
     })

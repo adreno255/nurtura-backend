@@ -6,7 +6,7 @@
 import { PlantCategory, SoilType } from '../../src/generated/prisma';
 import type { CreatePlantDto } from '../../src/plants/dto/create-plant.dto';
 import type { UpdatePlantDto } from '../../src/plants/dto/update-plant.dto';
-import type { AssignPlantToRackDto } from '../../src/plants/dto/assign-plant-to-rack.dto';
+import type { AssignPlantToRackDto } from '../../src/racks/dto/rack-operations.dto';
 import type { PlantCategoryQueryDto } from '../../src/plants/dto/plant-category-query.dto';
 
 // ─────────────────────────────────────────────

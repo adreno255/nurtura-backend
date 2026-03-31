@@ -342,11 +342,11 @@ components:
                 - name: subscribeToRackError
                   payload:
                       message: 'Failed to subscribe to rack'
-                      error: 'Rack not found or access denied'
+                      error: 'Rack clx789xyz123 not found or access denied'
                 - name: unsubscribeFromRackError
                   payload:
                       message: 'Failed to unsubscribe from rack'
-                      error: 'Rack not found or access denied'
+                      error: 'Rack clx789xyz123 not found or access denied'
 
         unsubscribeFromRackMessage:
             name: Unsubscribe
