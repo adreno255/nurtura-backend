@@ -158,7 +158,7 @@ export const rackWithDifferentPlant = {
 // HISTORY
 // ─────────────────────────────────────────────
 
-export const mockRackPlantHistoryEntry = {
+export const mockRackPlantingHistoryEntry = {
     id: 'history-001',
     rackId: 'rack-123',
     plantId: testPlantIds.primary,
@@ -176,14 +176,17 @@ export const mockRackPlantHistoryEntry = {
     },
 };
 
-export const mockOpenRackPlantHistoryEntry = {
-    ...mockRackPlantHistoryEntry,
+export const mockOpenRackPlantingHistoryEntry = {
+    ...mockRackPlantingHistoryEntry,
     id: 'history-002',
     harvestedAt: null,
     harvestCount: 0,
 };
 
-export const mockRackPlantHistory = [mockRackPlantHistoryEntry, mockOpenRackPlantHistoryEntry];
+export const mockRackPlantingHistory = [
+    mockRackPlantingHistoryEntry,
+    mockOpenRackPlantingHistoryEntry,
+];
 
 // ─────────────────────────────────────────────
 // SERVICE RESPONSES
@@ -237,11 +240,11 @@ export const paginatedPlantsResponse = {
 };
 
 export const paginatedHistoryResponse = {
-    data: mockRackPlantHistory,
+    data: mockRackPlantingHistory,
     meta: {
         currentPage: 1,
         itemsPerPage: 10,
-        totalItems: mockRackPlantHistory.length,
+        totalItems: mockRackPlantingHistory.length,
         totalPages: 1,
         hasNextPage: false,
         hasPreviousPage: false,

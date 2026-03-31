@@ -33,7 +33,6 @@ import {
     emptyRackForPlant,
     rackWithPlant,
     rackWithDifferentPlant,
-    mockRackPlantHistory,
 } from '../../test/fixtures';
 
 describe('PlantsService', () => {
@@ -470,7 +469,7 @@ describe('PlantsService', () => {
             await service.assignToRack(testPlantId, testUserId, validAssignPlantToRackDto);
 
             // History should have been created twice: once for outgoing, once for incoming
-            expect(mockDatabaseService.rackPlantHistory.create).toHaveBeenCalledTimes(2);
+            expect(mockDatabaseService.rackPlantingHistory.create).toHaveBeenCalledTimes(2);
         });
     });
 
@@ -651,92 +650,6 @@ describe('PlantsService', () => {
 
             await expect(
                 service.harvestFromRack(testPlantId, testRackId, testUserId),
-            ).rejects.toThrow(InternalServerErrorException);
-        });
-    });
-
-    // ─────────────────────────────────────────────
-    // getRackHistory
-    // ─────────────────────────────────────────────
-
-    describe('getRackHistory', () => {
-        beforeEach(() => {
-            mockRacksService.verifyRackOwnership.mockResolvedValue(undefined);
-        });
-
-        it('should return paginated rack plant history', async () => {
-            mockDatabaseService.rackPlantHistory.findMany.mockResolvedValue(mockRackPlantHistory);
-            mockDatabaseService.rackPlantHistory.count.mockResolvedValue(
-                mockRackPlantHistory.length,
-            );
-
-            const result = await service.getRackHistory(testRackId, testUserId, defaultPlantQuery);
-
-            expect(result.data).toEqual(mockRackPlantHistory);
-            expect(result.meta.totalItems).toBe(mockRackPlantHistory.length);
-        });
-
-        it('should include plant details in each history entry', async () => {
-            mockDatabaseService.rackPlantHistory.findMany.mockResolvedValue(mockRackPlantHistory);
-            mockDatabaseService.rackPlantHistory.count.mockResolvedValue(
-                mockRackPlantHistory.length,
-            );
-
-            await service.getRackHistory(testRackId, testUserId, defaultPlantQuery);
-
-            expect(mockDatabaseService.rackPlantHistory.findMany).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    include: expect.objectContaining({
-                        plant: expect.objectContaining({
-                            select: expect.any(Object) as object,
-                        }) as unknown as Prisma.RackPlantHistoryFindManyArgs,
-                    }) as unknown as Prisma.RackPlantHistoryFindManyArgs,
-                }),
-            );
-        });
-
-        it('should filter history by rackId', async () => {
-            mockDatabaseService.rackPlantHistory.findMany.mockResolvedValue(mockRackPlantHistory);
-            mockDatabaseService.rackPlantHistory.count.mockResolvedValue(
-                mockRackPlantHistory.length,
-            );
-
-            await service.getRackHistory(testRackId, testUserId, defaultPlantQuery);
-
-            expect(mockDatabaseService.rackPlantHistory.findMany).toHaveBeenCalledWith(
-                expect.objectContaining({ where: { rackId: testRackId } }),
-            );
-        });
-
-        it('should call verifyRackOwnership', async () => {
-            mockDatabaseService.rackPlantHistory.findMany.mockResolvedValue([]);
-            mockDatabaseService.rackPlantHistory.count.mockResolvedValue(0);
-
-            await service.getRackHistory(testRackId, testUserId, defaultPlantQuery);
-
-            expect(mockRacksService.verifyRackOwnership).toHaveBeenCalledWith(
-                testRackId,
-                testUserId,
-            );
-        });
-
-        it('should propagate NotFoundException from verifyRackOwnership', async () => {
-            mockRacksService.verifyRackOwnership.mockRejectedValue(
-                new NotFoundException('Rack not found or access denied'),
-            );
-
-            await expect(
-                service.getRackHistory(testRackId, testUserId, defaultPlantQuery),
-            ).rejects.toThrow(NotFoundException);
-        });
-
-        it('should throw InternalServerErrorException on database error', async () => {
-            mockDatabaseService.rackPlantHistory.findMany.mockRejectedValueOnce(
-                new Error('DB error'),
-            );
-
-            await expect(
-                service.getRackHistory(testRackId, testUserId, defaultPlantQuery),
             ).rejects.toThrow(InternalServerErrorException);
         });
     });

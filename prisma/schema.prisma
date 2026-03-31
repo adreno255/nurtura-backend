@@ -38,6 +38,7 @@ enum SoilType {
 enum ActivityEventType {
     // Rack events
     RACK_ADDED
+    RACK_RENAMED
     RACK_REMOVED
     
     // Plant events
@@ -138,7 +139,7 @@ model Plant {
     // Relations
     racks           Rack[]
     automationRules AutomationRule[]
-    rackHistory     RackPlantHistory[]
+    rackHistory     RackPlantingHistory[]
 
     @@map("plants")
 }
@@ -180,7 +181,7 @@ model Rack {
     notifications      Notification[]
     sensorReadings     SensorReading[]
     aggregatedReadings AggregatedSensorReading[]
-    rackHistory        RackPlantHistory[]
+    rackHistory        RackPlantingHistory[]
 
     @@index([userId])
     @@index([macAddress])
@@ -190,7 +191,7 @@ model Rack {
     @@map("racks")
 }
 
-model RackPlantHistory {
+model RackPlantingHistory {
     // Primary fields
     id      String @id @default(cuid())
     rackId  String @map("rack_id")
@@ -213,7 +214,7 @@ model RackPlantHistory {
     @@index([rackId])
     @@index([plantId])
     @@index([plantedAt])
-    @@map("rack_plant_history")
+    @@map("rack_planting_history")
 }
 
 model SensorReading {

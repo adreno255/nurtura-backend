@@ -166,7 +166,7 @@ export class PlantsController {
     @ApiOperation({
         summary: 'Get planting activity',
         description:
-            'Retrieves plant assignment history (RackPlantHistory) across all racks owned by the authenticated user. Supports date range filtering on plantedAt.',
+            'Retrieves plant assignment history (RackPlantingHistory) across all racks owned by the authenticated user. Supports date range filtering on plantedAt.',
     })
     @ApiQuery({
         name: 'startDate',

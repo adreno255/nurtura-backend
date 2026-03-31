@@ -250,9 +250,9 @@ export class PlantsService {
             const isChangingPlant = hadPreviousPlant && rack.currentPlantId !== plantId;
 
             await this.databaseService.$transaction(async (tx) => {
-                // If changing plants, close out the previous RackPlantHistory entry
+                // If changing plants, close out the previous RackPlantingHistory entry
                 if (isChangingPlant && rack.plantedAt) {
-                    await tx.rackPlantHistory.create({
+                    await tx.rackPlantingHistory.create({
                         data: {
                             rackId: rack.id,
                             plantId: rack.currentPlantId!,
@@ -276,7 +276,7 @@ export class PlantsService {
                 });
 
                 // Create new history entry for the incoming plant
-                await tx.rackPlantHistory.create({
+                await tx.rackPlantingHistory.create({
                     data: {
                         rackId: rack.id,
                         plantId,
@@ -372,7 +372,7 @@ export class PlantsService {
             await this.databaseService.$transaction(async (tx) => {
                 // Close history entry (no harvest)
                 if (rack.plantedAt) {
-                    await tx.rackPlantHistory.updateMany({
+                    await tx.rackPlantingHistory.updateMany({
                         where: {
                             rackId,
                             plantId,
@@ -445,7 +445,7 @@ export class PlantsService {
             await this.databaseService.$transaction(async (tx) => {
                 // Update history record with harvest date and count
                 if (rack.plantedAt) {
-                    await tx.rackPlantHistory.updateMany({
+                    await tx.rackPlantingHistory.updateMany({
                         where: {
                             rackId,
                             plantId,
@@ -508,7 +508,7 @@ export class PlantsService {
      * Already covers the "Planting Activity" screen.
      */
     /**
-     * Get Planting Activity — RackPlantHistory records across all user racks.
+     * Get Planting Activity — RackPlantingHistory records across all user racks.
      * Supports date range filtering on plantedAt.
      * Returns paginated results + `amount` count within the date range.
      */
@@ -541,7 +541,7 @@ export class PlantsService {
             const { skip, take } = PaginationHelper.getPrismaOptions(query);
 
             const [history, totalItems] = await Promise.all([
-                this.databaseService.rackPlantHistory.findMany({
+                this.databaseService.rackPlantingHistory.findMany({
                     where,
                     orderBy: { plantedAt: 'desc' },
                     skip,
@@ -551,7 +551,7 @@ export class PlantsService {
                         rack: { select: { id: true, name: true, macAddress: true } },
                     },
                 }),
-                this.databaseService.rackPlantHistory.count({ where }),
+                this.databaseService.rackPlantingHistory.count({ where }),
             ]);
 
             this.logger.log(

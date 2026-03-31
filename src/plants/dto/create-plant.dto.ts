@@ -7,7 +7,7 @@ export class CreatePlantDto {
     @IsString()
     @IsNotEmpty()
     @MaxLength(200)
-    name: string;
+    name!: string;
 
     @ApiPropertyOptional({ enum: PlantCategory, example: PlantCategory.LEAFY_GREENS })
     @IsOptional()

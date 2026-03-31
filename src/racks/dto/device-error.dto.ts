@@ -49,16 +49,16 @@ export class DeviceErrorDto {
     @Expose({ name: 'c' })
     @IsString()
     @IsDefined()
-    code: string;
+    code!: string;
 
     @Expose({ name: 'm' })
     @IsString()
     @IsDefined()
-    message: string;
+    message!: string;
 
     @Expose({ name: 's' })
     @IsEnum(ErrorSeverity)
-    severity: ErrorSeverity;
+    severity!: ErrorSeverity;
 
     @Expose({ name: 'tm' })
     @IsOptional()

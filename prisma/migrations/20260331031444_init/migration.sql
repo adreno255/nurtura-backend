@@ -5,7 +5,7 @@ CREATE TYPE "plant_category" AS ENUM ('LEAFY_GREENS', 'TROPICAL_GREENS', 'HERBS'
 CREATE TYPE "soil_type" AS ENUM ('LOAMY', 'SANDY', 'PEATY', 'SILTY', 'CHALKY', 'CLAY');
 
 -- CreateEnum
-CREATE TYPE "activity_event_type" AS ENUM ('RACK_ADDED', 'RACK_REMOVED', 'PLANT_ADDED', 'PLANT_REMOVED', 'PLANT_CHANGED', 'PLANT_HARVESTED', 'LIGHT_ON', 'LIGHT_OFF', 'WATERING_ON', 'WATERING_OFF', 'AUTOMATION_TRIGGERED', 'DEVICE_ONLINE', 'DEVICE_OFFLINE');
+CREATE TYPE "activity_event_type" AS ENUM ('RACK_ADDED', 'RACK_RENAMED', 'RACK_REMOVED', 'PLANT_ADDED', 'PLANT_REMOVED', 'PLANT_CHANGED', 'PLANT_HARVESTED', 'LIGHT_ON', 'LIGHT_OFF', 'WATERING_ON', 'WATERING_OFF', 'AUTOMATION_TRIGGERED', 'DEVICE_ONLINE', 'DEVICE_OFFLINE');
 
 -- CreateEnum
 CREATE TYPE "notification_type" AS ENUM ('SYSTEM', 'ALERT', 'WARNING', 'INFO', 'SUCCESS');
@@ -72,7 +72,7 @@ CREATE TABLE "racks" (
 );
 
 -- CreateTable
-CREATE TABLE "rack_plant_history" (
+CREATE TABLE "rack_planting_history" (
     "id" TEXT NOT NULL,
     "rack_id" TEXT NOT NULL,
     "plant_id" TEXT NOT NULL,
@@ -83,7 +83,7 @@ CREATE TABLE "rack_plant_history" (
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
 
-    CONSTRAINT "rack_plant_history_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "rack_planting_history_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -198,13 +198,13 @@ CREATE INDEX "racks_last_seen_at_idx" ON "racks"("last_seen_at");
 CREATE INDEX "racks_current_plant_id_idx" ON "racks"("current_plant_id");
 
 -- CreateIndex
-CREATE INDEX "rack_plant_history_rack_id_idx" ON "rack_plant_history"("rack_id");
+CREATE INDEX "rack_planting_history_rack_id_idx" ON "rack_planting_history"("rack_id");
 
 -- CreateIndex
-CREATE INDEX "rack_plant_history_plant_id_idx" ON "rack_plant_history"("plant_id");
+CREATE INDEX "rack_planting_history_plant_id_idx" ON "rack_planting_history"("plant_id");
 
 -- CreateIndex
-CREATE INDEX "rack_plant_history_planted_at_idx" ON "rack_plant_history"("planted_at");
+CREATE INDEX "rack_planting_history_planted_at_idx" ON "rack_planting_history"("planted_at");
 
 -- CreateIndex
 CREATE INDEX "sensor_readings_rack_id_timestamp_idx" ON "sensor_readings"("rack_id", "timestamp");
@@ -261,10 +261,10 @@ ALTER TABLE "racks" ADD CONSTRAINT "racks_user_id_fkey" FOREIGN KEY ("user_id") 
 ALTER TABLE "racks" ADD CONSTRAINT "racks_current_plant_id_fkey" FOREIGN KEY ("current_plant_id") REFERENCES "plants"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "rack_plant_history" ADD CONSTRAINT "rack_plant_history_rack_id_fkey" FOREIGN KEY ("rack_id") REFERENCES "racks"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "rack_planting_history" ADD CONSTRAINT "rack_planting_history_rack_id_fkey" FOREIGN KEY ("rack_id") REFERENCES "racks"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "rack_plant_history" ADD CONSTRAINT "rack_plant_history_plant_id_fkey" FOREIGN KEY ("plant_id") REFERENCES "plants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "rack_planting_history" ADD CONSTRAINT "rack_planting_history_plant_id_fkey" FOREIGN KEY ("plant_id") REFERENCES "plants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "sensor_readings" ADD CONSTRAINT "sensor_readings_rack_id_fkey" FOREIGN KEY ("rack_id") REFERENCES "racks"("id") ON DELETE CASCADE ON UPDATE CASCADE;

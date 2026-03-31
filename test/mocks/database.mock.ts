@@ -30,7 +30,7 @@ export const createMockDatabaseService = () => ({
         delete: jest.fn(),
         count: jest.fn(),
     },
-    rackPlantHistory: {
+    rackPlantingHistory: {
         findUnique: jest.fn(),
         findFirst: jest.fn(),
         findMany: jest.fn(),

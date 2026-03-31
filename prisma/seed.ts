@@ -53,7 +53,7 @@ async function main() {
     // Clean up existing data
     await prisma.notification.deleteMany({ where: { rackId: rack.id } });
     await prisma.activity.deleteMany({ where: { rackId: rack.id } });
-    await prisma.rackPlantHistory.deleteMany({ where: { rackId: rack.id } });
+    await prisma.rackPlantingHistory.deleteMany({ where: { rackId: rack.id } });
     await prisma.automationRule.deleteMany({});
     await prisma.aggregatedSensorReading.deleteMany({ where: { rackId: rack.id } });
     await prisma.sensorReading.deleteMany({ where: { rackId: rack.id } });
