@@ -33,8 +33,6 @@ async function bootstrap(): Promise<void> {
 
     app.enableCors();
 
-    app.setGlobalPrefix('api');
-
     const isProduction = configService.get('NODE_ENV') === 'production';
 
     if (isProduction) {
@@ -71,7 +69,7 @@ async function bootstrap(): Promise<void> {
 
         const document = SwaggerModule.createDocument(app, config);
 
-        SwaggerModule.setup('api/docs', app, document, {
+        SwaggerModule.setup('/docs', app, document, {
             customSiteTitle: 'Nurtura API Docs',
             swaggerOptions: {
                 operationsSorter: (

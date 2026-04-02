@@ -46,9 +46,9 @@ export class TestServerHelper {
                 whitelist: true,
                 forbidNonWhitelisted: true,
                 transform: true,
-                transformOptions: {
-                    enableImplicitConversion: true,
-                },
+                // transformOptions: {
+                //     enableImplicitConversion: true,
+                // },
             }),
         );
 
@@ -57,7 +57,6 @@ export class TestServerHelper {
         this.app.useGlobalFilters(this.app.get(AllExceptionsFilter));
 
         this.app.enableCors();
-        this.app.setGlobalPrefix('api');
 
         await this.app.init();
         return this.app;
