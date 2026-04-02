@@ -1,3 +1,20 @@
+## [4.0.0](https://github.com/adreno255/nurtura-backend/compare/v3.0.0...v4.0.0) (2026-04-02)
+
+### ⚠ BREAKING CHANGES
+
+* remove api global prefix in all endpoints
+* move statistic and rack assignment operations to rack endpoints
+
+### Features
+
+* add plant endpoints ([d2690a7](https://github.com/adreno255/nurtura-backend/commit/d2690a7eb91bfdf3c31e3ef50d068c9d43f6d8e9))
+* add statistics endpoints ([89f3c33](https://github.com/adreno255/nurtura-backend/commit/89f3c332c776eb9e4a4b010685aee90fcb06c6a0))
+
+### Code Refactoring
+
+* move statistic and rack assignment operations to rack endpoints ([6d56ad9](https://github.com/adreno255/nurtura-backend/commit/6d56ad9e753b3f0381f3600b0e40f667c1c4ef29))
+* remove api global prefix in all endpoints ([5b2da68](https://github.com/adreno255/nurtura-backend/commit/5b2da68170866c49f83faf576e893f65147c8e20))
+
 ## [3.0.0](https://github.com/adreno255/nurtura-backend/compare/v2.0.0...v3.0.0) (2026-02-26)
 
 ### ⚠ BREAKING CHANGES
