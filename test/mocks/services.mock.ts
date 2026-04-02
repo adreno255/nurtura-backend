@@ -61,14 +61,30 @@ export const createMockRacksService = () => ({
     update: jest.fn(),
     delete: jest.fn(),
     verifyRackOwnership: jest.fn(),
+    resolveAuthorizedRackIds: jest.fn(),
     processDeviceStatus: jest.fn(),
     processDeviceError: jest.fn(),
     getLatestSensorReading: jest.fn(),
     getCurrentState: jest.fn(),
     getDeviceStatus: jest.fn(),
+    getRackActivities: jest.fn(),
+    getPlantCareActivities: jest.fn(),
+    getHarvestActivities: jest.fn(),
+    getPlantingActivities: jest.fn(),
+    harvestFromRack: jest.fn(),
+    assignToRack: jest.fn(),
+    unassignFromRack: jest.fn(),
+    getRecentActivities: jest.fn(),
     updateDeviceStatus: jest.fn(),
     updateLastSeenAt: jest.fn(),
-    getRecentActivities: jest.fn(),
+});
+
+export const createMockPlantsService = () => ({
+    create: jest.fn(),
+    findAll: jest.fn(),
+    findOne: jest.fn(),
+    update: jest.fn(),
+    remove: jest.fn(),
 });
 
 export const createMockAutomationService = () => ({

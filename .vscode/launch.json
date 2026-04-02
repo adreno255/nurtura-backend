@@ -21,8 +21,12 @@
             "restart": true,
             "sourceMaps": true,
             "cwd": "${workspaceFolder}",
-            "skipFiles": ["<node_internals>/**", "**/node_modules/**"],
-            "resolveSourceMapLocations": ["${workspaceFolder}/**", "!**/node_modules/**"]
+            "skipFiles": ["<node_internals>/**", "**/node_modules/**", "**/src/generated/**"],
+            "resolveSourceMapLocations": [
+                "${workspaceFolder}/**",
+                "!**/node_modules/**",
+                "!**/src/generated/**"
+            ]
         },
         {
             "type": "node",

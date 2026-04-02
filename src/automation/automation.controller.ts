@@ -19,6 +19,7 @@ import {
     ApiInternalServerErrorResponse,
     ApiBadRequestResponse,
     ApiParam,
+    ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { AutomationService } from './automation.service';
 import { CreateAutomationRuleDto, UpdateAutomationRuleDto } from './dto';
@@ -31,86 +32,6 @@ import { type PaginationQueryDto } from '../common/dto/pagination-query.dto';
 @Controller('automation')
 export class AutomationController {
     constructor(private readonly automationService: AutomationService) {}
-
-    @Post('rules')
-    @HttpCode(HttpStatus.CREATED)
-    @ApiOperation({
-        summary: 'Create an automation rule',
-        description: 'Creates a new automation rule for a rack with conditions and actions',
-    })
-    @ApiResponse({
-        status: HttpStatus.CREATED,
-        description: 'Automation rule created successfully',
-        schema: {
-            type: 'object',
-            properties: {
-                message: { type: 'string', example: 'Automation rule created successfully' },
-                rule: {
-                    type: 'object',
-                    properties: {
-                        id: { type: 'string', example: 'clx123abc456' },
-                        name: { type: 'string', example: 'Auto-water when dry' },
-                        description: {
-                            type: 'string',
-                            example: 'Waters plants when soil moisture is low',
-                        },
-                        conditions: {
-                            type: 'object',
-                            example: { moisture: { lessThan: 30 } },
-                        },
-                        actions: {
-                            type: 'object',
-                            example: { watering: { action: 'start', duration: 5000 } },
-                        },
-                        cooldownMinutes: { type: 'number', example: 30 },
-                        isEnabled: { type: 'boolean', example: true },
-                    },
-                },
-            },
-        },
-    })
-    @ApiBadRequestResponse({
-        description: 'Invalid input data or validation error',
-        schema: {
-            type: 'object',
-            properties: {
-                statusCode: { type: 'number', example: 400 },
-                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/automation/rules' },
-                message: { type: 'string', example: 'At least one condition must be specified' },
-            },
-        },
-    })
-    @ApiNotFoundResponse({
-        description: 'Rack not found',
-        schema: {
-            type: 'object',
-            properties: {
-                statusCode: { type: 'number', example: 404 },
-                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/automation/rules' },
-                message: { type: 'string', example: 'Rack not found' },
-            },
-        },
-    })
-    @ApiInternalServerErrorResponse({
-        description: 'Internal server error',
-        schema: {
-            type: 'object',
-            properties: {
-                statusCode: { type: 'number', example: 500 },
-                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/automation/rules' },
-                message: { type: 'string', example: 'Failed to create automation rule' },
-            },
-        },
-    })
-    async createRule(
-        @CurrentUser() user: CurrentUserPayload,
-        @Body() body: CreateAutomationRuleDto,
-    ) {
-        return this.automationService.create(user.dbId, body);
-    }
 
     @Get('racks/:rackId/rules')
     @HttpCode(HttpStatus.OK)
@@ -172,6 +93,18 @@ export class AutomationController {
             },
         },
     })
+    @ApiUnauthorizedResponse({
+        description: 'Missing or invalid authentication token',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 401 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/automation/racks/clx123abc456/rules' },
+                message: { type: 'string', example: 'Authentication required' },
+            },
+        },
+    })
     @ApiNotFoundResponse({
         description: 'Rack not found',
         schema: {
@@ -196,12 +129,104 @@ export class AutomationController {
             },
         },
     })
-    async getRackRules(
-        @Param('rackId') rackId: string,
+    async getPlantRules(
+        @Param('plantId') plantId: string,
         @CurrentUser() user: CurrentUserPayload,
         @Query() query: PaginationQueryDto,
     ) {
-        return this.automationService.findAll(rackId, user.dbId, query);
+        return this.automationService.findAll(plantId, user.dbId, query);
+    }
+
+    @Post('rules')
+    @HttpCode(HttpStatus.CREATED)
+    @ApiOperation({
+        summary: 'Create an automation rule',
+        description: 'Creates a new automation rule for a rack with conditions and actions',
+    })
+    @ApiResponse({
+        status: HttpStatus.CREATED,
+        description: 'Automation rule created successfully',
+        schema: {
+            type: 'object',
+            properties: {
+                message: { type: 'string', example: 'Automation rule created successfully' },
+                rule: {
+                    type: 'object',
+                    properties: {
+                        id: { type: 'string', example: 'clx123abc456' },
+                        name: { type: 'string', example: 'Auto-water when dry' },
+                        description: {
+                            type: 'string',
+                            example: 'Waters plants when soil moisture is low',
+                        },
+                        conditions: {
+                            type: 'object',
+                            example: { moisture: { lessThan: 30 } },
+                        },
+                        actions: {
+                            type: 'object',
+                            example: { watering: { action: 'start', duration: 5000 } },
+                        },
+                        cooldownMinutes: { type: 'number', example: 30 },
+                        isEnabled: { type: 'boolean', example: true },
+                    },
+                },
+            },
+        },
+    })
+    @ApiBadRequestResponse({
+        description: 'Invalid input data or validation error',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 400 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/automation/rules' },
+                message: { type: 'string', example: 'At least one condition must be specified' },
+            },
+        },
+    })
+    @ApiUnauthorizedResponse({
+        description: 'Missing or invalid authentication token',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 401 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/automation/rules' },
+                message: { type: 'string', example: 'Authentication required' },
+            },
+        },
+    })
+    @ApiNotFoundResponse({
+        description: 'Rack not found',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 404 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/automation/rules' },
+                message: { type: 'string', example: 'Rack not found' },
+            },
+        },
+    })
+    @ApiInternalServerErrorResponse({
+        description: 'Internal server error',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 500 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/automation/rules' },
+                message: { type: 'string', example: 'Failed to create automation rule' },
+            },
+        },
+    })
+    async createRule(
+        @CurrentUser() user: CurrentUserPayload,
+        @Body() body: CreateAutomationRuleDto,
+    ) {
+        return this.automationService.create(user.dbId, body);
     }
 
     @Put('rules/:ruleId')
@@ -233,6 +258,18 @@ export class AutomationController {
                         isEnabled: { type: 'boolean', example: false },
                     },
                 },
+            },
+        },
+    })
+    @ApiUnauthorizedResponse({
+        description: 'Missing or invalid authentication token',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 401 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/automation/rules/clx789xyz123' },
+                message: { type: 'string', example: 'Authentication required' },
             },
         },
     })
@@ -303,6 +340,18 @@ export class AutomationController {
             type: 'object',
             properties: {
                 message: { type: 'string', example: 'Automation rule deleted successfully' },
+            },
+        },
+    })
+    @ApiUnauthorizedResponse({
+        description: 'Missing or invalid authentication token',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 401 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/api/automation/rules/clx789xyz123' },
+                message: { type: 'string', example: 'Authentication required' },
             },
         },
     })

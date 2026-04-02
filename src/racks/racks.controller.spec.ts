@@ -1,5 +1,9 @@
 import { Test, type TestingModule } from '@nestjs/testing';
-import { NotFoundException, InternalServerErrorException } from '@nestjs/common';
+import {
+    NotFoundException,
+    InternalServerErrorException,
+    BadRequestException,
+} from '@nestjs/common';
 import { RacksController } from './racks.controller';
 import { RacksService } from './racks.service';
 import { type CreateRackDto } from './dto/create-rack.dto';
@@ -16,8 +20,16 @@ import {
     mockRacks,
     testRackIds,
     testMacAddresses,
+    paginatedHistoryResponse,
+    assignSuccessResponse,
+    baseActivityQuery,
+    harvestSuccessResponse,
+    unassignFromRackSuccessResponse,
+    validAssignPlantToRackDto,
+    testPlantIds,
 } from '../../test/fixtures';
 import { createMockRacksService } from '../../test/mocks';
+import { type HarvestFromRackDto, type UnassignFromRackDto } from './dto';
 
 describe('RacksController', () => {
     let controller: RacksController;
@@ -27,6 +39,7 @@ describe('RacksController', () => {
 
     const testRackId = testRackIds.primary;
     const testMacAddress = testMacAddresses.valid;
+    const testPlantId = testPlantIds.primary;
 
     const mockRacksService = createMockRacksService();
 
@@ -52,51 +65,6 @@ describe('RacksController', () => {
 
     it('should be defined', () => {
         expect(controller).toBeDefined();
-    });
-
-    describe('create', () => {
-        it('should register a new rack successfully', async () => {
-            const expectedResponse = {
-                message: 'Rack registered successfully',
-                rackId: testRackId,
-            };
-
-            mockRacksService.create.mockResolvedValue(expectedResponse);
-
-            const result = await controller.create(testUser, createRackDto);
-
-            expect(result).toEqual(expectedResponse);
-            expect(mockRacksService.create).toHaveBeenCalledWith(testUser.dbId, createRackDto);
-            expect(mockRacksService.create).toHaveBeenCalledTimes(1);
-        });
-
-        it('should pass userId from CurrentUser decorator', async () => {
-            const expectedResponse = {
-                message: 'Rack registered successfully',
-                rackId: testRackId,
-            };
-
-            mockRacksService.create.mockResolvedValue(expectedResponse);
-
-            await controller.create(testUser, createRackDto);
-
-            expect(mockRacksService.create).toHaveBeenCalledWith(testUser.dbId, createRackDto);
-        });
-
-        it('should propagate service errors', async () => {
-            const error = new InternalServerErrorException('Failed to register rack');
-            mockRacksService.create.mockRejectedValue(error);
-
-            await expect(controller.create(testUser, createRackDto)).rejects.toThrow(error);
-            expect(mockRacksService.create).toHaveBeenCalledWith(testUser.dbId, createRackDto);
-        });
-
-        it('should handle ConflictException for duplicate MAC address', async () => {
-            const error = new InternalServerErrorException('MAC address already registered');
-            mockRacksService.create.mockRejectedValue(error);
-
-            await expect(controller.create(testUser, createRackDto)).rejects.toThrow(error);
-        });
     });
 
     describe('findAll', () => {
@@ -183,6 +151,42 @@ describe('RacksController', () => {
         });
     });
 
+    describe('getRackActivities', () => {
+        it('should return paginated rack activities', async () => {
+            mockRacksService.getRackActivities.mockResolvedValue(paginatedHistoryResponse);
+
+            const result = await controller.getRackActivities(testUser, baseActivityQuery);
+
+            expect(result).toEqual(paginatedHistoryResponse);
+            expect(mockRacksService.getRackActivities).toHaveBeenCalledWith(
+                testUser.dbId,
+                baseActivityQuery,
+            );
+            expect(mockRacksService.getRackActivities).toHaveBeenCalledTimes(1);
+        });
+
+        it('should pass userId from CurrentUser decorator', async () => {
+            mockRacksService.getRackActivities.mockResolvedValue(paginatedHistoryResponse);
+
+            await controller.getRackActivities(testUser, baseActivityQuery);
+
+            expect(mockRacksService.getRackActivities).toHaveBeenCalledWith(
+                testUser.dbId,
+                expect.any(Object),
+            );
+        });
+
+        it('should propagate NotFoundException for missing rack', async () => {
+            mockRacksService.getRackActivities.mockRejectedValue(
+                new NotFoundException('Rack not found or does not belong to you'),
+            );
+
+            await expect(controller.getRackActivities(testUser, baseActivityQuery)).rejects.toThrow(
+                NotFoundException,
+            );
+        });
+    });
+
     describe('findOne', () => {
         it('should retrieve rack details successfully', async () => {
             const expectedResponse = {
@@ -223,7 +227,7 @@ describe('RacksController', () => {
         });
 
         it('should throw NotFoundException when rack not found', async () => {
-            const error = new NotFoundException('Rack not found or access denied');
+            const error = new NotFoundException(`Rack ${testRackId} not found or access denied`);
             mockRacksService.findById.mockRejectedValue(error);
 
             await expect(controller.findOne(testUser, testRackId)).rejects.toThrow(error);
@@ -235,129 +239,6 @@ describe('RacksController', () => {
             mockRacksService.findById.mockRejectedValue(error);
 
             await expect(controller.findOne(testUser, testRackId)).rejects.toThrow(error);
-        });
-    });
-
-    describe('update', () => {
-        it('should update rack successfully', async () => {
-            const expectedResponse = {
-                message: 'Rack updated successfully',
-                rack: {
-                    ...mockRack,
-                    name: updateRackDto.name,
-                    description: updateRackDto.description,
-                    mqttTopic: updateRackDto.mqttTopic,
-                },
-            };
-
-            mockRacksService.update.mockResolvedValue(expectedResponse);
-
-            const result = await controller.update(testUser, testRackId, updateRackDto);
-
-            expect(result).toEqual(expectedResponse);
-            expect(mockRacksService.update).toHaveBeenCalledWith(
-                testRackId,
-                testUser.dbId,
-                updateRackDto,
-            );
-            expect(mockRacksService.update).toHaveBeenCalledTimes(1);
-        });
-
-        it('should pass correct parameters to service', async () => {
-            const expectedResponse = {
-                message: 'Rack updated successfully',
-                rack: mockRack,
-            };
-
-            mockRacksService.update.mockResolvedValue(expectedResponse);
-
-            await controller.update(testUser, testRackId, updateRackDto);
-
-            expect(mockRacksService.update).toHaveBeenCalledWith(
-                testRackId,
-                testUser.dbId,
-                updateRackDto,
-            );
-        });
-
-        it('should handle partial updates', async () => {
-            const partialUpdate: UpdateRackDto = { name: 'New Name Only' };
-            const expectedResponse = {
-                message: 'Rack updated successfully',
-                rack: { ...mockRack, name: partialUpdate.name },
-            };
-
-            mockRacksService.update.mockResolvedValue(expectedResponse);
-
-            const result = await controller.update(testUser, testRackId, partialUpdate);
-
-            expect(result).toEqual(expectedResponse);
-            expect(mockRacksService.update).toHaveBeenCalledWith(
-                testRackId,
-                testUser.dbId,
-                partialUpdate,
-            );
-        });
-
-        it('should throw NotFoundException when rack not found', async () => {
-            const error = new NotFoundException('Rack not found or access denied');
-            mockRacksService.update.mockRejectedValue(error);
-
-            await expect(controller.update(testUser, testRackId, updateRackDto)).rejects.toThrow(
-                error,
-            );
-        });
-
-        it('should propagate service errors', async () => {
-            const error = new InternalServerErrorException('Failed to update rack');
-            mockRacksService.update.mockRejectedValue(error);
-
-            await expect(controller.update(testUser, testRackId, updateRackDto)).rejects.toThrow(
-                error,
-            );
-        });
-    });
-
-    describe('remove', () => {
-        it('should delete rack successfully', async () => {
-            const expectedResponse = {
-                message: 'Rack deleted successfully',
-            };
-
-            mockRacksService.delete.mockResolvedValue(expectedResponse);
-
-            const result = await controller.remove(testUser, testRackId);
-
-            expect(result).toEqual(expectedResponse);
-            expect(mockRacksService.delete).toHaveBeenCalledWith(testRackId, testUser.dbId);
-            expect(mockRacksService.delete).toHaveBeenCalledTimes(1);
-        });
-
-        it('should pass correct parameters to service', async () => {
-            const expectedResponse = {
-                message: 'Rack deleted successfully',
-            };
-
-            mockRacksService.delete.mockResolvedValue(expectedResponse);
-
-            await controller.remove(testUser, testRackId);
-
-            expect(mockRacksService.delete).toHaveBeenCalledWith(testRackId, testUser.dbId);
-        });
-
-        it('should throw NotFoundException when rack not found', async () => {
-            const error = new NotFoundException('Rack not found or access denied');
-            mockRacksService.delete.mockRejectedValue(error);
-
-            await expect(controller.remove(testUser, testRackId)).rejects.toThrow(error);
-            expect(mockRacksService.delete).toHaveBeenCalledWith(testRackId, testUser.dbId);
-        });
-
-        it('should propagate service errors', async () => {
-            const error = new InternalServerErrorException('Failed to delete rack');
-            mockRacksService.delete.mockRejectedValue(error);
-
-            await expect(controller.remove(testUser, testRackId)).rejects.toThrow(error);
         });
     });
 
@@ -430,7 +311,7 @@ describe('RacksController', () => {
         });
 
         it('should throw NotFoundException when rack not found', async () => {
-            const error = new NotFoundException('Rack not found or access denied');
+            const error = new NotFoundException(`Rack ${testRackId} not found or access denied`);
             mockRacksService.getCurrentState.mockRejectedValue(error);
 
             await expect(controller.getCurrentState(testUser, testRackId)).rejects.toThrow(error);
@@ -513,7 +394,7 @@ describe('RacksController', () => {
         });
 
         it('should throw NotFoundException when rack not found', async () => {
-            const error = new NotFoundException('Rack not found or access denied');
+            const error = new NotFoundException(`Rack ${testRackId} not found or access denied`);
             mockRacksService.getDeviceStatus.mockRejectedValue(error);
 
             await expect(controller.getStatus(testUser, testRackId)).rejects.toThrow(error);
@@ -524,6 +405,469 @@ describe('RacksController', () => {
             mockRacksService.getDeviceStatus.mockRejectedValue(error);
 
             await expect(controller.getStatus(testUser, testRackId)).rejects.toThrow(error);
+        });
+    });
+
+    describe('getPlantCareActivities', () => {
+        it('should return paginated plant care activities', async () => {
+            mockRacksService.getPlantCareActivities.mockResolvedValue(paginatedHistoryResponse);
+
+            const result = await controller.getPlantCareActivities(testUser, baseActivityQuery);
+
+            expect(result).toEqual(paginatedHistoryResponse);
+            expect(mockRacksService.getPlantCareActivities).toHaveBeenCalledWith(
+                testUser.dbId,
+                baseActivityQuery,
+            );
+            expect(mockRacksService.getPlantCareActivities).toHaveBeenCalledTimes(1);
+        });
+
+        it('should pass userId from CurrentUser decorator', async () => {
+            mockRacksService.getPlantCareActivities.mockResolvedValue(paginatedHistoryResponse);
+
+            await controller.getPlantCareActivities(testUser, baseActivityQuery);
+
+            expect(mockRacksService.getPlantCareActivities).toHaveBeenCalledWith(
+                testUser.dbId,
+                expect.any(Object),
+            );
+        });
+
+        it('should propagate NotFoundException for missing rack', async () => {
+            mockRacksService.getPlantCareActivities.mockRejectedValue(
+                new NotFoundException('Rack not found or access denied'),
+            );
+
+            await expect(
+                controller.getPlantCareActivities(testUser, baseActivityQuery),
+            ).rejects.toThrow(NotFoundException);
+        });
+
+        it('should propagate service errors', async () => {
+            mockRacksService.getPlantCareActivities.mockRejectedValue(
+                new InternalServerErrorException('Failed to fetch plant care activities'),
+            );
+
+            await expect(
+                controller.getPlantCareActivities(testUser, baseActivityQuery),
+            ).rejects.toThrow(InternalServerErrorException);
+        });
+    });
+
+    describe('getHarvestActivities', () => {
+        it('should return paginated harvest activities', async () => {
+            const harvestResponse = {
+                ...paginatedHistoryResponse,
+                totalHarvestCount: 150,
+            };
+
+            mockRacksService.getHarvestActivities.mockResolvedValue(harvestResponse);
+
+            const result = await controller.getHarvestActivities(testUser, baseActivityQuery);
+
+            expect(result).toEqual(harvestResponse);
+            expect(mockRacksService.getHarvestActivities).toHaveBeenCalledWith(
+                testUser.dbId,
+                baseActivityQuery,
+            );
+            expect(mockRacksService.getHarvestActivities).toHaveBeenCalledTimes(1);
+        });
+
+        it('should pass userId from CurrentUser decorator', async () => {
+            mockRacksService.getHarvestActivities.mockResolvedValue(paginatedHistoryResponse);
+
+            await controller.getHarvestActivities(testUser, baseActivityQuery);
+
+            expect(mockRacksService.getHarvestActivities).toHaveBeenCalledWith(
+                testUser.dbId,
+                expect.any(Object),
+            );
+        });
+
+        it('should propagate NotFoundException for missing rack', async () => {
+            mockRacksService.getHarvestActivities.mockRejectedValue(
+                new NotFoundException('Rack not found or access denied'),
+            );
+
+            await expect(
+                controller.getHarvestActivities(testUser, baseActivityQuery),
+            ).rejects.toThrow(NotFoundException);
+        });
+
+        it('should propagate service errors', async () => {
+            mockRacksService.getHarvestActivities.mockRejectedValue(
+                new InternalServerErrorException('Failed to fetch harvest activities'),
+            );
+
+            await expect(
+                controller.getHarvestActivities(testUser, baseActivityQuery),
+            ).rejects.toThrow(InternalServerErrorException);
+        });
+    });
+
+    describe('getPlantingActivities', () => {
+        it('should return paginated planting activities', async () => {
+            mockRacksService.getPlantingActivities.mockResolvedValue(paginatedHistoryResponse);
+
+            const result = await controller.getPlantingActivities(testUser, baseActivityQuery);
+
+            expect(result).toEqual(paginatedHistoryResponse);
+            expect(mockRacksService.getPlantingActivities).toHaveBeenCalledWith(
+                testUser.dbId,
+                baseActivityQuery,
+            );
+            expect(mockRacksService.getPlantingActivities).toHaveBeenCalledTimes(1);
+        });
+
+        it('should pass userId from CurrentUser decorator', async () => {
+            mockRacksService.getPlantingActivities.mockResolvedValue(paginatedHistoryResponse);
+
+            await controller.getPlantingActivities(testUser, baseActivityQuery);
+
+            expect(mockRacksService.getPlantingActivities).toHaveBeenCalledWith(
+                testUser.dbId,
+                expect.any(Object),
+            );
+        });
+
+        it('should propagate NotFoundException for missing rack', async () => {
+            mockRacksService.getPlantingActivities.mockRejectedValue(
+                new NotFoundException('Rack not found or access denied'),
+            );
+
+            await expect(
+                controller.getPlantingActivities(testUser, baseActivityQuery),
+            ).rejects.toThrow(NotFoundException);
+        });
+
+        it('should propagate service errors', async () => {
+            mockRacksService.getPlantingActivities.mockRejectedValue(
+                new InternalServerErrorException('Failed to fetch planting activities'),
+            );
+
+            await expect(
+                controller.getPlantingActivities(testUser, baseActivityQuery),
+            ).rejects.toThrow(InternalServerErrorException);
+        });
+    });
+
+    describe('harvestFromRack', () => {
+        const harvestDto: HarvestFromRackDto = { plantId: testPlantId };
+
+        it('should harvest a plant from a rack successfully', async () => {
+            mockRacksService.harvestFromRack.mockResolvedValue(harvestSuccessResponse);
+
+            const result = await controller.harvestFromRack(testRackId, harvestDto, testUser);
+
+            expect(result).toEqual(harvestSuccessResponse);
+            expect(mockRacksService.harvestFromRack).toHaveBeenCalledWith(
+                testRackId,
+                testUser.dbId,
+                harvestDto,
+            );
+            expect(mockRacksService.harvestFromRack).toHaveBeenCalledTimes(1);
+        });
+
+        it('should pass userId from CurrentUser decorator', async () => {
+            mockRacksService.harvestFromRack.mockResolvedValue(harvestSuccessResponse);
+
+            await controller.harvestFromRack(testRackId, harvestDto, testUser);
+
+            expect(mockRacksService.harvestFromRack).toHaveBeenCalledWith(
+                expect.any(String),
+                testUser.dbId,
+                expect.any(Object),
+            );
+        });
+
+        it('should propagate BadRequestException when plant is not in rack', async () => {
+            mockRacksService.harvestFromRack.mockRejectedValue(
+                new BadRequestException('This plant is not currently assigned to that rack'),
+            );
+
+            await expect(
+                controller.harvestFromRack(testRackId, harvestDto, testUser),
+            ).rejects.toThrow(BadRequestException);
+        });
+
+        it('should propagate NotFoundException for missing rack', async () => {
+            mockRacksService.harvestFromRack.mockRejectedValue(
+                new NotFoundException('Rack not found or does not belong to you'),
+            );
+
+            await expect(
+                controller.harvestFromRack(testRackId, harvestDto, testUser),
+            ).rejects.toThrow(NotFoundException);
+        });
+    });
+
+    describe('assignToRack', () => {
+        it('should assign a plant to a rack successfully', async () => {
+            mockRacksService.assignToRack.mockResolvedValue(assignSuccessResponse);
+
+            const result = await controller.assignToRack(
+                testRackId,
+                validAssignPlantToRackDto,
+                testUser,
+            );
+
+            expect(result).toEqual(assignSuccessResponse);
+            expect(mockRacksService.assignToRack).toHaveBeenCalledWith(
+                testRackId,
+                testUser.dbId,
+                validAssignPlantToRackDto,
+            );
+            expect(mockRacksService.assignToRack).toHaveBeenCalledTimes(1);
+        });
+
+        it('should pass userId from CurrentUser decorator', async () => {
+            mockRacksService.assignToRack.mockResolvedValue(assignSuccessResponse);
+
+            await controller.assignToRack(testRackId, validAssignPlantToRackDto, testUser);
+
+            expect(mockRacksService.assignToRack).toHaveBeenCalledWith(
+                expect.any(String),
+                testUser.dbId,
+                expect.any(Object),
+            );
+        });
+
+        it('should propagate BadRequestException for inactive plant', async () => {
+            mockRacksService.assignToRack.mockRejectedValue(
+                new BadRequestException('Cannot assign an inactive plant to a rack'),
+            );
+
+            await expect(
+                controller.assignToRack(testRackId, validAssignPlantToRackDto, testUser),
+            ).rejects.toThrow(BadRequestException);
+        });
+
+        it('should propagate NotFoundException for missing rack', async () => {
+            mockRacksService.assignToRack.mockRejectedValue(
+                new NotFoundException('Rack not found or does not belong to you'),
+            );
+
+            await expect(
+                controller.assignToRack(testRackId, validAssignPlantToRackDto, testUser),
+            ).rejects.toThrow(NotFoundException);
+        });
+    });
+
+    describe('unassignFromRack', () => {
+        const unassignDto: UnassignFromRackDto = { plantId: 'clx000plant123' };
+
+        it('should remove a plant from a rack successfully', async () => {
+            mockRacksService.unassignFromRack.mockResolvedValue(unassignFromRackSuccessResponse);
+
+            const result = await controller.unassignFromRack(testRackId, unassignDto, testUser);
+
+            expect(result).toEqual(unassignFromRackSuccessResponse);
+            expect(mockRacksService.unassignFromRack).toHaveBeenCalledWith(
+                testRackId,
+                testUser.dbId,
+                unassignDto,
+            );
+            expect(mockRacksService.unassignFromRack).toHaveBeenCalledTimes(1);
+        });
+
+        it('should pass userId from CurrentUser decorator', async () => {
+            mockRacksService.unassignFromRack.mockResolvedValue(unassignFromRackSuccessResponse);
+
+            await controller.unassignFromRack(testRackId, unassignDto, testUser);
+
+            expect(mockRacksService.unassignFromRack).toHaveBeenCalledWith(
+                expect.any(String),
+                testUser.dbId,
+                expect.any(Object),
+            );
+        });
+
+        it('should propagate BadRequestException when plant is not in rack', async () => {
+            mockRacksService.unassignFromRack.mockRejectedValue(
+                new BadRequestException('This plant is not currently assigned to that rack'),
+            );
+
+            await expect(
+                controller.unassignFromRack(testRackId, unassignDto, testUser),
+            ).rejects.toThrow(BadRequestException);
+        });
+
+        it('should propagate NotFoundException for missing rack', async () => {
+            mockRacksService.unassignFromRack.mockRejectedValue(
+                new NotFoundException('Rack not found or does not belong to you'),
+            );
+
+            await expect(
+                controller.unassignFromRack(testRackId, unassignDto, testUser),
+            ).rejects.toThrow(NotFoundException);
+        });
+    });
+
+    describe('create', () => {
+        it('should register a new rack successfully', async () => {
+            const expectedResponse = {
+                message: 'Rack registered successfully',
+                rackId: testRackId,
+            };
+
+            mockRacksService.create.mockResolvedValue(expectedResponse);
+
+            const result = await controller.create(testUser, createRackDto);
+
+            expect(result).toEqual(expectedResponse);
+            expect(mockRacksService.create).toHaveBeenCalledWith(testUser.dbId, createRackDto);
+            expect(mockRacksService.create).toHaveBeenCalledTimes(1);
+        });
+
+        it('should pass userId from CurrentUser decorator', async () => {
+            const expectedResponse = {
+                message: 'Rack registered successfully',
+                rackId: testRackId,
+            };
+
+            mockRacksService.create.mockResolvedValue(expectedResponse);
+
+            await controller.create(testUser, createRackDto);
+
+            expect(mockRacksService.create).toHaveBeenCalledWith(testUser.dbId, createRackDto);
+        });
+
+        it('should propagate service errors', async () => {
+            const error = new InternalServerErrorException('Failed to register rack');
+            mockRacksService.create.mockRejectedValue(error);
+
+            await expect(controller.create(testUser, createRackDto)).rejects.toThrow(error);
+            expect(mockRacksService.create).toHaveBeenCalledWith(testUser.dbId, createRackDto);
+        });
+
+        it('should handle ConflictException for duplicate MAC address', async () => {
+            const error = new InternalServerErrorException('MAC address already registered');
+            mockRacksService.create.mockRejectedValue(error);
+
+            await expect(controller.create(testUser, createRackDto)).rejects.toThrow(error);
+        });
+    });
+
+    describe('update', () => {
+        it('should update rack successfully', async () => {
+            const expectedResponse = {
+                message: 'Rack updated successfully',
+                rack: {
+                    ...mockRack,
+                    name: updateRackDto.name,
+                    description: updateRackDto.description,
+                    mqttTopic: updateRackDto.mqttTopic,
+                },
+            };
+
+            mockRacksService.update.mockResolvedValue(expectedResponse);
+
+            const result = await controller.update(testUser, testRackId, updateRackDto);
+
+            expect(result).toEqual(expectedResponse);
+            expect(mockRacksService.update).toHaveBeenCalledWith(
+                testRackId,
+                testUser.dbId,
+                updateRackDto,
+            );
+            expect(mockRacksService.update).toHaveBeenCalledTimes(1);
+        });
+
+        it('should pass correct parameters to service', async () => {
+            const expectedResponse = {
+                message: 'Rack updated successfully',
+                rack: mockRack,
+            };
+
+            mockRacksService.update.mockResolvedValue(expectedResponse);
+
+            await controller.update(testUser, testRackId, updateRackDto);
+
+            expect(mockRacksService.update).toHaveBeenCalledWith(
+                testRackId,
+                testUser.dbId,
+                updateRackDto,
+            );
+        });
+
+        it('should handle partial updates', async () => {
+            const partialUpdate: UpdateRackDto = { name: 'New Name Only' };
+            const expectedResponse = {
+                message: 'Rack updated successfully',
+                rack: { ...mockRack, name: partialUpdate.name },
+            };
+
+            mockRacksService.update.mockResolvedValue(expectedResponse);
+
+            const result = await controller.update(testUser, testRackId, partialUpdate);
+
+            expect(result).toEqual(expectedResponse);
+            expect(mockRacksService.update).toHaveBeenCalledWith(
+                testRackId,
+                testUser.dbId,
+                partialUpdate,
+            );
+        });
+
+        it('should throw NotFoundException when rack not found', async () => {
+            const error = new NotFoundException(`Rack ${testRackId} not found or access denied`);
+            mockRacksService.update.mockRejectedValue(error);
+
+            await expect(controller.update(testUser, testRackId, updateRackDto)).rejects.toThrow(
+                error,
+            );
+        });
+
+        it('should propagate service errors', async () => {
+            const error = new InternalServerErrorException('Failed to update rack');
+            mockRacksService.update.mockRejectedValue(error);
+
+            await expect(controller.update(testUser, testRackId, updateRackDto)).rejects.toThrow(
+                error,
+            );
+        });
+    });
+
+    describe('remove', () => {
+        it('should delete rack successfully', async () => {
+            const expectedResponse = {
+                message: 'Rack deleted successfully',
+            };
+
+            mockRacksService.delete.mockResolvedValue(expectedResponse);
+
+            const result = await controller.remove(testUser, testRackId);
+
+            expect(result).toEqual(expectedResponse);
+            expect(mockRacksService.delete).toHaveBeenCalledWith(testRackId, testUser.dbId);
+            expect(mockRacksService.delete).toHaveBeenCalledTimes(1);
+        });
+
+        it('should pass correct parameters to service', async () => {
+            const expectedResponse = {
+                message: 'Rack deleted successfully',
+            };
+
+            mockRacksService.delete.mockResolvedValue(expectedResponse);
+
+            await controller.remove(testUser, testRackId);
+
+            expect(mockRacksService.delete).toHaveBeenCalledWith(testRackId, testUser.dbId);
+        });
+
+        it('should throw NotFoundException when rack not found', async () => {
+            const error = new NotFoundException(`Rack ${testRackId} not found or access denied`);
+            mockRacksService.delete.mockRejectedValue(error);
+
+            await expect(controller.remove(testUser, testRackId)).rejects.toThrow(error);
+            expect(mockRacksService.delete).toHaveBeenCalledWith(testRackId, testUser.dbId);
+        });
+
+        it('should propagate service errors', async () => {
+            const error = new InternalServerErrorException('Failed to delete rack');
+            mockRacksService.delete.mockRejectedValue(error);
+
+            await expect(controller.remove(testUser, testRackId)).rejects.toThrow(error);
         });
     });
 

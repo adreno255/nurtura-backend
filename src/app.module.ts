@@ -20,6 +20,7 @@ import { WebsocketModule } from './websocket/websocket.module';
 import { RacksModule } from './racks/racks.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { AutomationModule } from './automation/automation.module';
+import { PlantsModule } from './plants/plants.module';
 
 @Module({
     imports: [
@@ -53,6 +54,7 @@ import { AutomationModule } from './automation/automation.module';
         WebsocketModule,
         RacksModule,
         AutomationModule,
+        PlantsModule,
     ],
     controllers: [AppController],
     providers: [

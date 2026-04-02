@@ -15,13 +15,13 @@ datasource db {
 // ENUMS
 // ============================================
 
-enum PlantType {
+enum PlantCategory {
     LEAFY_GREENS      // Lettuce (ASTERACEAE)
     TROPICAL_GREENS   // Malabar spinach (BASELLACEAE)
     HERBS             // Basil, Oregano, Rosemary (LAMIACEAE)
     ROOT_AND_STALK    // Cilantro, Celery, Parsley (APIACEAE)
 
-    @@map("plant_type")
+    @@map("plant_category")
 }
 
 enum SoilType {
@@ -38,6 +38,7 @@ enum SoilType {
 enum ActivityEventType {
     // Rack events
     RACK_ADDED
+    RACK_RENAMED
     RACK_REMOVED
     
     // Plant events
@@ -124,7 +125,7 @@ model Plant {
 
     // Plant information
     name            String     @db.VarChar(200)
-    type            PlantType?
+    category        PlantCategory? @map("category")
     recommendedSoil SoilType?  @map("recommended_soil")
     description     String?    @db.VarChar(1000)
 
@@ -138,7 +139,7 @@ model Plant {
     // Relations
     racks           Rack[]
     automationRules AutomationRule[]
-    rackHistory     RackPlantHistory[]
+    rackHistory     RackPlantingHistory[]
 
     @@map("plants")
 }
@@ -180,7 +181,7 @@ model Rack {
     notifications      Notification[]
     sensorReadings     SensorReading[]
     aggregatedReadings AggregatedSensorReading[]
-    rackHistory        RackPlantHistory[]
+    rackHistory        RackPlantingHistory[]
 
     @@index([userId])
     @@index([macAddress])
@@ -190,7 +191,7 @@ model Rack {
     @@map("racks")
 }
 
-model RackPlantHistory {
+model RackPlantingHistory {
     // Primary fields
     id      String @id @default(cuid())
     rackId  String @map("rack_id")
@@ -213,7 +214,7 @@ model RackPlantHistory {
     @@index([rackId])
     @@index([plantId])
     @@index([plantedAt])
-    @@map("rack_plant_history")
+    @@map("rack_planting_history")
 }
 
 model SensorReading {

@@ -13,7 +13,7 @@ import {
     AuthProvidersResponse,
     OnboardingStatusResponse,
     UpdatePasswordResponse,
-} from './interfaces';
+} from './interfaces/auth.interface';
 import { isFirebaseAuthError } from '../common/type-guards';
 import { CurrentUserPayload } from '../common/interfaces';
 

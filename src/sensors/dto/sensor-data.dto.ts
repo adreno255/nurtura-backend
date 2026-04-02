@@ -10,30 +10,30 @@ export class SensorDataDto {
     @IsNumber()
     @Min(-10)
     @Max(60)
-    temperature: number;
+    temperature!: number;
 
     @Expose({ name: 'h' })
     @IsNumber()
     @Min(0)
     @Max(100)
-    humidity: number;
+    humidity!: number;
 
     @Expose({ name: 'm' })
     @IsNumber()
     @Min(0)
     @Max(100)
-    moisture: number;
+    moisture!: number;
 
     @Expose({ name: 'l' })
     @IsNumber()
     @Min(0)
-    lightLevel: number;
+    lightLevel!: number;
 
     @Expose({ name: 'wu' })
     @IsOptional()
     @IsNumber()
     @Min(0)
-    waterUsed: number;
+    waterUsed?: number;
 
     @Expose({ name: 'tm' })
     @IsOptional()

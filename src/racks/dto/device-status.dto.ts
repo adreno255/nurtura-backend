@@ -8,7 +8,7 @@ import { IsBoolean, IsNumber, IsOptional, IsString, IsIP, Max, Min } from 'class
 export class DeviceStatusDto {
     @Expose({ name: 'o' })
     @IsBoolean()
-    online: boolean;
+    online!: boolean;
 
     @Expose({ name: 'tm' })
     @IsOptional()

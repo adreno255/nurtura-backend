@@ -1,6 +1,7 @@
 /**
  * Automation Test Fixtures
  * Reusable test data for automation-related tests
+ * Updated to use plant-scoped automation rules
  */
 
 import {
@@ -17,6 +18,7 @@ import {
  */
 export const testAutomationIds = {
     ruleId: 'rule-789',
+    plantId: 'plant-456',
     rackId: 'rack-123',
     userId: 'user-123',
 };
@@ -131,7 +133,7 @@ export const multipleActions: RuleActions = {
  */
 export const mockAutomationRule = {
     id: testAutomationIds.ruleId,
-    rackId: testAutomationIds.rackId,
+    plantId: testAutomationIds.plantId,
     name: 'Auto-water when dry',
     description: 'Automatically waters plants when soil moisture drops below 30%',
     conditions: moistureLessThanCondition,
@@ -186,7 +188,7 @@ export const mockTemperatureAutomationRule = {
  * DTOs for CRUD operations
  */
 export const validCreateAutomationRuleDto: CreateAutomationRuleDto = {
-    rackId: testAutomationIds.rackId,
+    plantId: testAutomationIds.plantId,
     name: 'Auto-water when dry',
     description: 'Automatically waters plants when soil moisture drops below 30%',
     conditions: moistureLessThanCondition,
@@ -195,14 +197,14 @@ export const validCreateAutomationRuleDto: CreateAutomationRuleDto = {
 };
 
 export const minimalCreateAutomationRuleDto: CreateAutomationRuleDto = {
-    rackId: testAutomationIds.rackId,
+    plantId: testAutomationIds.plantId,
     name: 'Simple watering rule',
     conditions: moistureLessThanCondition,
     actions: wateringStartAction,
 };
 
 export const lightingCreateRuleDto: CreateAutomationRuleDto = {
-    rackId: testAutomationIds.rackId,
+    plantId: testAutomationIds.plantId,
     name: 'Auto-lighting',
     description: 'Turns on lights when dark',
     conditions: lightLevelLessThanCondition,
@@ -211,7 +213,7 @@ export const lightingCreateRuleDto: CreateAutomationRuleDto = {
 };
 
 export const multiConditionRuleDto: CreateAutomationRuleDto = {
-    rackId: testAutomationIds.rackId,
+    plantId: testAutomationIds.plantId,
     name: 'Complex rule',
     description: 'Multiple conditions and actions',
     conditions: multipleConditions,
@@ -249,21 +251,21 @@ export const enableRuleDto: UpdateAutomationRuleDto = {
  * Invalid DTOs for validation testing
  */
 export const invalidNoConditionsDto: CreateAutomationRuleDto = {
-    rackId: testAutomationIds.rackId,
+    plantId: testAutomationIds.plantId,
     name: 'Invalid rule',
     conditions: {} as object,
     actions: wateringStartAction,
 };
 
 export const invalidNoActionsDto: CreateAutomationRuleDto = {
-    rackId: testAutomationIds.rackId,
+    plantId: testAutomationIds.plantId,
     name: 'Invalid rule',
     conditions: moistureLessThanCondition,
     actions: {} as object,
 };
 
 export const invalidMoistureThresholdDto: CreateAutomationRuleDto = {
-    rackId: testAutomationIds.rackId,
+    plantId: testAutomationIds.plantId,
     name: 'Invalid moisture',
     conditions: {
         moisture: { lessThan: 150 }, // Invalid: > 100
@@ -272,7 +274,7 @@ export const invalidMoistureThresholdDto: CreateAutomationRuleDto = {
 };
 
 export const invalidTemperatureThresholdDto: CreateAutomationRuleDto = {
-    rackId: testAutomationIds.rackId,
+    plantId: testAutomationIds.plantId,
     name: 'Invalid temperature',
     conditions: {
         temperature: { greaterThan: 150 }, // Invalid: > 100
@@ -281,7 +283,7 @@ export const invalidTemperatureThresholdDto: CreateAutomationRuleDto = {
 };
 
 export const invalidHumidityThresholdDto: CreateAutomationRuleDto = {
-    rackId: testAutomationIds.rackId,
+    plantId: testAutomationIds.plantId,
     name: 'Invalid humidity',
     conditions: {
         humidity: { lessThan: -10 }, // Invalid: < 0
@@ -290,7 +292,7 @@ export const invalidHumidityThresholdDto: CreateAutomationRuleDto = {
 };
 
 export const invalidLightLevelThresholdDto: CreateAutomationRuleDto = {
-    rackId: testAutomationIds.rackId,
+    plantId: testAutomationIds.plantId,
     name: 'Invalid light level',
     conditions: {
         lightLevel: { greaterThan: -100 }, // Invalid: < 0
@@ -299,7 +301,7 @@ export const invalidLightLevelThresholdDto: CreateAutomationRuleDto = {
 };
 
 export const invalidWateringActionDto: CreateAutomationRuleDto = {
-    rackId: testAutomationIds.rackId,
+    plantId: testAutomationIds.plantId,
     name: 'Invalid watering action',
     conditions: moistureLessThanCondition,
     actions: {
@@ -308,7 +310,7 @@ export const invalidWateringActionDto: CreateAutomationRuleDto = {
 };
 
 export const invalidWateringDurationDto: CreateAutomationRuleDto = {
-    rackId: testAutomationIds.rackId,
+    plantId: testAutomationIds.plantId,
     name: 'Invalid watering duration',
     conditions: moistureLessThanCondition,
     actions: {
@@ -320,7 +322,7 @@ export const invalidWateringDurationDto: CreateAutomationRuleDto = {
 };
 
 export const invalidGrowLightActionDto: CreateAutomationRuleDto = {
-    rackId: testAutomationIds.rackId,
+    plantId: testAutomationIds.plantId,
     name: 'Invalid grow light action',
     conditions: lightLevelLessThanCondition,
     actions: {
@@ -329,23 +331,21 @@ export const invalidGrowLightActionDto: CreateAutomationRuleDto = {
 };
 
 /**
- * Mock automation rule with rack relationship
+ * Mock automation rule with plant relationship
  */
-export const mockAutomationRuleWithRack = {
+export const mockAutomationRuleWithPlant = {
     ...mockAutomationRule,
-    rack: {
-        userId: testAutomationIds.userId,
-        name: 'Test Rack',
-        macAddress: 'AA:BB:CC:DD:EE:FF',
+    plant: {
+        name: 'Tomato Plant',
+        racks: [{ id: testAutomationIds.rackId }],
     },
 };
 
 export const mockAutomationRuleWithDifferentUser = {
     ...mockAutomationRule,
-    rack: {
-        userId: 'different-user-id',
-        name: 'Other Rack',
-        macAddress: '11:22:33:44:55:66',
+    plant: {
+        name: 'Other Plant',
+        racks: [], // No racks owned by user
     },
 };
 
@@ -399,14 +399,48 @@ export const lightingCommandPayload = {
 };
 
 /**
- * Mock rack for automation tests
+ * Mock rack for automation tests (with currentPlantId)
  */
 export const mockRackForAutomation = {
     id: testAutomationIds.rackId,
     userId: testAutomationIds.userId,
     name: 'Test Rack',
     macAddress: 'AA:BB:CC:DD:EE:FF',
+    currentPlantId: testAutomationIds.plantId,
     isActive: true,
     createdAt: new Date('2025-01-15T08:00:00.000Z'),
     updatedAt: new Date('2025-02-01T10:30:00.000Z'),
+};
+
+/**
+ * Mock rack without current plant
+ */
+export const mockRackWithoutPlant = {
+    ...mockRackForAutomation,
+    currentPlantId: null,
+};
+
+/**
+ * Mock plant for automation tests
+ */
+export const mockPlantForAutomation = {
+    id: testAutomationIds.plantId,
+    name: 'Tomato Plant',
+    type: 'Vegetable',
+    isActive: true,
+    racks: [
+        {
+            id: testAutomationIds.rackId,
+            userId: testAutomationIds.userId,
+            isActive: true,
+        },
+    ],
+};
+
+/**
+ * Mock plant without user's racks
+ */
+export const mockPlantWithoutUserRacks = {
+    ...mockPlantForAutomation,
+    racks: [],
 };

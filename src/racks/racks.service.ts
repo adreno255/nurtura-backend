@@ -25,8 +25,14 @@ import { type Rack } from '../generated/prisma/client';
 import { MqttMessageParser } from '../common/utils/mqtt-parser.helper';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DeviceErrorDto, DeviceStatusDto, ErrorSeverity } from './dto';
-import { NotificationType, Prisma } from '../generated/prisma';
+import { Activity, NotificationType, Prisma } from '../generated/prisma';
 import { LogRackActivityHelper } from '../common/utils/log-rack-activity.helper';
+import { ActivityQueryDto } from '../common/dto/activity-query.dto';
+import {
+    AssignPlantToRackDto,
+    HarvestFromRackDto,
+    UnassignFromRackDto,
+} from './dto/rack-operations.dto';
 
 @Injectable()
 export class RacksService {
@@ -37,62 +43,9 @@ export class RacksService {
         private readonly logger: MyLoggerService,
     ) {}
 
-    // CRUD Operations
-
-    /**
-     * Register a new rack (ESP32 device) to the system
-     *
-     * @param userId - User ID who owns the rack
-     * @param createRackDto - Rack creation data
-     * @returns Created rack
-     */
-    async create(userId: string, dto: CreateRackDto): Promise<RackCreatedResponse> {
-        try {
-            // Check if MAC address already exists
-            const existingRack = await this.databaseService.rack.findUnique({
-                where: { userId, macAddress: dto.macAddress },
-            });
-
-            if (existingRack) {
-                throw new ConflictException(`MAC address already registered to ${userId}`);
-            }
-
-            // Generate MQTT topic if not provided
-            const mqttTopic =
-                dto.mqttTopic || `nurtura/rack/${dto.macAddress.replace(/:/g, '-').toLowerCase()}`;
-
-            const rack = await this.databaseService.rack.create({
-                data: {
-                    userId,
-                    name: dto.name,
-                    macAddress: dto.macAddress,
-                    mqttTopic,
-                    description: dto.description,
-                },
-            });
-
-            this.logger.log(
-                `Rack created successfully: ${rack.id} for user ${userId}`,
-                'RacksService',
-            );
-
-            return {
-                message: 'Rack registered successfully',
-                rackId: rack.id,
-            };
-        } catch (error) {
-            if (error instanceof ConflictException) {
-                throw error;
-            }
-
-            this.logger.error(
-                `Error creating rack for user ${userId}`,
-                error instanceof Error ? error.message : String(error),
-                'RacksService',
-            );
-            throw new InternalServerErrorException('Failed to register rack');
-        }
-    }
+    // ─────────────────────────────────────────────
+    // CRUD OPERATIONS
+    // ─────────────────────────────────────────────
 
     /**
      * Get all racks for a user
@@ -110,10 +63,18 @@ export class RacksService {
                     skip,
                     take,
                     orderBy: { createdAt: 'desc' },
+                    include: {
+                        currentPlant: {
+                            select: {
+                                name: true,
+                                category: true,
+                                recommendedSoil: true,
+                                description: true,
+                            },
+                        },
+                    },
                 }),
-                this.databaseService.rack.count({
-                    where: { userId },
-                }),
+                this.databaseService.rack.count({ where: { userId } }),
             ]);
 
             this.logger.log(
@@ -142,26 +103,28 @@ export class RacksService {
     async findById(rackId: string, userId: string): Promise<RackDetailsResponse> {
         try {
             const rack = await this.databaseService.rack.findFirst({
-                where: {
-                    id: rackId,
-                    userId,
+                where: { id: rackId, userId },
+                include: {
+                    currentPlant: {
+                        select: {
+                            name: true,
+                            category: true,
+                            recommendedSoil: true,
+                            description: true,
+                        },
+                    },
                 },
             });
 
             if (!rack) {
-                throw new NotFoundException('Rack not found or access denied');
+                throw new NotFoundException(`Rack ${rackId} not found or access denied`);
             }
 
             this.logger.log(`Rack details fetched: ${rackId}`, 'RacksService');
 
-            return {
-                message: 'Rack details retrieved successfully',
-                rack,
-            };
+            return { message: 'Rack details retrieved successfully', rack };
         } catch (error) {
-            if (error instanceof NotFoundException) {
-                throw error;
-            }
+            if (error instanceof NotFoundException) throw error;
 
             this.logger.error(
                 `Error fetching rack ${rackId}`,
@@ -190,6 +153,67 @@ export class RacksService {
     }
 
     /**
+     * Register a new rack (ESP32 device) to the system
+     *
+     * @param userId - User ID who owns the rack
+     * @param createRackDto - Rack creation data
+     * @returns Created rack
+     */
+    async create(userId: string, dto: CreateRackDto): Promise<RackCreatedResponse> {
+        try {
+            const existingRack = await this.databaseService.rack.findUnique({
+                where: { userId, macAddress: dto.macAddress },
+            });
+
+            if (existingRack) {
+                throw new ConflictException(`MAC address already registered to ${userId}`);
+            }
+
+            const mqttTopic =
+                dto.mqttTopic || `nurtura/rack/${dto.macAddress.replace(/:/g, '-').toLowerCase()}`;
+
+            const rack = await this.databaseService.rack.create({
+                data: {
+                    userId,
+                    name: dto.name,
+                    macAddress: dto.macAddress,
+                    mqttTopic,
+                    description: dto.description,
+                },
+            });
+
+            this.logger.log(
+                `Rack created successfully: ${rack.id} for user ${userId}`,
+                'RacksService',
+            );
+
+            // Log RACK_ADDED activity (non-critical — don't let it fail the response)
+            await this.logRackActivityHelper.logActivity(
+                rack.id,
+                ActivityEventType.RACK_ADDED,
+                `Rack "${rack.name}" registered`,
+                { rackName: rack.name, macAddress: rack.macAddress, userId },
+            );
+
+            return {
+                message: 'Rack registered successfully',
+                rackId: rack.id,
+            };
+        } catch (error) {
+            if (error instanceof ConflictException) {
+                throw error;
+            }
+
+            this.logger.error(
+                `Error creating rack for user ${userId}`,
+                error instanceof Error ? error.message : String(error),
+                'RacksService',
+            );
+            throw new InternalServerErrorException('Failed to register rack');
+        }
+    }
+
+    /**
      * Update rack information
      *
      * @param rackId - Rack ID
@@ -199,8 +223,13 @@ export class RacksService {
      */
     async update(rackId: string, userId: string, dto: UpdateRackDto): Promise<RackUpdatedResponse> {
         try {
-            // Verify ownership
             await this.verifyRackOwnership(rackId, userId);
+
+            // Fetch current rack before update to capture the old name for the activity log
+            const currentRack = await this.databaseService.rack.findUnique({
+                where: { id: rackId },
+                select: { name: true, macAddress: true },
+            });
 
             const updatedRack = await this.databaseService.rack.update({
                 where: { id: rackId },
@@ -212,6 +241,21 @@ export class RacksService {
             });
 
             this.logger.log(`Rack updated successfully: ${rackId}`, 'RacksService');
+
+            // Log RACK_RENAMED activity only if the name actually changed
+            if (dto.name && dto.name !== currentRack?.name) {
+                await this.logRackActivityHelper.logActivity(
+                    rackId,
+                    ActivityEventType.RACK_RENAMED,
+                    `Rack renamed from "${currentRack?.name}" to "${dto.name}"`,
+                    {
+                        oldName: currentRack?.name,
+                        newName: dto.name,
+                        macAddress: currentRack?.macAddress,
+                        userId,
+                    },
+                );
+            }
 
             return {
                 message: 'Rack updated successfully',
@@ -239,10 +283,14 @@ export class RacksService {
      */
     async delete(rackId: string, userId: string): Promise<RackDeletedResponse> {
         try {
-            // Verify ownership
-            await this.verifyRackOwnership(rackId, userId);
+            const rack = await this.databaseService.rack.findFirst({
+                where: { id: rackId, userId },
+            });
 
-            // Soft delete - set isActive to false
+            if (!rack) {
+                throw new NotFoundException(`Rack ${rackId} not found or access denied`);
+            }
+
             await this.databaseService.rack.update({
                 where: { id: rackId },
                 data: { isActive: false },
@@ -250,13 +298,17 @@ export class RacksService {
 
             this.logger.log(`Rack soft deleted: ${rackId}`, 'RacksService');
 
-            return {
-                message: 'Rack deleted successfully',
-            };
+            // Log RACK_REMOVED activity
+            await this.logRackActivityHelper.logActivity(
+                rackId,
+                ActivityEventType.RACK_REMOVED,
+                `Rack "${rack.name}" removed`,
+                { rackName: rack.name, macAddress: rack.macAddress, userId },
+            );
+
+            return { message: 'Rack deleted successfully' };
         } catch (error) {
-            if (error instanceof NotFoundException) {
-                throw error;
-            }
+            if (error instanceof NotFoundException) throw error;
 
             this.logger.error(
                 `Error deleting rack ${rackId}`,
@@ -279,7 +331,7 @@ export class RacksService {
             });
 
             if (!rack) {
-                throw new NotFoundException('Rack not found or access denied');
+                throw new NotFoundException(`Rack ${rackId} not found or access denied`);
             }
 
             return true;
@@ -291,6 +343,27 @@ export class RacksService {
             );
             throw error;
         }
+    }
+
+    private async resolveAuthorizedRackIds(
+        userId: string,
+        requestedRackIds?: string[],
+    ): Promise<string[]> {
+        const userRacks = await this.databaseService.rack.findMany({
+            where: { userId },
+            select: { id: true },
+        });
+        const userRackIds = userRacks.map((r) => r.id);
+
+        if (requestedRackIds?.length) {
+            for (const rackId of requestedRackIds) {
+                await this.verifyRackOwnership(rackId, userId);
+            }
+        }
+
+        return requestedRackIds?.length
+            ? requestedRackIds.filter((id) => userRackIds.includes(id))
+            : userRackIds;
     }
 
     // Current State Operations
@@ -487,22 +560,20 @@ export class RacksService {
 
     async getCurrentState(rackId: string, userId: string): Promise<RackCurrentStateResponse> {
         try {
-            // Verify ownership
             await this.verifyRackOwnership(rackId, userId);
 
-            const rack = await this.databaseService.rack.findUnique({
+            const rack = (await this.databaseService.rack.findUnique({
                 where: { id: rackId },
                 select: {
                     id: true,
                     name: true,
                     status: true,
                     lastSeenAt: true,
+                    currentPlant: {
+                        select: { id: true, name: true, category: true, recommendedSoil: true },
+                    },
                 },
-            });
-
-            if (!rack) {
-                throw new NotFoundException('Rack not found');
-            }
+            })) as RackCurrentStateResponse['rack'];
 
             const latestReading = await this.getLatestSensorReading(rackId);
 
@@ -515,14 +586,13 @@ export class RacksService {
                           humidity: latestReading.humidity,
                           moisture: latestReading.moisture,
                           lightLevel: latestReading.lightLevel,
+                          waterUsed: latestReading.waterUsed,
                           timestamp: latestReading.timestamp,
                       }
                     : null,
             };
         } catch (error) {
-            if (error instanceof NotFoundException) {
-                throw error;
-            }
+            if (error instanceof NotFoundException) throw error;
 
             this.logger.error(
                 `Error fetching current state for rack ${rackId}`,
@@ -538,17 +608,13 @@ export class RacksService {
             // Verify ownership
             await this.verifyRackOwnership(rackId, userId);
 
-            const rack = await this.databaseService.rack.findUnique({
+            const rack = (await this.databaseService.rack.findUnique({
                 where: { id: rackId },
                 select: {
                     status: true,
                     lastSeenAt: true,
                 },
-            });
-
-            if (!rack) {
-                throw new NotFoundException('Rack not found');
-            }
+            })) as Rack;
 
             return {
                 message: 'Device status retrieved successfully',
@@ -566,6 +632,621 @@ export class RacksService {
                 'RacksService',
             );
             throw new InternalServerErrorException('Failed to fetch device status');
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // STATISTICS & ANALYTICS
+    // ─────────────────────────────────────────────
+
+    async getRackActivities(
+        userId: string,
+        query: ActivityQueryDto,
+    ): Promise<PaginatedResponse<Activity>> {
+        try {
+            const queryRackIds = await this.resolveAuthorizedRackIds(userId, query.rackId);
+
+            const dateFilter =
+                query.startDate || query.endDate
+                    ? {
+                          timestamp: {
+                              ...(query.startDate ? { gte: new Date(query.startDate) } : {}),
+                              ...(query.endDate ? { lte: new Date(query.endDate) } : {}),
+                          },
+                      }
+                    : {};
+
+            const where = {
+                rackId: { in: queryRackIds },
+                eventType: {
+                    in: [
+                        ActivityEventType.RACK_ADDED,
+                        ActivityEventType.RACK_RENAMED,
+                        ActivityEventType.RACK_REMOVED,
+                    ],
+                },
+                ...dateFilter,
+            };
+
+            const { skip, take } = PaginationHelper.getPrismaOptions(query);
+
+            const [activities, totalItems] = await Promise.all([
+                this.databaseService.activity.findMany({
+                    where,
+                    orderBy: { timestamp: 'desc' },
+                    skip,
+                    take,
+                }),
+                this.databaseService.activity.count({ where }),
+            ]);
+
+            this.logger.log(
+                `Retrieved ${activities.length} rack activities for user ${userId}`,
+                'RacksService',
+            );
+
+            return PaginationHelper.createResponse(activities, totalItems, query);
+        } catch (error) {
+            if (error instanceof NotFoundException) throw error;
+
+            this.logger.error(
+                `Error fetching rack activities for user ${userId}`,
+                error instanceof Error ? error.message : String(error),
+                'RacksService',
+            );
+            throw new InternalServerErrorException('Failed to fetch rack activities');
+        }
+    }
+
+    /**
+     * Get Plant Care Activity — watering and grow light events across all user racks.
+     * Event types: WATERING_ON, WATERING_OFF, LIGHT_ON, LIGHT_OFF.
+     * Includes associated rack and current plant info.
+     * Returns paginated results + `amount` count within the date range.
+     */
+    async getPlantCareActivities(
+        userId: string,
+        query: ActivityQueryDto,
+    ): Promise<PaginatedResponse<Activity>> {
+        try {
+            const queryRackIds = await this.resolveAuthorizedRackIds(userId, query.rackId);
+
+            const dateFilter =
+                query.startDate || query.endDate
+                    ? {
+                          timestamp: {
+                              ...(query.startDate ? { gte: new Date(query.startDate) } : {}),
+                              ...(query.endDate ? { lte: new Date(query.endDate) } : {}),
+                          },
+                      }
+                    : {};
+
+            const where = {
+                rackId: { in: queryRackIds },
+                eventType: {
+                    in: [
+                        ActivityEventType.WATERING_ON,
+                        ActivityEventType.WATERING_OFF,
+                        ActivityEventType.LIGHT_ON,
+                        ActivityEventType.LIGHT_OFF,
+                    ],
+                },
+                ...dateFilter,
+            };
+
+            const { skip, take } = PaginationHelper.getPrismaOptions(query);
+
+            const [activities, totalItems] = await Promise.all([
+                this.databaseService.activity.findMany({
+                    where,
+                    orderBy: { timestamp: 'desc' },
+                    skip,
+                    take,
+                }),
+                this.databaseService.activity.count({ where }),
+            ]);
+
+            this.logger.log(
+                `Retrieved ${activities.length} plant care activities for user ${userId}`,
+                'PlantsService',
+            );
+
+            return PaginationHelper.createResponse(activities, totalItems, query);
+        } catch (error) {
+            if (error instanceof NotFoundException) throw error;
+
+            this.logger.error(
+                `Error fetching plant care activities for user ${userId}`,
+                error instanceof Error ? error.message : String(error),
+                'PlantsService',
+            );
+            throw new InternalServerErrorException('Failed to fetch plant care activities');
+        }
+    }
+
+    /**
+     * Get Harvest Activity — PLANT_HARVESTED events across all user racks.
+     * Returns paginated results + `amount` count within the date range
+     * + `totalHarvestCount` summed from activity metadata.
+     */
+    async getHarvestActivities(
+        userId: string,
+        query: ActivityQueryDto,
+    ): Promise<PaginatedResponse<Activity> & { totalHarvestCount: number }> {
+        try {
+            const queryRackIds = await this.resolveAuthorizedRackIds(userId, query.rackId);
+
+            const dateFilter =
+                query.startDate || query.endDate
+                    ? {
+                          timestamp: {
+                              ...(query.startDate ? { gte: new Date(query.startDate) } : {}),
+                              ...(query.endDate ? { lte: new Date(query.endDate) } : {}),
+                          },
+                      }
+                    : {};
+
+            const where = {
+                rackId: { in: queryRackIds },
+                eventType: ActivityEventType.PLANT_HARVESTED,
+                ...dateFilter,
+            };
+
+            const { skip, take } = PaginationHelper.getPrismaOptions(query);
+
+            const [activities, totalItems, allInRange] = await Promise.all([
+                this.databaseService.activity.findMany({
+                    where,
+                    orderBy: { timestamp: 'desc' },
+                    skip,
+                    take,
+                }),
+                this.databaseService.activity.count({ where }),
+                this.databaseService.activity.findMany({
+                    where,
+                    select: { metadata: true },
+                }),
+            ]);
+
+            const totalHarvestCount = allInRange.reduce((sum, act) => {
+                const meta = act.metadata as Record<string, unknown> | null;
+                const qty = typeof meta?.['quantity'] === 'number' ? meta['quantity'] : 0;
+                return sum + qty;
+            }, 0);
+
+            this.logger.log(
+                `Retrieved ${activities.length} harvest activities for user ${userId} (total count: ${totalHarvestCount})`,
+                'PlantsService',
+            );
+
+            return {
+                ...PaginationHelper.createResponse(activities, totalItems, query),
+                totalHarvestCount,
+            };
+        } catch (error) {
+            if (error instanceof NotFoundException) throw error;
+
+            this.logger.error(
+                `Error fetching harvest activities for user ${userId}`,
+                error instanceof Error ? error.message : String(error),
+                'PlantsService',
+            );
+            throw new InternalServerErrorException('Failed to fetch harvest activities');
+        }
+    }
+
+    /**
+     * Get rack-plant assignment history for a specific rack (Planting Activity).
+     * Already covers the "Planting Activity" screen.
+     */
+    /**
+     * Get Planting Activity — RackPlantingHistory records across all user racks.
+     * Supports date range filtering on plantedAt.
+     * Returns paginated results + `amount` count within the date range.
+     */
+    async getPlantingActivities(
+        userId: string,
+        query: ActivityQueryDto,
+    ): Promise<PaginatedResponse<Activity>> {
+        try {
+            const queryRackIds = await this.resolveAuthorizedRackIds(userId, query.rackId);
+
+            const dateFilter =
+                query.startDate || query.endDate
+                    ? {
+                          timestamp: {
+                              ...(query.startDate ? { gte: new Date(query.startDate) } : {}),
+                              ...(query.endDate ? { lte: new Date(query.endDate) } : {}),
+                          },
+                      }
+                    : {};
+
+            const where = {
+                rackId: { in: queryRackIds },
+                eventType: {
+                    in: [
+                        ActivityEventType.PLANT_ADDED,
+                        ActivityEventType.PLANT_CHANGED,
+                        ActivityEventType.PLANT_REMOVED,
+                    ],
+                },
+                ...dateFilter,
+            };
+
+            const { skip, take } = PaginationHelper.getPrismaOptions(query);
+
+            const [activities, totalItems] = await Promise.all([
+                this.databaseService.activity.findMany({
+                    where,
+                    orderBy: { timestamp: 'desc' },
+                    skip,
+                    take,
+                }),
+                this.databaseService.activity.count({ where }),
+            ]);
+
+            this.logger.log(
+                `Retrieved ${activities.length} planting activities for user ${userId}`,
+                'PlantsService',
+            );
+
+            return PaginationHelper.createResponse(activities, totalItems, query);
+        } catch (error) {
+            if (error instanceof NotFoundException) throw error;
+
+            this.logger.error(
+                `Error fetching planting activities for user ${userId}`,
+                error instanceof Error ? error.message : String(error),
+                'PlantsService',
+            );
+            throw new InternalServerErrorException('Failed to fetch planting activities');
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // RACK ASSIGNMENT OPERATIONS
+    // ─────────────────────────────────────────────
+
+    /**
+     * Harvest the current plant from a rack (successful completion).
+     * Logs PLANT_HARVESTED activity.
+     */
+    async harvestFromRack(
+        rackId: string,
+        userId: string,
+        dto: HarvestFromRackDto,
+    ): Promise<{ message: string }> {
+        try {
+            const plantId = dto.plantId;
+
+            this.logger.log(`Harvesting plant ${plantId} from rack ${rackId}`, 'PlantsService');
+
+            await this.verifyRackOwnership(rackId, userId);
+
+            const rack = (await this.databaseService.rack.findUnique({
+                where: { id: rackId },
+                include: { currentPlant: { select: { name: true } } },
+            })) as Rack & { currentPlant: { name: string } };
+
+            if (rack.currentPlantId !== plantId) {
+                throw new BadRequestException('This plant is not currently assigned to that rack');
+            }
+
+            const now = new Date();
+            const newHarvestCount = rack.harvestCount + 1;
+
+            await this.databaseService.$transaction(async (tx) => {
+                // Update history record with harvest date and count
+                if (rack.plantedAt) {
+                    await tx.rackPlantingHistory.updateMany({
+                        where: {
+                            rackId,
+                            plantId,
+                            harvestedAt: null,
+                        },
+                        data: {
+                            harvestedAt: now,
+                            harvestCount: newHarvestCount,
+                        },
+                    });
+                }
+
+                // Clear plant from rack
+                await tx.rack.update({
+                    where: { id: rackId },
+                    data: {
+                        currentPlantId: null,
+                        quantity: 0,
+                        plantedAt: null,
+                        lastHarvestAt: now,
+                        harvestCount: newHarvestCount,
+                        lastActivityAt: now,
+                    },
+                });
+            });
+
+            await this.logRackActivityHelper.logActivity(
+                rackId,
+                ActivityEventType.PLANT_HARVESTED,
+                `Plant "${rack.currentPlant?.name ?? plantId}" harvested from rack`,
+                {
+                    rackName: rack.name,
+                    macAddress: rack.macAddress,
+                    plantId,
+                    plantName: rack.currentPlant?.name,
+                    harvestCount: newHarvestCount,
+                    quantity: rack.quantity,
+                    harvestedAt: now.toISOString(),
+                },
+            );
+
+            this.logger.log(
+                `Plant ${plantId} harvested from rack ${rackId} (total harvests: ${newHarvestCount})`,
+                'PlantsService',
+            );
+
+            return { message: 'Plant harvested successfully' };
+        } catch (error) {
+            if (error instanceof NotFoundException || error instanceof BadRequestException)
+                throw error;
+
+            this.logger.error(
+                `Error harvesting plant ${dto.plantId} from rack ${rackId}`,
+                error instanceof Error ? error.message : String(error),
+                'PlantsService',
+            );
+            throw new InternalServerErrorException('Failed to harvest plant');
+        }
+    }
+
+    /**
+     * Assign a plant to a rack.
+     *
+     * Activity logic:
+     * - Rack has NO current plant → PLANT_ADDED
+     * - Rack has a DIFFERENT current plant → PLANT_CHANGED (old plant recorded as removed without harvest)
+     *   Also logs PLANT_REMOVED for the outgoing plant.
+     */
+    async assignToRack(
+        rackId: string,
+        userId: string,
+        dto: AssignPlantToRackDto,
+    ): Promise<{ message: string }> {
+        try {
+            const plantId = dto.plantId;
+
+            this.logger.log(`Assigning plant ${plantId} to rack ${rackId}`, 'RacksService');
+
+            const plant = await this.databaseService.plant.findUnique({
+                where: { id: plantId },
+            });
+
+            if (!plant) {
+                throw new NotFoundException(`Plant with ID ${plantId} not found`);
+            }
+
+            if (!plant.isActive) {
+                throw new BadRequestException('Cannot assign an inactive plant to a rack');
+            }
+
+            await this.verifyRackOwnership(rackId, userId);
+
+            const rack = (await this.databaseService.rack.findUnique({
+                where: { id: rackId },
+                include: { currentPlant: true },
+            })) as Rack & { currentPlant: { name: string } | null };
+
+            const plantedAt = dto.plantedAt ? new Date(dto.plantedAt) : new Date();
+            const now = new Date();
+            const hadPreviousPlant = rack.currentPlantId !== null;
+            const isChangingPlant = hadPreviousPlant && rack.currentPlantId !== plantId;
+
+            await this.databaseService.$transaction(async (tx) => {
+                if (isChangingPlant && rack.plantedAt) {
+                    await tx.rackPlantingHistory.create({
+                        data: {
+                            rackId: rack.id,
+                            plantId: rack.currentPlantId!,
+                            quantity: rack.quantity,
+                            plantedAt: rack.plantedAt,
+                            harvestedAt: null,
+                            harvestCount: 0,
+                        },
+                    });
+                }
+
+                await tx.rack.update({
+                    where: { id: rack.id },
+                    data: {
+                        currentPlantId: plantId,
+                        quantity: dto.quantity,
+                        plantedAt,
+                        lastActivityAt: now,
+                    },
+                });
+
+                await tx.rackPlantingHistory.create({
+                    data: {
+                        rackId: rack.id,
+                        plantId,
+                        quantity: dto.quantity,
+                        plantedAt,
+                        harvestedAt: null,
+                        harvestCount: 0,
+                    },
+                });
+            });
+
+            if (isChangingPlant) {
+                await this.logRackActivityHelper.logActivity(
+                    rack.id,
+                    ActivityEventType.PLANT_REMOVED,
+                    `Plant removed from rack (replaced during crop rotation)`,
+                    {
+                        rackName: rack.name,
+                        macAddress: rack.macAddress,
+                        removedPlantId: rack.currentPlantId,
+                        removedPlantName: rack.currentPlant?.name,
+                        replacedByPlantId: plantId,
+                        replacedByPlantName: plant.name,
+                    },
+                );
+
+                await this.logRackActivityHelper.logActivity(
+                    rack.id,
+                    ActivityEventType.PLANT_CHANGED,
+                    `Plant changed from previous to "${plant.name}"`,
+                    {
+                        rackName: rack.name,
+                        macAddress: rack.macAddress,
+                        previousPlantId: rack.currentPlantId,
+                        previousPlantName: rack.currentPlant?.name,
+                        newPlantId: plantId,
+                        newPlantName: plant.name,
+                        quantity: dto.quantity,
+                    },
+                );
+            } else {
+                await this.logRackActivityHelper.logActivity(
+                    rack.id,
+                    ActivityEventType.PLANT_ADDED,
+                    `Plant "${plant.name}" added to rack`,
+                    {
+                        rackName: rack.name,
+                        macAddress: rack.macAddress,
+                        plantId,
+                        plantName: plant.name,
+                        quantity: dto.quantity,
+                        plantedAt: plantedAt.toISOString(),
+                    },
+                );
+            }
+
+            this.logger.log(
+                `Plant ${plantId} successfully assigned to rack ${rackId}`,
+                'RacksService',
+            );
+
+            return { message: 'Plant assigned to rack successfully' };
+        } catch (error) {
+            if (error instanceof NotFoundException || error instanceof BadRequestException)
+                throw error;
+
+            this.logger.error(
+                `Error assigning plant ${dto.plantId} to rack ${rackId}`,
+                error instanceof Error ? error.message : String(error),
+                'RacksService',
+            );
+            throw new InternalServerErrorException('Failed to assign plant to rack');
+        }
+    }
+
+    /**
+     * Remove a plant from a rack WITHOUT harvesting (failure/death case).
+     * Logs PLANT_REMOVED activity.
+     */
+    async unassignFromRack(
+        rackId: string,
+        userId: string,
+        dto: UnassignFromRackDto,
+    ): Promise<{ message: string }> {
+        try {
+            const plantId = dto.plantId;
+
+            this.logger.log(`Removing plant ${plantId} from rack ${rackId}`, 'RacksService');
+
+            await this.verifyRackOwnership(rackId, userId);
+
+            const rack = (await this.databaseService.rack.findUnique({
+                where: { id: rackId },
+            })) as Rack;
+
+            if (rack.currentPlantId !== plantId) {
+                throw new BadRequestException('This plant is not currently assigned to that rack');
+            }
+
+            const now = new Date();
+
+            await this.databaseService.$transaction(async (tx) => {
+                if (rack.plantedAt) {
+                    await tx.rackPlantingHistory.updateMany({
+                        where: {
+                            rackId,
+                            plantId,
+                            harvestedAt: null,
+                        },
+                        data: { harvestedAt: now },
+                    });
+                }
+
+                await tx.rack.update({
+                    where: { id: rackId },
+                    data: {
+                        currentPlantId: null,
+                        quantity: 0,
+                        plantedAt: null,
+                        lastActivityAt: now,
+                    },
+                });
+            });
+
+            await this.logRackActivityHelper.logActivity(
+                rackId,
+                ActivityEventType.PLANT_REMOVED,
+                `Plant removed from rack (without harvest)`,
+                {
+                    rackName: rack.name,
+                    macAddress: rack.macAddress,
+                    removedPlantId: plantId,
+                    replacedByPlantId: null,
+                },
+            );
+
+            this.logger.log(`Plant ${plantId} removed from rack ${rackId}`, 'RacksService');
+
+            return { message: 'Plant removed from rack successfully' };
+        } catch (error) {
+            if (error instanceof NotFoundException || error instanceof BadRequestException)
+                throw error;
+
+            this.logger.error(
+                `Error removing plant ${dto.plantId} from rack ${rackId}`,
+                error instanceof Error ? error.message : String(error),
+                'RacksService',
+            );
+            throw new InternalServerErrorException('Failed to remove plant from rack');
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // ACTIVITY LOGGING & DEVICE STATUS UPDATES
+    // ─────────────────────────────────────────────
+
+    // Unused methods for now, but could be useful for admin dashboards or user activity feeds in the future
+
+    async getRecentActivities(rackId: string, userId: string, limit: number = 50) {
+        try {
+            // Verify ownership
+            await this.verifyRackOwnership(rackId, userId);
+
+            const activities = await this.databaseService.activity.findMany({
+                where: { rackId },
+                orderBy: { timestamp: 'desc' },
+                take: limit,
+            });
+
+            return activities;
+        } catch (error) {
+            if (error instanceof NotFoundException) {
+                throw error;
+            }
+
+            this.logger.error(
+                `Error fetching activities for rack ${rackId}`,
+                error instanceof Error ? error.message : String(error),
+                'RacksService',
+            );
+            throw new InternalServerErrorException('Failed to fetch activities');
         }
     }
 
@@ -602,34 +1283,6 @@ export class RacksService {
                 'RacksService',
             );
             throw new InternalServerErrorException('Failed to update last seen time');
-        }
-    }
-
-    // Activity Logging
-
-    async getRecentActivities(rackId: string, userId: string, limit: number = 50) {
-        try {
-            // Verify ownership
-            await this.verifyRackOwnership(rackId, userId);
-
-            const activities = await this.databaseService.activity.findMany({
-                where: { rackId },
-                orderBy: { timestamp: 'desc' },
-                take: limit,
-            });
-
-            return activities;
-        } catch (error) {
-            if (error instanceof NotFoundException) {
-                throw error;
-            }
-
-            this.logger.error(
-                `Error fetching activities for rack ${rackId}`,
-                error instanceof Error ? error.message : String(error),
-                'RacksService',
-            );
-            throw new InternalServerErrorException('Failed to fetch activities');
         }
     }
 }

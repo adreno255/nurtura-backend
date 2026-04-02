@@ -73,7 +73,7 @@ describe('E2E User Registration Flow', () => {
 
         it('should check email availability for registration', async () => {
             const response = await request(httpServer)
-                .get('/api/users/exists')
+                .get('/users/exists')
                 .query({ email })
                 .expect(200);
 
@@ -92,7 +92,7 @@ describe('E2E User Registration Flow', () => {
             (crypto.randomInt as jest.Mock).mockReturnValue(1);
 
             const response = await request(httpServer)
-                .post('/api/auth/otp/registration')
+                .post('/auth/otp/registration')
                 .send({ email })
                 .expect(200);
 
@@ -105,7 +105,7 @@ describe('E2E User Registration Flow', () => {
             const code = '11111';
 
             const response = await request(httpServer)
-                .post('/api/auth/otp/verify')
+                .post('/auth/otp/verify')
                 .send({
                     email,
                     code,
@@ -149,7 +149,7 @@ describe('E2E User Registration Flow', () => {
             );
 
             const response = await request(httpServer)
-                .post('/api/users')
+                .post('/users')
                 .set('Authorization', `Bearer ${firebaseUser.firebaseUid}`)
                 .send({
                     firstName: userData.firstName,
@@ -205,7 +205,7 @@ describe('E2E User Registration Flow', () => {
             );
 
             const response = await request(httpServer)
-                .get(`/api/users`)
+                .get(`/users`)
                 .set('Authorization', `Bearer ${firebaseUser.firebaseUid}`)
                 .expect(200);
 
@@ -241,7 +241,7 @@ describe('E2E User Registration Flow', () => {
         describe('forgot Password Endpoints', () => {
             it('should check if account exists for forgot password', async () => {
                 const response = await request(httpServer)
-                    .get('/api/users/exists')
+                    .get('/users/exists')
                     .query({ email })
                     .expect(200);
 
@@ -258,7 +258,7 @@ describe('E2E User Registration Flow', () => {
 
             it('should only return password as provider', async () => {
                 const response = await request(httpServer)
-                    .get('/api/auth/providers')
+                    .get('/auth/providers')
                     .query({ email })
                     .expect(200);
 
@@ -271,7 +271,7 @@ describe('E2E User Registration Flow', () => {
                 (crypto.randomInt as jest.Mock).mockReturnValue(1);
 
                 const response = await request(httpServer)
-                    .post('/api/auth/otp/forgot-password')
+                    .post('/auth/otp/forgot-password')
                     .send({ email })
                     .expect(200);
 
@@ -284,7 +284,7 @@ describe('E2E User Registration Flow', () => {
                 const code = '11111';
 
                 const response = await request(httpServer)
-                    .post('/api/auth/otp/verify')
+                    .post('/auth/otp/verify')
                     .send({
                         email,
                         code,
@@ -308,7 +308,7 @@ describe('E2E User Registration Flow', () => {
 
         it('should check email availability for registration', async () => {
             const response = await request(httpServer)
-                .get('/api/users/exists')
+                .get('/users/exists')
                 .query({ email })
                 .expect(200);
 
@@ -326,7 +326,7 @@ describe('E2E User Registration Flow', () => {
 
         it('should check onboarding status and be true', async () => {
             const response = await request(httpServer)
-                .get('/api/auth/onboarding-status')
+                .get('/auth/onboarding-status')
                 .query({ email })
                 .expect(200);
 
@@ -362,7 +362,7 @@ describe('E2E User Registration Flow', () => {
             );
 
             const response = await request(httpServer)
-                .post('/api/users')
+                .post('/users')
                 .set('Authorization', `Bearer ${firebaseUser.firebaseUid}`)
                 .send({
                     firstName: userData.firstName,
@@ -418,7 +418,7 @@ describe('E2E User Registration Flow', () => {
             );
 
             const response = await request(httpServer)
-                .get(`/api/users`)
+                .get(`/users`)
                 .set('Authorization', `Bearer ${firebaseUser.firebaseUid}`)
                 .expect(200);
 
@@ -454,7 +454,7 @@ describe('E2E User Registration Flow', () => {
         describe('forgot Password Endpoints', () => {
             it('should check if account exists for forgot password', async () => {
                 const response = await request(httpServer)
-                    .get('/api/users/exists')
+                    .get('/users/exists')
                     .query({ email })
                     .expect(200);
 
@@ -471,7 +471,7 @@ describe('E2E User Registration Flow', () => {
 
             it('should only return google.com as provider', async () => {
                 const response = await request(httpServer)
-                    .get('/api/auth/providers')
+                    .get('/auth/providers')
                     .query({ email })
                     .expect(200);
 
