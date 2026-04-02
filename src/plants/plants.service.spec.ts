@@ -1,38 +1,19 @@
 import { Test, type TestingModule } from '@nestjs/testing';
-import {
-    NotFoundException,
-    BadRequestException,
-    ConflictException,
-    InternalServerErrorException,
-} from '@nestjs/common';
+import { NotFoundException, ConflictException, InternalServerErrorException } from '@nestjs/common';
 import { PlantsService } from './plants.service';
 import { DatabaseService } from '../database/database.service';
 import { MyLoggerService } from '../my-logger/my-logger.service';
-import { LogRackActivityHelper } from '../common/utils/log-rack-activity.helper';
-import { RacksService } from '../racks/racks.service';
-import { ActivityEventType, type Prisma } from '../generated/prisma';
+import { type Prisma } from '../generated/prisma';
+import { createMockDatabaseService, createMockLogger } from '../../test/mocks';
 import {
-    createMockDatabaseService,
-    createMockLogger,
-    createMockLogRackActivityHelper,
-    createMockRacksService,
-} from '../../test/mocks';
-import {
-    testDbIds,
     testPlantIds,
     mockPlant,
-    mockInactivePlant,
     mockPlants,
     validCreatePlantDto,
     validUpdatePlantDto,
-    validAssignPlantToRackDto,
-    assignWithDateDto,
     defaultPlantQuery,
     leafyGreensQuery,
     activeOnlyQuery,
-    emptyRackForPlant,
-    rackWithPlant,
-    rackWithDifferentPlant,
 } from '../../test/fixtures';
 
 describe('PlantsService', () => {
@@ -40,11 +21,8 @@ describe('PlantsService', () => {
 
     const mockDatabaseService = createMockDatabaseService();
     const mockLoggerService = createMockLogger();
-    const mockLogRackActivityHelper = createMockLogRackActivityHelper();
-    const mockRacksService = createMockRacksService();
 
     const testPlantId = testPlantIds.primary;
-    const testUserId = testDbIds.primary;
     const testRackId = 'rack-123';
 
     beforeEach(async () => {
@@ -55,8 +33,6 @@ describe('PlantsService', () => {
                 PlantsService,
                 { provide: DatabaseService, useValue: mockDatabaseService },
                 { provide: MyLoggerService, useValue: mockLoggerService },
-                { provide: LogRackActivityHelper, useValue: mockLogRackActivityHelper },
-                { provide: RacksService, useValue: mockRacksService },
             ],
         }).compile();
 
@@ -354,303 +330,6 @@ describe('PlantsService', () => {
             mockDatabaseService.plant.delete.mockRejectedValueOnce(new Error('DB error'));
 
             await expect(service.remove(testPlantId)).rejects.toThrow(InternalServerErrorException);
-        });
-    });
-
-    // ─────────────────────────────────────────────
-    // assignToRack
-    // ─────────────────────────────────────────────
-
-    describe('assignToRack', () => {
-        beforeEach(() => {
-            mockRacksService.verifyRackOwnership.mockResolvedValue(undefined);
-        });
-
-        it('should log PLANT_ADDED when rack has no current plant', async () => {
-            mockDatabaseService.plant.findUnique.mockResolvedValue(mockPlant);
-            mockDatabaseService.rack.findFirst.mockResolvedValue(emptyRackForPlant);
-
-            await service.assignToRack(testPlantId, testUserId, validAssignPlantToRackDto);
-
-            expect(mockLogRackActivityHelper.logActivity).toHaveBeenCalledWith(
-                testRackId,
-                ActivityEventType.PLANT_ADDED,
-                expect.stringContaining('added to rack'),
-                expect.objectContaining({ plantId: testPlantId }),
-            );
-        });
-
-        it('should log PLANT_REMOVED + PLANT_CHANGED when rack has a different plant', async () => {
-            mockDatabaseService.plant.findUnique.mockResolvedValue(mockPlant);
-            mockDatabaseService.rack.findFirst.mockResolvedValue(rackWithDifferentPlant);
-
-            await service.assignToRack(testPlantId, testUserId, validAssignPlantToRackDto);
-
-            expect(mockLogRackActivityHelper.logActivity).toHaveBeenCalledWith(
-                testRackId,
-                ActivityEventType.PLANT_REMOVED,
-                expect.stringContaining('replaced during crop rotation'),
-                expect.objectContaining({ replacedByPlantId: testPlantId }),
-            );
-            expect(mockLogRackActivityHelper.logActivity).toHaveBeenCalledWith(
-                testRackId,
-                ActivityEventType.PLANT_CHANGED,
-                expect.stringContaining(mockPlant.name),
-                expect.objectContaining({ newPlantId: testPlantId }),
-            );
-        });
-
-        it('should use provided plantedAt date when given', async () => {
-            mockDatabaseService.plant.findUnique.mockResolvedValue(mockPlant);
-            mockDatabaseService.rack.findFirst.mockResolvedValue(emptyRackForPlant);
-
-            await service.assignToRack(testPlantId, testUserId, assignWithDateDto);
-
-            expect(mockDatabaseService.$transaction).toHaveBeenCalled();
-        });
-
-        it('should throw NotFoundException when plant does not exist', async () => {
-            mockDatabaseService.plant.findUnique.mockResolvedValue(null);
-
-            await expect(
-                service.assignToRack(
-                    testPlantIds.nonExistent,
-                    testUserId,
-                    validAssignPlantToRackDto,
-                ),
-            ).rejects.toThrow(NotFoundException);
-        });
-
-        it('should throw BadRequestException when plant is inactive', async () => {
-            mockDatabaseService.plant.findUnique.mockResolvedValue(mockInactivePlant);
-
-            await expect(
-                service.assignToRack(testPlantIds.inactive, testUserId, validAssignPlantToRackDto),
-            ).rejects.toThrow(BadRequestException);
-            await expect(
-                service.assignToRack(testPlantIds.inactive, testUserId, validAssignPlantToRackDto),
-            ).rejects.toThrow('Cannot assign an inactive plant to a rack');
-        });
-
-        it('should call verifyRackOwnership to check authorization', async () => {
-            mockDatabaseService.plant.findUnique.mockResolvedValue(mockPlant);
-            mockDatabaseService.rack.findFirst.mockResolvedValue(emptyRackForPlant);
-
-            await service.assignToRack(testPlantId, testUserId, validAssignPlantToRackDto);
-
-            expect(mockRacksService.verifyRackOwnership).toHaveBeenCalledWith(
-                validAssignPlantToRackDto.rackId,
-                testUserId,
-            );
-        });
-
-        it('should run updates in a transaction', async () => {
-            mockDatabaseService.plant.findUnique.mockResolvedValue(mockPlant);
-            mockDatabaseService.rack.findFirst.mockResolvedValue(emptyRackForPlant);
-
-            await service.assignToRack(testPlantId, testUserId, validAssignPlantToRackDto);
-
-            expect(mockDatabaseService.$transaction).toHaveBeenCalledTimes(1);
-        });
-
-        it('should create a RackPlantHistory entry for the outgoing plant when changing', async () => {
-            mockDatabaseService.plant.findUnique.mockResolvedValue(mockPlant);
-            mockDatabaseService.rack.findFirst.mockResolvedValue(rackWithDifferentPlant);
-
-            // Capture what the transaction callback does
-            // let capturedTx: Record<string, unknown> | null = null;
-            mockDatabaseService.$transaction.mockImplementation(
-                async (cb: (tx: unknown) => Promise<unknown>) => {
-                    // capturedTx = mockDatabaseService;
-                    return cb(mockDatabaseService);
-                },
-            );
-
-            await service.assignToRack(testPlantId, testUserId, validAssignPlantToRackDto);
-
-            // History should have been created twice: once for outgoing, once for incoming
-            expect(mockDatabaseService.rackPlantingHistory.create).toHaveBeenCalledTimes(2);
-        });
-    });
-
-    // ─────────────────────────────────────────────
-    // removeFromRack
-    // ─────────────────────────────────────────────
-
-    describe('removeFromRack', () => {
-        beforeEach(() => {
-            mockRacksService.verifyRackOwnership.mockResolvedValue(undefined);
-        });
-
-        it('should remove plant from rack and log PLANT_REMOVED', async () => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue(rackWithPlant);
-
-            const result = await service.removeFromRack(testPlantId, testRackId, testUserId);
-
-            expect(result).toEqual({ message: 'Plant removed from rack successfully' });
-            expect(mockLogRackActivityHelper.logActivity).toHaveBeenCalledWith(
-                testRackId,
-                ActivityEventType.PLANT_REMOVED,
-                expect.stringContaining('without harvest'),
-                expect.objectContaining({ plantId: testPlantId }),
-            );
-        });
-
-        it('should clear currentPlantId and quantity on the rack', async () => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue(rackWithPlant);
-
-            await service.removeFromRack(testPlantId, testRackId, testUserId);
-
-            expect(mockDatabaseService.rack.update).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    data: expect.objectContaining({
-                        currentPlantId: null,
-                        quantity: 0,
-                        plantedAt: null,
-                    }) as unknown as Prisma.RackUpdateInput,
-                }),
-            );
-        });
-
-        it('should call verifyRackOwnership', async () => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue(rackWithPlant);
-
-            await service.removeFromRack(testPlantId, testRackId, testUserId);
-
-            expect(mockRacksService.verifyRackOwnership).toHaveBeenCalledWith(
-                testRackId,
-                testUserId,
-            );
-        });
-
-        it('should throw BadRequestException when plant is not in the rack', async () => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue({
-                ...rackWithPlant,
-                currentPlantId: testPlantIds.secondary,
-            });
-
-            await expect(
-                service.removeFromRack(testPlantId, testRackId, testUserId),
-            ).rejects.toThrow(BadRequestException);
-            await expect(
-                service.removeFromRack(testPlantId, testRackId, testUserId),
-            ).rejects.toThrow('This plant is not currently assigned to that rack');
-        });
-
-        it('should throw InternalServerErrorException on database error', async () => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue(rackWithPlant);
-            mockDatabaseService.$transaction.mockRejectedValueOnce(new Error('DB error'));
-
-            await expect(
-                service.removeFromRack(testPlantId, testRackId, testUserId),
-            ).rejects.toThrow(InternalServerErrorException);
-        });
-    });
-
-    // ─────────────────────────────────────────────
-    // harvestFromRack
-    // ─────────────────────────────────────────────
-
-    describe('harvestFromRack', () => {
-        beforeEach(() => {
-            mockRacksService.verifyRackOwnership.mockResolvedValue(undefined);
-        });
-
-        it('should harvest plant and return success message', async () => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue(rackWithPlant);
-
-            const result = await service.harvestFromRack(testPlantId, testRackId, testUserId);
-
-            expect(result).toEqual({ message: 'Plant harvested successfully' });
-        });
-
-        it('should log PLANT_HARVESTED activity', async () => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue(rackWithPlant);
-
-            await service.harvestFromRack(testPlantId, testRackId, testUserId);
-
-            expect(mockLogRackActivityHelper.logActivity).toHaveBeenCalledWith(
-                testRackId,
-                ActivityEventType.PLANT_HARVESTED,
-                expect.stringContaining('harvested'),
-                expect.objectContaining({ plantId: testPlantId }),
-            );
-        });
-
-        it('should increment harvest count on the rack', async () => {
-            const rackWithTwoHarvests = { ...rackWithPlant, harvestCount: 2 };
-            mockDatabaseService.rack.findFirst.mockResolvedValue(rackWithTwoHarvests);
-
-            await service.harvestFromRack(testPlantId, testRackId, testUserId);
-
-            expect(mockDatabaseService.rack.update).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    data: expect.objectContaining({
-                        harvestCount: 3,
-                    }) as unknown as Prisma.RackUpdateInput,
-                }),
-            );
-        });
-
-        it('should clear currentPlantId, quantity and plantedAt after harvest', async () => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue(rackWithPlant);
-
-            await service.harvestFromRack(testPlantId, testRackId, testUserId);
-
-            expect(mockDatabaseService.rack.update).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    data: expect.objectContaining({
-                        currentPlantId: null,
-                        quantity: 0,
-                        plantedAt: null,
-                    }) as unknown as Prisma.RackUpdateInput,
-                }),
-            );
-        });
-
-        it('should call verifyRackOwnership', async () => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue(rackWithPlant);
-
-            await service.harvestFromRack(testPlantId, testRackId, testUserId);
-
-            expect(mockRacksService.verifyRackOwnership).toHaveBeenCalledWith(
-                testRackId,
-                testUserId,
-            );
-        });
-
-        it('should throw BadRequestException when plant is not in the rack', async () => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue({
-                ...rackWithPlant,
-                currentPlantId: testPlantIds.secondary,
-            });
-
-            await expect(
-                service.harvestFromRack(testPlantId, testRackId, testUserId),
-            ).rejects.toThrow(BadRequestException);
-        });
-
-        it('should log the correct harvest count in activity metadata', async () => {
-            const rackWith3Harvests = { ...rackWithPlant, harvestCount: 3 };
-            mockDatabaseService.rack.findFirst.mockResolvedValue(rackWith3Harvests);
-
-            await service.harvestFromRack(testPlantId, testRackId, testUserId);
-
-            expect(mockLogRackActivityHelper.logActivity).toHaveBeenCalledWith(
-                testRackId,
-                ActivityEventType.PLANT_HARVESTED,
-                expect.any(String),
-                expect.objectContaining({ harvestCount: 4 }),
-            );
-        });
-
-        it('should throw InternalServerErrorException on database error', async () => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue(rackWithPlant);
-            mockDatabaseService.$transaction.mockRejectedValueOnce(new Error('DB error'));
-
-            await expect(
-                service.harvestFromRack(testPlantId, testRackId, testUserId),
-            ).rejects.toThrow(InternalServerErrorException);
         });
     });
 });

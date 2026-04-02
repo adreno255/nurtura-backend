@@ -118,7 +118,14 @@ export class AutomationService {
 
                     // Execute actions
                     const actions = rule.actions as RuleActions;
-                    await this.executeActions(rack.macAddress, actions, rack, rule.id, rule.name);
+                    await this.executeActions(
+                        rack.macAddress,
+                        actions,
+                        rackId,
+                        rack,
+                        rule.id,
+                        rule.name,
+                    );
 
                     // Update rule trigger tracking
                     await this.databaseService.automationRule.update({
@@ -236,6 +243,7 @@ export class AutomationService {
     private async executeActions(
         macAddress: string,
         actions: RuleActions,
+        rackId: string,
         rack: Partial<Rack>,
         ruleId: string,
         ruleName: string,
@@ -257,7 +265,7 @@ export class AutomationService {
                 );
 
                 await this.logRackActivityHelper.logActivity(
-                    rack.id!,
+                    rackId,
                     actions.watering.action === 'start'
                         ? ActivityEventType.WATERING_ON
                         : ActivityEventType.WATERING_OFF,
@@ -284,7 +292,7 @@ export class AutomationService {
                 executedActions.push(`growLight:${actions.growLight.action}`);
 
                 await this.logRackActivityHelper.logActivity(
-                    rack.id!,
+                    rackId,
                     actions.growLight.action === 'on'
                         ? ActivityEventType.LIGHT_ON
                         : ActivityEventType.LIGHT_OFF,
@@ -300,7 +308,7 @@ export class AutomationService {
             }
 
             const automatedEvents: AutomatedEventDto = {
-                rackId: rack.id!,
+                rackId,
                 ruleName,
                 executedActions,
                 timestamp: new Date(),

@@ -1,25 +1,19 @@
 import { Test, type TestingModule } from '@nestjs/testing';
-import { NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { NotFoundException, ConflictException } from '@nestjs/common';
 import { PlantsController } from './plants.controller';
 import { PlantsService } from './plants.service';
 import { createMockPlantsService } from '../../test/mocks';
 import {
-    testUser,
     testPlantIds,
     validCreatePlantDto,
     validUpdatePlantDto,
-    validAssignPlantToRackDto,
     defaultPlantQuery,
     leafyGreensQuery,
     paginatedPlantsResponse,
-    paginatedHistoryResponse,
     plantCreatedResponse,
     plantUpdatedResponse,
     plantDeletedResponse,
     plantDetailsResponse,
-    assignSuccessResponse,
-    removeFromRackSuccessResponse,
-    harvestSuccessResponse,
 } from '../../test/fixtures';
 
 describe('PlantsController', () => {
@@ -28,7 +22,6 @@ describe('PlantsController', () => {
     const mockPlantsService = createMockPlantsService();
 
     const testPlantId = testPlantIds.primary;
-    const testRackId = 'rack-123';
 
     beforeEach(async () => {
         jest.clearAllMocks();
@@ -244,208 +237,6 @@ describe('PlantsController', () => {
             );
 
             await expect(controller.remove(testPlantId)).rejects.toThrow(ConflictException);
-        });
-    });
-
-    // ─────────────────────────────────────────────
-    // assignToRack
-    // ─────────────────────────────────────────────
-
-    describe('assignToRack', () => {
-        it('should assign a plant to a rack successfully', async () => {
-            mockPlantsService.assignToRack.mockResolvedValue(assignSuccessResponse);
-
-            const result = await controller.assignToRack(
-                testPlantId,
-                validAssignPlantToRackDto,
-                testUser,
-            );
-
-            expect(result).toEqual(assignSuccessResponse);
-            expect(mockPlantsService.assignToRack).toHaveBeenCalledWith(
-                testPlantId,
-                testUser.dbId,
-                validAssignPlantToRackDto,
-            );
-            expect(mockPlantsService.assignToRack).toHaveBeenCalledTimes(1);
-        });
-
-        it('should pass userId from CurrentUser decorator', async () => {
-            mockPlantsService.assignToRack.mockResolvedValue(assignSuccessResponse);
-
-            await controller.assignToRack(testPlantId, validAssignPlantToRackDto, testUser);
-
-            expect(mockPlantsService.assignToRack).toHaveBeenCalledWith(
-                expect.any(String),
-                testUser.dbId,
-                expect.any(Object),
-            );
-        });
-
-        it('should propagate BadRequestException for inactive plant', async () => {
-            mockPlantsService.assignToRack.mockRejectedValue(
-                new BadRequestException('Cannot assign an inactive plant to a rack'),
-            );
-
-            await expect(
-                controller.assignToRack(testPlantId, validAssignPlantToRackDto, testUser),
-            ).rejects.toThrow(BadRequestException);
-        });
-
-        it('should propagate NotFoundException for missing rack', async () => {
-            mockPlantsService.assignToRack.mockRejectedValue(
-                new NotFoundException('Rack not found or does not belong to you'),
-            );
-
-            await expect(
-                controller.assignToRack(testPlantId, validAssignPlantToRackDto, testUser),
-            ).rejects.toThrow(NotFoundException);
-        });
-    });
-
-    // ─────────────────────────────────────────────
-    // removeFromRack
-    // ─────────────────────────────────────────────
-
-    describe('removeFromRack', () => {
-        it('should remove a plant from a rack successfully', async () => {
-            mockPlantsService.removeFromRack.mockResolvedValue(removeFromRackSuccessResponse);
-
-            const result = await controller.removeFromRack(testPlantId, testRackId, testUser);
-
-            expect(result).toEqual(removeFromRackSuccessResponse);
-            expect(mockPlantsService.removeFromRack).toHaveBeenCalledWith(
-                testPlantId,
-                testRackId,
-                testUser.dbId,
-            );
-            expect(mockPlantsService.removeFromRack).toHaveBeenCalledTimes(1);
-        });
-
-        it('should pass userId from CurrentUser decorator', async () => {
-            mockPlantsService.removeFromRack.mockResolvedValue(removeFromRackSuccessResponse);
-
-            await controller.removeFromRack(testPlantId, testRackId, testUser);
-
-            expect(mockPlantsService.removeFromRack).toHaveBeenCalledWith(
-                expect.any(String),
-                expect.any(String),
-                testUser.dbId,
-            );
-        });
-
-        it('should propagate BadRequestException when plant is not in rack', async () => {
-            mockPlantsService.removeFromRack.mockRejectedValue(
-                new BadRequestException('This plant is not currently assigned to that rack'),
-            );
-
-            await expect(
-                controller.removeFromRack(testPlantId, testRackId, testUser),
-            ).rejects.toThrow(BadRequestException);
-        });
-
-        it('should propagate NotFoundException for missing rack', async () => {
-            mockPlantsService.removeFromRack.mockRejectedValue(
-                new NotFoundException('Rack not found or does not belong to you'),
-            );
-
-            await expect(
-                controller.removeFromRack(testPlantId, testRackId, testUser),
-            ).rejects.toThrow(NotFoundException);
-        });
-    });
-
-    // ─────────────────────────────────────────────
-    // harvestFromRack
-    // ─────────────────────────────────────────────
-
-    describe('harvestFromRack', () => {
-        it('should harvest a plant from a rack successfully', async () => {
-            mockPlantsService.harvestFromRack.mockResolvedValue(harvestSuccessResponse);
-
-            const result = await controller.harvestFromRack(testPlantId, testRackId, testUser);
-
-            expect(result).toEqual(harvestSuccessResponse);
-            expect(mockPlantsService.harvestFromRack).toHaveBeenCalledWith(
-                testPlantId,
-                testRackId,
-                testUser.dbId,
-            );
-            expect(mockPlantsService.harvestFromRack).toHaveBeenCalledTimes(1);
-        });
-
-        it('should pass userId from CurrentUser decorator', async () => {
-            mockPlantsService.harvestFromRack.mockResolvedValue(harvestSuccessResponse);
-
-            await controller.harvestFromRack(testPlantId, testRackId, testUser);
-
-            expect(mockPlantsService.harvestFromRack).toHaveBeenCalledWith(
-                expect.any(String),
-                expect.any(String),
-                testUser.dbId,
-            );
-        });
-
-        it('should propagate BadRequestException when plant is not in rack', async () => {
-            mockPlantsService.harvestFromRack.mockRejectedValue(
-                new BadRequestException('This plant is not currently assigned to that rack'),
-            );
-
-            await expect(
-                controller.harvestFromRack(testPlantId, testRackId, testUser),
-            ).rejects.toThrow(BadRequestException);
-        });
-
-        it('should propagate NotFoundException for missing rack', async () => {
-            mockPlantsService.harvestFromRack.mockRejectedValue(
-                new NotFoundException('Rack not found or does not belong to you'),
-            );
-
-            await expect(
-                controller.harvestFromRack(testPlantId, testRackId, testUser),
-            ).rejects.toThrow(NotFoundException);
-        });
-    });
-
-    // ─────────────────────────────────────────────
-    // getRackHistory
-    // ─────────────────────────────────────────────
-
-    describe('getRackHistory', () => {
-        it('should return paginated planting history for a rack', async () => {
-            mockPlantsService.getRackHistory.mockResolvedValue(paginatedHistoryResponse);
-
-            const result = await controller.getRackHistory(testRackId, defaultPlantQuery, testUser);
-
-            expect(result).toEqual(paginatedHistoryResponse);
-            expect(mockPlantsService.getRackHistory).toHaveBeenCalledWith(
-                testRackId,
-                testUser.dbId,
-                defaultPlantQuery,
-            );
-            expect(mockPlantsService.getRackHistory).toHaveBeenCalledTimes(1);
-        });
-
-        it('should pass userId from CurrentUser decorator', async () => {
-            mockPlantsService.getRackHistory.mockResolvedValue(paginatedHistoryResponse);
-
-            await controller.getRackHistory(testRackId, defaultPlantQuery, testUser);
-
-            expect(mockPlantsService.getRackHistory).toHaveBeenCalledWith(
-                expect.any(String),
-                testUser.dbId,
-                expect.any(Object),
-            );
-        });
-
-        it('should propagate NotFoundException for missing rack', async () => {
-            mockPlantsService.getRackHistory.mockRejectedValue(
-                new NotFoundException('Rack not found or does not belong to you'),
-            );
-
-            await expect(
-                controller.getRackHistory(testRackId, defaultPlantQuery, testUser),
-            ).rejects.toThrow(NotFoundException);
         });
     });
 });

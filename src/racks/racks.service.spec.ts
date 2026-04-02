@@ -32,6 +32,13 @@ import {
     statusMessage,
     testMacAddresses,
     testRackIds,
+    rackWithPlant,
+    testPlantIds,
+    baseActivityQuery,
+    expectedPaginatedResponse,
+    filteredActivityQuery,
+    mockActivities,
+    mockActivity,
 } from '../../test/fixtures';
 
 // Mock MqttMessageParser at module level
@@ -43,10 +50,61 @@ jest.mock('../common/utils/mqtt-parser.helper', () => ({
 
 import { MqttMessageParser } from '../common/utils/mqtt-parser.helper';
 
+// ─── Fixtures local to operation tests ──────────────────────────────────────
+
+const testPlantId = testPlantIds.primary;
+const testRackId = testRackIds.primary;
+const testUserId = testDbIds.primary;
+
+const mockPlant = {
+    id: testPlantId,
+    name: 'Basil',
+    isActive: true,
+};
+
+const mockInactivePlant = {
+    id: testPlantIds.inactive ?? 'plant-inactive',
+    name: 'Dead Herb',
+    isActive: false,
+};
+
+const emptyRackForPlant = {
+    ...mockRack,
+    id: testRackId,
+    currentPlantId: null,
+    plantedAt: null,
+    quantity: 0,
+    currentPlant: null,
+};
+
+const rackWithDifferentPlant = {
+    ...mockRack,
+    id: testRackId,
+    currentPlantId: testPlantIds.secondary ?? 'plant-other',
+    plantedAt: new Date('2024-01-01'),
+    quantity: 5,
+    currentPlant: { name: 'Lettuce' },
+};
+
+const validAssignPlantToRackDto = {
+    plantId: testPlantId,
+    rackId: testRackId,
+    quantity: 10,
+};
+
+const assignWithDateDto = {
+    ...validAssignPlantToRackDto,
+    plantedAt: '2024-06-01T00:00:00.000Z',
+};
+
+const harvestDto = { plantId: testPlantId };
+const unassignDto = { plantId: testPlantId };
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 describe('RacksService', () => {
     let service: RacksService;
 
-    const testRackId = testRackIds.primary;
     const testMacAddress = testMacAddresses.valid;
 
     const createRackDto: CreateRackDto = validCreateRackDto;
@@ -59,6 +117,20 @@ describe('RacksService', () => {
 
     beforeEach(async () => {
         jest.clearAllMocks();
+
+        // Ensure rackPlantingHistory exists on the mock if not auto-created
+        if (!mockDatabaseService.rackPlantingHistory) {
+            mockDatabaseService.rackPlantingHistory = {
+                create: jest.fn(),
+                updateMany: jest.fn(),
+                findMany: jest.fn(),
+                findFirst: jest.fn(),
+                findUnique: jest.fn(),
+                update: jest.fn(),
+                delete: jest.fn(),
+                count: jest.fn(),
+            };
+        }
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
@@ -91,6 +163,230 @@ describe('RacksService', () => {
 
     it('should be defined', () => {
         expect(service).toBeDefined();
+    });
+
+    // ─────────────────────────────────────────────
+    // CRUD OPERATIONS
+    // ─────────────────────────────────────────────
+
+    describe('findAll', () => {
+        const query: PaginationQueryDto = { page: 1, limit: 10 };
+
+        it('should retrieve all racks for a user with pagination', async () => {
+            mockDatabaseService.rack.findMany.mockResolvedValue(mockRacks);
+            mockDatabaseService.rack.count.mockResolvedValue(mockRacks.length);
+
+            const result = await service.findAll(testDbIds.primary, query);
+
+            expect(result).toEqual({
+                data: mockRacks,
+                meta: {
+                    currentPage: 1,
+                    itemsPerPage: 10,
+                    totalItems: mockRacks.length,
+                    totalPages: 1,
+                    hasNextPage: false,
+                    hasPreviousPage: false,
+                },
+            });
+        });
+
+        it('should call database with correct pagination parameters', async () => {
+            mockDatabaseService.rack.findMany.mockResolvedValue(mockRacks);
+            mockDatabaseService.rack.count.mockResolvedValue(mockRacks.length);
+
+            await service.findAll(testDbIds.primary, query);
+
+            expect(mockDatabaseService.rack.findMany).toHaveBeenCalledWith({
+                where: { userId: testDbIds.primary },
+                skip: 0,
+                take: 10,
+                orderBy: { createdAt: 'desc' },
+                include: {
+                    currentPlant: {
+                        select: {
+                            name: true,
+                            category: true,
+                            recommendedSoil: true,
+                            description: true,
+                        },
+                    },
+                },
+            });
+        });
+
+        it('should log success message', async () => {
+            mockDatabaseService.rack.findMany.mockResolvedValue(mockRacks);
+            mockDatabaseService.rack.count.mockResolvedValue(mockRacks.length);
+
+            await service.findAll(testDbIds.primary, query);
+
+            expect(mockLoggerService.log).toHaveBeenCalledWith(
+                `Retrieved ${mockRacks.length} racks for user ${testDbIds.primary} (page 1)`,
+                'RacksService',
+            );
+        });
+
+        it('should return empty data array when no racks found', async () => {
+            mockDatabaseService.rack.findMany.mockResolvedValue([]);
+            mockDatabaseService.rack.count.mockResolvedValue(0);
+
+            const result = await service.findAll(testDbIds.primary, query);
+
+            expect(result.data).toEqual([]);
+            expect(result.meta.totalItems).toBe(0);
+        });
+
+        it('should throw InternalServerErrorException on database error', async () => {
+            mockDatabaseService.rack.findMany.mockRejectedValue(new Error('Database error'));
+
+            await expect(service.findAll(testDbIds.primary, query)).rejects.toThrow(
+                InternalServerErrorException,
+            );
+            await expect(service.findAll(testDbIds.primary, query)).rejects.toThrow(
+                'Failed to fetch racks',
+            );
+        });
+
+        it('should log error on failure', async () => {
+            const dbError = new Error('Database error');
+            mockDatabaseService.rack.findMany.mockRejectedValue(dbError);
+
+            await expect(service.findAll(testDbIds.primary, query)).rejects.toThrow();
+
+            expect(mockLoggerService.error).toHaveBeenCalledWith(
+                `Error fetching racks for user ${testDbIds.primary}`,
+                'Database error',
+                'RacksService',
+            );
+        });
+    });
+
+    describe('findById', () => {
+        it('should retrieve rack by ID', async () => {
+            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
+
+            const result = await service.findById(testRackId, testDbIds.primary);
+
+            expect(result).toEqual({
+                message: 'Rack details retrieved successfully',
+                rack: mockRack,
+            });
+        });
+
+        it('should call database with correct parameters', async () => {
+            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
+
+            await service.findById(testRackId, testDbIds.primary);
+
+            expect(mockDatabaseService.rack.findFirst).toHaveBeenCalledWith({
+                where: {
+                    id: testRackId,
+                    userId: testDbIds.primary,
+                },
+                include: {
+                    currentPlant: {
+                        select: {
+                            name: true,
+                            category: true,
+                            recommendedSoil: true,
+                            description: true,
+                        },
+                    },
+                },
+            });
+        });
+
+        it('should throw NotFoundException if rack not found', async () => {
+            mockDatabaseService.rack.findFirst.mockResolvedValue(null);
+
+            await expect(service.findById(testRackId, testDbIds.primary)).rejects.toThrow(
+                NotFoundException,
+            );
+            await expect(service.findById(testRackId, testDbIds.primary)).rejects.toThrow(
+                `Rack ${testRackId} not found or access denied`,
+            );
+        });
+
+        it('should log success message', async () => {
+            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
+
+            await service.findById(testRackId, testDbIds.primary);
+
+            expect(mockLoggerService.log).toHaveBeenCalledWith(
+                `Rack details fetched: ${testRackId}`,
+                'RacksService',
+            );
+        });
+
+        it('should throw InternalServerErrorException on database error', async () => {
+            mockDatabaseService.rack.findFirst.mockRejectedValue(new Error('Database error'));
+
+            await expect(service.findById(testRackId, testDbIds.primary)).rejects.toThrow(
+                InternalServerErrorException,
+            );
+            await expect(service.findById(testRackId, testDbIds.primary)).rejects.toThrow(
+                'Failed to fetch rack details',
+            );
+        });
+
+        it('should log error on failure', async () => {
+            const dbError = new Error('Database error');
+            mockDatabaseService.rack.findFirst.mockRejectedValue(dbError);
+
+            await expect(service.findById(testRackId, testDbIds.primary)).rejects.toThrow();
+
+            expect(mockLoggerService.error).toHaveBeenCalledWith(
+                `Error fetching rack ${testRackId}`,
+                'Database error',
+                'RacksService',
+            );
+        });
+    });
+
+    describe('findByMacAddress', () => {
+        it('should find rack by MAC address', async () => {
+            mockDatabaseService.rack.findUnique.mockResolvedValue(mockRack);
+
+            const result = await service.findByMacAddress(testMacAddress);
+
+            expect(result).toEqual(mockRack);
+            expect(mockDatabaseService.rack.findUnique).toHaveBeenCalledWith({
+                where: { macAddress: testMacAddress },
+            });
+        });
+
+        it('should return null if rack not found', async () => {
+            mockDatabaseService.rack.findUnique.mockResolvedValue(null);
+
+            const result = await service.findByMacAddress(testMacAddress);
+
+            expect(result).toBeNull();
+        });
+
+        it('should throw InternalServerErrorException on database error', async () => {
+            mockDatabaseService.rack.findUnique.mockRejectedValue(new Error('Database error'));
+
+            await expect(service.findByMacAddress(testMacAddress)).rejects.toThrow(
+                InternalServerErrorException,
+            );
+            await expect(service.findByMacAddress(testMacAddress)).rejects.toThrow(
+                'Failed to find rack by MAC address',
+            );
+        });
+
+        it('should log error on failure', async () => {
+            const dbError = new Error('Database error');
+            mockDatabaseService.rack.findUnique.mockRejectedValue(dbError);
+
+            await expect(service.findByMacAddress(testMacAddress)).rejects.toThrow();
+
+            expect(mockLoggerService.error).toHaveBeenCalledWith(
+                `Error finding rack by MAC address: ${testMacAddress}`,
+                'Database error',
+                'RacksService',
+            );
+        });
     });
 
     describe('create', () => {
@@ -192,224 +488,37 @@ describe('RacksService', () => {
         });
     });
 
-    describe('findAll', () => {
-        const query: PaginationQueryDto = { page: 1, limit: 10 };
-
-        it('should retrieve all racks for a user with pagination', async () => {
-            mockDatabaseService.rack.findMany.mockResolvedValue(mockRacks);
-            mockDatabaseService.rack.count.mockResolvedValue(mockRacks.length);
-
-            const result = await service.findAll(testDbIds.primary, query);
-
-            expect(result).toEqual({
-                data: mockRacks,
-                meta: {
-                    currentPage: 1,
-                    itemsPerPage: 10,
-                    totalItems: mockRacks.length,
-                    totalPages: 1,
-                    hasNextPage: false,
-                    hasPreviousPage: false,
-                },
-            });
-        });
-
-        it('should call database with correct pagination parameters', async () => {
-            mockDatabaseService.rack.findMany.mockResolvedValue(mockRacks);
-            mockDatabaseService.rack.count.mockResolvedValue(mockRacks.length);
-
-            await service.findAll(testDbIds.primary, query);
-
-            expect(mockDatabaseService.rack.findMany).toHaveBeenCalledWith({
-                where: { userId: testDbIds.primary },
-                skip: 0,
-                take: 10,
-                orderBy: { createdAt: 'desc' },
-            });
-        });
-
-        it('should log success message', async () => {
-            mockDatabaseService.rack.findMany.mockResolvedValue(mockRacks);
-            mockDatabaseService.rack.count.mockResolvedValue(mockRacks.length);
-
-            await service.findAll(testDbIds.primary, query);
-
-            expect(mockLoggerService.log).toHaveBeenCalledWith(
-                `Retrieved ${mockRacks.length} racks for user ${testDbIds.primary} (page 1)`,
-                'RacksService',
-            );
-        });
-
-        it('should return empty data array when no racks found', async () => {
-            mockDatabaseService.rack.findMany.mockResolvedValue([]);
-            mockDatabaseService.rack.count.mockResolvedValue(0);
-
-            const result = await service.findAll(testDbIds.primary, query);
-
-            expect(result.data).toEqual([]);
-            expect(result.meta.totalItems).toBe(0);
-        });
-
-        it('should throw InternalServerErrorException on database error', async () => {
-            mockDatabaseService.rack.findMany.mockRejectedValue(new Error('Database error'));
-
-            await expect(service.findAll(testDbIds.primary, query)).rejects.toThrow(
-                InternalServerErrorException,
-            );
-            await expect(service.findAll(testDbIds.primary, query)).rejects.toThrow(
-                'Failed to fetch racks',
-            );
-        });
-
-        it('should log error on failure', async () => {
-            const dbError = new Error('Database error');
-            mockDatabaseService.rack.findMany.mockRejectedValue(dbError);
-
-            await expect(service.findAll(testDbIds.primary, query)).rejects.toThrow();
-
-            expect(mockLoggerService.error).toHaveBeenCalledWith(
-                `Error fetching racks for user ${testDbIds.primary}`,
-                'Database error',
-                'RacksService',
-            );
-        });
-    });
-
-    describe('findById', () => {
-        it('should retrieve rack by ID', async () => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
-
-            const result = await service.findById(testRackId, testDbIds.primary);
-
-            expect(result).toEqual({
-                message: 'Rack details retrieved successfully',
-                rack: mockRack,
-            });
-        });
-
-        it('should call database with correct parameters', async () => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
-
-            await service.findById(testRackId, testDbIds.primary);
-
-            expect(mockDatabaseService.rack.findFirst).toHaveBeenCalledWith({
-                where: {
-                    id: testRackId,
-                    userId: testDbIds.primary,
-                },
-            });
-        });
-
-        it('should throw NotFoundException if rack not found', async () => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue(null);
-
-            await expect(service.findById(testRackId, testDbIds.primary)).rejects.toThrow(
-                NotFoundException,
-            );
-            await expect(service.findById(testRackId, testDbIds.primary)).rejects.toThrow(
-                'Rack not found or access denied',
-            );
-        });
-
-        it('should log success message', async () => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
-
-            await service.findById(testRackId, testDbIds.primary);
-
-            expect(mockLoggerService.log).toHaveBeenCalledWith(
-                `Rack details fetched: ${testRackId}`,
-                'RacksService',
-            );
-        });
-
-        it('should throw InternalServerErrorException on database error', async () => {
-            mockDatabaseService.rack.findFirst.mockRejectedValue(new Error('Database error'));
-
-            await expect(service.findById(testRackId, testDbIds.primary)).rejects.toThrow(
-                InternalServerErrorException,
-            );
-            await expect(service.findById(testRackId, testDbIds.primary)).rejects.toThrow(
-                'Failed to fetch rack details',
-            );
-        });
-
-        it('should log error on failure', async () => {
-            const dbError = new Error('Database error');
-            mockDatabaseService.rack.findFirst.mockRejectedValue(dbError);
-
-            await expect(service.findById(testRackId, testDbIds.primary)).rejects.toThrow();
-
-            expect(mockLoggerService.error).toHaveBeenCalledWith(
-                `Error fetching rack ${testRackId}`,
-                'Database error',
-                'RacksService',
-            );
-        });
-    });
-
-    describe('findByMacAddress', () => {
-        it('should find rack by MAC address', async () => {
-            mockDatabaseService.rack.findUnique.mockResolvedValue(mockRack);
-
-            const result = await service.findByMacAddress(testMacAddress);
-
-            expect(result).toEqual(mockRack);
-            expect(mockDatabaseService.rack.findUnique).toHaveBeenCalledWith({
-                where: { macAddress: testMacAddress },
-            });
-        });
-
-        it('should return null if rack not found', async () => {
-            mockDatabaseService.rack.findUnique.mockResolvedValue(null);
-
-            const result = await service.findByMacAddress(testMacAddress);
-
-            expect(result).toBeNull();
-        });
-
-        it('should throw InternalServerErrorException on database error', async () => {
-            mockDatabaseService.rack.findUnique.mockRejectedValue(new Error('Database error'));
-
-            await expect(service.findByMacAddress(testMacAddress)).rejects.toThrow(
-                InternalServerErrorException,
-            );
-            await expect(service.findByMacAddress(testMacAddress)).rejects.toThrow(
-                'Failed to find rack by MAC address',
-            );
-        });
-
-        it('should log error on failure', async () => {
-            const dbError = new Error('Database error');
-            mockDatabaseService.rack.findUnique.mockRejectedValue(dbError);
-
-            await expect(service.findByMacAddress(testMacAddress)).rejects.toThrow();
-
-            expect(mockLoggerService.error).toHaveBeenCalledWith(
-                `Error finding rack by MAC address: ${testMacAddress}`,
-                'Database error',
-                'RacksService',
-            );
-        });
-    });
-
     describe('update', () => {
-        it('should update rack successfully', async () => {
+        // update now calls verifyRackOwnership (findFirst) then findUnique for old name, then rack.update.
+        // Mock sequence: findFirst for ownership → findUnique for current name → update.
+        beforeEach(() => {
             mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
+            mockDatabaseService.rack.findUnique.mockResolvedValue({
+                name: mockRack.name,
+                macAddress: mockRack.macAddress,
+            });
+        });
+
+        it('should update rack successfully', async () => {
             mockDatabaseService.rack.update.mockResolvedValue({
                 ...mockRack,
-                ...updateRackDto,
+                name: updateRackDto.name,
+                description: updateRackDto.description,
             });
 
             const result = await service.update(testRackId, testDbIds.primary, updateRackDto);
 
             expect(result).toEqual({
                 message: 'Rack updated successfully',
-                rack: { ...mockRack, ...updateRackDto },
+                rack: {
+                    ...mockRack,
+                    name: updateRackDto.name,
+                    description: updateRackDto.description,
+                },
             });
         });
 
         it('should verify ownership before updating', async () => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
             mockDatabaseService.rack.update.mockResolvedValue(mockRack);
 
             await service.update(testRackId, testDbIds.primary, updateRackDto);
@@ -422,16 +531,68 @@ describe('RacksService', () => {
             });
         });
 
-        it('should call database update with correct data', async () => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
+        it('should fetch current rack name before updating', async () => {
+            mockDatabaseService.rack.update.mockResolvedValue(mockRack);
+
+            await service.update(testRackId, testDbIds.primary, updateRackDto);
+
+            expect(mockDatabaseService.rack.findUnique).toHaveBeenCalledWith({
+                where: { id: testRackId },
+                select: { name: true, macAddress: true },
+            });
+        });
+
+        it('should call database update with correct data shape', async () => {
             mockDatabaseService.rack.update.mockResolvedValue(mockRack);
 
             await service.update(testRackId, testDbIds.primary, updateRackDto);
 
             expect(mockDatabaseService.rack.update).toHaveBeenCalledWith({
                 where: { id: testRackId },
-                data: updateRackDto,
+                data: {
+                    name: updateRackDto.name,
+                    mqttTopic: updateRackDto.mqttTopic,
+                    description: updateRackDto.description,
+                },
             });
+        });
+
+        it('should log RACK_RENAMED activity when name changes', async () => {
+            // updateRackDto.name must differ from mockRack.name for the branch to fire
+            mockDatabaseService.rack.findUnique.mockResolvedValue({
+                name: 'Old Name',
+                macAddress: mockRack.macAddress,
+            });
+            mockDatabaseService.rack.update.mockResolvedValue(mockRack);
+
+            await service.update(testRackId, testDbIds.primary, {
+                ...updateRackDto,
+                name: 'New Name',
+            });
+
+            expect(mockLogRackActivityHelper.logActivity).toHaveBeenCalledWith(
+                testRackId,
+                ActivityEventType.RACK_RENAMED,
+                expect.stringContaining('renamed'),
+                expect.objectContaining({ oldName: 'Old Name', newName: 'New Name' }),
+            );
+        });
+
+        it('should not log RACK_RENAMED activity when name is unchanged', async () => {
+            mockDatabaseService.rack.findUnique.mockResolvedValue({
+                name: updateRackDto.name,
+                macAddress: mockRack.macAddress,
+            });
+            mockDatabaseService.rack.update.mockResolvedValue(mockRack);
+
+            await service.update(testRackId, testDbIds.primary, updateRackDto);
+
+            expect(mockLogRackActivityHelper.logActivity).not.toHaveBeenCalledWith(
+                expect.anything(),
+                ActivityEventType.RACK_RENAMED,
+                expect.anything(),
+                expect.anything(),
+            );
         });
 
         it('should throw NotFoundException if ownership verification fails', async () => {
@@ -442,11 +603,10 @@ describe('RacksService', () => {
             ).rejects.toThrow(NotFoundException);
             await expect(
                 service.update(testRackId, testDbIds.primary, updateRackDto),
-            ).rejects.toThrow('Rack not found or access denied');
+            ).rejects.toThrow(`Rack ${testRackId} not found or access denied`);
         });
 
         it('should log success message', async () => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
             mockDatabaseService.rack.update.mockResolvedValue(mockRack);
 
             await service.update(testRackId, testDbIds.primary, updateRackDto);
@@ -458,7 +618,6 @@ describe('RacksService', () => {
         });
 
         it('should throw InternalServerErrorException on database error', async () => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
             mockDatabaseService.rack.update.mockRejectedValue(new Error('Database error'));
 
             await expect(
@@ -470,7 +629,6 @@ describe('RacksService', () => {
         });
 
         it('should log error on failure', async () => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
             const dbError = new Error('Database error');
             mockDatabaseService.rack.update.mockRejectedValue(dbError);
 
@@ -524,14 +682,14 @@ describe('RacksService', () => {
             });
         });
 
-        it('should throw NotFoundException if ownership verification fails', async () => {
+        it('should throw NotFoundException if rack not found', async () => {
             mockDatabaseService.rack.findFirst.mockResolvedValue(null);
 
             await expect(service.delete(testRackId, testDbIds.primary)).rejects.toThrow(
                 NotFoundException,
             );
             await expect(service.delete(testRackId, testDbIds.primary)).rejects.toThrow(
-                'Rack not found or access denied',
+                `Rack ${testRackId} not found or access denied`,
             );
         });
 
@@ -604,7 +762,7 @@ describe('RacksService', () => {
             ).rejects.toThrow(NotFoundException);
             await expect(
                 service.verifyRackOwnership(testRackId, testDbIds.primary),
-            ).rejects.toThrow('Rack not found or access denied');
+            ).rejects.toThrow(`Rack ${testRackId} not found or access denied`);
         });
 
         it('should log error on failure', async () => {
@@ -631,6 +789,166 @@ describe('RacksService', () => {
             ).rejects.toThrow(dbError);
         });
     });
+
+    describe('resolveAuthorizedRackIds', () => {
+        // Access the private method without unsafe `any` by casting to a type that
+        // exposes only the method we need, preserving its exact signature.
+        type PrivateResolve = {
+            resolveAuthorizedRackIds(
+                userId: string,
+                requestedRackIds?: string[],
+            ): Promise<string[]>;
+        };
+        const call = (userId: string, requestedRackIds?: string[]) =>
+            (service as unknown as PrivateResolve).resolveAuthorizedRackIds(
+                userId,
+                requestedRackIds,
+            );
+
+        const rackIdA = testRackIds.primary;
+        const rackIdB = testRackIds.secondary ?? 'rack-id-b';
+        const rackIdC = 'rack-id-c';
+
+        // Seed rack.findMany to return the given set of rack IDs for the user
+        const seedUserRacks = (...ids: string[]) =>
+            mockDatabaseService.rack.findMany.mockResolvedValue(ids.map((id) => ({ id })));
+
+        // ── No requestedRackIds (return all user racks) ──────────────────────────
+
+        describe('when no requestedRackIds are provided', () => {
+            it('should return all rack IDs belonging to the user', async () => {
+                seedUserRacks(rackIdA, rackIdB);
+
+                const result = await call(testUserId);
+
+                expect(result).toEqual([rackIdA, rackIdB]);
+            });
+
+            it('should query rack.findMany with the correct userId filter', async () => {
+                seedUserRacks(rackIdA);
+
+                await call(testUserId);
+
+                expect(mockDatabaseService.rack.findMany).toHaveBeenCalledWith({
+                    where: { userId: testUserId },
+                    select: { id: true },
+                });
+            });
+
+            it('should return an empty array when the user owns no racks', async () => {
+                seedUserRacks();
+
+                const result = await call(testUserId);
+
+                expect(result).toEqual([]);
+            });
+
+            it('should not call verifyRackOwnership', async () => {
+                seedUserRacks(rackIdA);
+
+                await call(testUserId);
+
+                expect(mockDatabaseService.rack.findFirst).not.toHaveBeenCalled();
+            });
+
+            it('should treat undefined requestedRackIds the same as omitting it', async () => {
+                seedUserRacks(rackIdA, rackIdB);
+
+                const result = await call(testUserId, undefined);
+
+                expect(result).toEqual([rackIdA, rackIdB]);
+            });
+
+            it('should treat an empty array the same as omitting it', async () => {
+                seedUserRacks(rackIdA, rackIdB);
+
+                const result = await call(testUserId, []);
+
+                expect(result).toEqual([rackIdA, rackIdB]);
+            });
+        });
+
+        // ── requestedRackIds provided ────────────────────────────────────────────
+
+        describe('when requestedRackIds are provided', () => {
+            it('should return only the requested rack IDs when all are owned by the user', async () => {
+                seedUserRacks(rackIdA, rackIdB, rackIdC);
+                mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
+
+                const result = await call(testUserId, [rackIdA, rackIdB]);
+
+                expect(result).toEqual([rackIdA, rackIdB]);
+            });
+
+            it('should call verifyRackOwnership once per requested rack ID', async () => {
+                seedUserRacks(rackIdA, rackIdB);
+                mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
+
+                await call(testUserId, [rackIdA, rackIdB]);
+
+                expect(mockDatabaseService.rack.findFirst).toHaveBeenCalledTimes(2);
+            });
+
+            it('should call verifyRackOwnership with the correct rackId and userId each time', async () => {
+                seedUserRacks(rackIdA, rackIdB);
+                mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
+
+                await call(testUserId, [rackIdA, rackIdB]);
+
+                expect(mockDatabaseService.rack.findFirst).toHaveBeenCalledWith({
+                    where: { id: rackIdA, userId: testUserId },
+                });
+                expect(mockDatabaseService.rack.findFirst).toHaveBeenCalledWith({
+                    where: { id: rackIdB, userId: testUserId },
+                });
+            });
+
+            it('should throw NotFoundException when a requested rack is not owned by the user', async () => {
+                seedUserRacks(rackIdA);
+                // verifyRackOwnership returns null → throws NotFoundException
+                mockDatabaseService.rack.findFirst.mockResolvedValue(null);
+
+                await expect(call(testUserId, [rackIdB])).rejects.toThrow(NotFoundException);
+            });
+
+            it('should filter out requested IDs that are not in the user rack set', async () => {
+                // User owns rackIdA only; rackIdC is not in their rack list even if ownership passes
+                seedUserRacks(rackIdA);
+                // verifyRackOwnership passes (findFirst returns a rack)
+                mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
+
+                const result = await call(testUserId, [rackIdA, rackIdC]);
+
+                // rackIdC passes ownership check but is not in the user's rack set, so filtered out
+                expect(result).toEqual([rackIdA]);
+            });
+
+            it('should return an empty array when all requested IDs are filtered out', async () => {
+                seedUserRacks(rackIdA);
+                mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
+
+                const result = await call(testUserId, [rackIdC]);
+
+                expect(result).toEqual([]);
+            });
+
+            it('should still call rack.findMany to build the user rack set', async () => {
+                seedUserRacks(rackIdA);
+                mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
+
+                await call(testUserId, [rackIdA]);
+
+                expect(mockDatabaseService.rack.findMany).toHaveBeenCalledWith({
+                    where: { userId: testUserId },
+                    select: { id: true },
+                });
+            });
+        });
+    });
+
+    // ─────────────────────────────────────────────
+    // DEVICE STATUS & ERROR
+    // ─────────────────────────────────────────────
 
     describe('processDeviceStatus', () => {
         const statusData: DeviceStatusDto = {
@@ -692,7 +1010,6 @@ describe('RacksService', () => {
         });
 
         it('should log activity when status changes', async () => {
-            // start with rack offline so we trigger the status change branch
             const offlineRack = { ...mockRack, status: DeviceStatus.OFFLINE };
             mockDatabaseService.rack.findUnique.mockResolvedValue(offlineRack);
             mockDatabaseService.rack.update.mockResolvedValue({
@@ -765,7 +1082,6 @@ describe('RacksService', () => {
         });
 
         it('should log error on failure', async () => {
-            // simulate error during update rather than find so outer catch triggers
             mockDatabaseService.rack.findUnique.mockResolvedValue(mockRack);
             mockDatabaseService.rack.update.mockRejectedValue(new Error('Database error'));
 
@@ -936,7 +1252,6 @@ describe('RacksService', () => {
         });
 
         it('should log error on failure', async () => {
-            // simulate error during update so outer catch logs
             mockDatabaseService.rack.findUnique.mockResolvedValue(mockRack);
             mockDatabaseService.rack.update.mockRejectedValue(new Error('Database error'));
 
@@ -951,6 +1266,10 @@ describe('RacksService', () => {
             );
         });
     });
+
+    // ─────────────────────────────────────────────
+    // SENSOR & CURRENT STATE
+    // ─────────────────────────────────────────────
 
     describe('getLatestSensorReading', () => {
         it('should retrieve latest sensor reading', async () => {
@@ -1059,18 +1378,6 @@ describe('RacksService', () => {
             );
         });
 
-        it('should throw NotFoundException if rack not found', async () => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue(null);
-            mockDatabaseService.rack.findUnique.mockResolvedValue(null);
-
-            await expect(service.getCurrentState(testRackId, testDbIds.primary)).rejects.toThrow(
-                NotFoundException,
-            );
-            await expect(service.getCurrentState(testRackId, testDbIds.primary)).rejects.toThrow(
-                'Rack not found',
-            );
-        });
-
         it('should throw InternalServerErrorException on database error', async () => {
             mockDatabaseService.rack.findFirst.mockRejectedValue(new Error('Database error'));
 
@@ -1123,7 +1430,6 @@ describe('RacksService', () => {
 
         it('should throw NotFoundException if rack not found', async () => {
             mockDatabaseService.rack.findFirst.mockResolvedValue(null);
-            mockDatabaseService.rack.findUnique.mockResolvedValue(null);
 
             await expect(service.getDeviceStatus(testRackId, testDbIds.primary)).rejects.toThrow(
                 NotFoundException,
@@ -1146,6 +1452,1076 @@ describe('RacksService', () => {
 
             expect(mockLoggerService.error).toHaveBeenCalledWith(
                 `Error fetching device status for rack ${testRackId}`,
+                'Database error',
+                'RacksService',
+            );
+        });
+    });
+
+    // ─────────────────────────────────────────────
+    // STATISTICS & ANALYTICS
+    // ─────────────────────────────────────────────
+
+    // resolveAuthorizedRackIds always calls rack.findMany to get all user rack IDs.
+    // When rackId filter is provided it also calls verifyRackOwnership (rack.findFirst)
+    // per requested rack ID.
+    function seedResolveAuthorizedRackIds(
+        mockDatabaseService: ReturnType<typeof createMockDatabaseService>,
+        rackIds: string[] = [testRackId],
+    ) {
+        mockDatabaseService.rack.findMany.mockResolvedValue(rackIds.map((id) => ({ id })));
+    }
+
+    describe('getRackActivities', () => {
+        beforeEach(() => {
+            seedResolveAuthorizedRackIds(mockDatabaseService);
+            mockDatabaseService.activity.findMany.mockResolvedValue(mockActivities);
+            mockDatabaseService.activity.count.mockResolvedValue(1);
+        });
+
+        it('should return paginated rack activities for all user racks', async () => {
+            const result = await service.getRackActivities(testUserId, baseActivityQuery);
+
+            expect(result).toEqual(expectedPaginatedResponse);
+        });
+
+        it('should query only RACK_ADDED, RACK_RENAMED, RACK_REMOVED event types', async () => {
+            await service.getRackActivities(testUserId, baseActivityQuery);
+
+            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        eventType: {
+                            in: expect.arrayContaining([
+                                ActivityEventType.RACK_ADDED,
+                                ActivityEventType.RACK_RENAMED,
+                                ActivityEventType.RACK_REMOVED,
+                            ]) as string[],
+                        },
+                    }) as object,
+                }),
+            );
+        });
+
+        it('should resolve all user rack IDs when no rackId filter provided', async () => {
+            await service.getRackActivities(testUserId, baseActivityQuery);
+
+            expect(mockDatabaseService.rack.findMany).toHaveBeenCalledWith({
+                where: { userId: testUserId },
+                select: { id: true },
+            });
+        });
+
+        it('should filter by specific rack IDs when rackId provided', async () => {
+            // ownership check for the specific rack
+            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
+
+            await service.getRackActivities(testUserId, filteredActivityQuery);
+
+            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        rackId: { in: [testRackId] },
+                    }) as object,
+                }),
+            );
+        });
+
+        it('should apply date range filter when startDate and endDate provided', async () => {
+            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
+
+            await service.getRackActivities(testUserId, filteredActivityQuery);
+
+            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        timestamp: {
+                            gte: new Date(filteredActivityQuery.startDate!),
+                            lte: new Date(filteredActivityQuery.endDate!),
+                        },
+                    }) as object,
+                }),
+            );
+        });
+
+        it('should apply only gte when only startDate provided', async () => {
+            await service.getRackActivities(testUserId, {
+                ...baseActivityQuery,
+                startDate: '2024-01-01',
+            });
+
+            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        timestamp: { gte: new Date('2024-01-01') },
+                    }) as object,
+                }),
+            );
+        });
+
+        it('should apply only lte when only endDate provided', async () => {
+            await service.getRackActivities(testUserId, {
+                ...baseActivityQuery,
+                endDate: '2024-12-31',
+            });
+
+            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        timestamp: { lte: new Date('2024-12-31') },
+                    }) as object,
+                }),
+            );
+        });
+
+        it('should not include timestamp filter when no dates provided', async () => {
+            await service.getRackActivities(testUserId, baseActivityQuery);
+
+            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.not.objectContaining({
+                        timestamp: expect.any(Date) as Date,
+                    }) as object,
+                }),
+            );
+        });
+
+        it('should order results by timestamp descending', async () => {
+            await service.getRackActivities(testUserId, baseActivityQuery);
+
+            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ orderBy: { timestamp: 'desc' } }),
+            );
+        });
+
+        it('should apply correct pagination skip and take', async () => {
+            await service.getRackActivities(testUserId, { page: 2, limit: 5 });
+
+            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ skip: 5, take: 5 }),
+            );
+        });
+
+        it('should throw NotFoundException when rackId filter contains an unauthorized rack', async () => {
+            mockDatabaseService.rack.findFirst.mockResolvedValue(null); // ownership fails
+
+            await expect(
+                service.getRackActivities(testUserId, filteredActivityQuery),
+            ).rejects.toThrow(NotFoundException);
+        });
+
+        it('should throw InternalServerErrorException on database error', async () => {
+            mockDatabaseService.rack.findMany.mockRejectedValue(new Error('DB error'));
+
+            await expect(service.getRackActivities(testUserId, baseActivityQuery)).rejects.toThrow(
+                InternalServerErrorException,
+            );
+        });
+
+        it('should log error on failure', async () => {
+            mockDatabaseService.rack.findMany.mockRejectedValue(new Error('DB error'));
+
+            await expect(
+                service.getRackActivities(testUserId, baseActivityQuery),
+            ).rejects.toThrow();
+
+            expect(mockLoggerService.error).toHaveBeenCalledWith(
+                `Error fetching rack activities for user ${testUserId}`,
+                'DB error',
+                'RacksService',
+            );
+        });
+    });
+
+    // ── getPlantCareActivities ───────────────────────────────────────────────────
+
+    describe('getPlantCareActivities', () => {
+        const plantCareActivity = {
+            ...mockActivity,
+            id: 'activity-2',
+            eventType: ActivityEventType.WATERING_ON,
+        };
+
+        beforeEach(() => {
+            seedResolveAuthorizedRackIds(mockDatabaseService);
+            mockDatabaseService.activity.findMany.mockResolvedValue([plantCareActivity]);
+            mockDatabaseService.activity.count.mockResolvedValue(1);
+        });
+
+        it('should return paginated plant care activities', async () => {
+            const result = await service.getPlantCareActivities(testUserId, baseActivityQuery);
+
+            expect(result).toEqual({
+                data: [plantCareActivity],
+                meta: expectedPaginatedResponse.meta,
+            });
+        });
+
+        it('should query only WATERING_ON, WATERING_OFF, LIGHT_ON, LIGHT_OFF event types', async () => {
+            await service.getPlantCareActivities(testUserId, baseActivityQuery);
+
+            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        eventType: {
+                            in: expect.arrayContaining([
+                                ActivityEventType.WATERING_ON,
+                                ActivityEventType.WATERING_OFF,
+                                ActivityEventType.LIGHT_ON,
+                                ActivityEventType.LIGHT_OFF,
+                            ]) as string[],
+                        },
+                    }) as object,
+                }),
+            );
+        });
+
+        it('should not include any rack-management event types', async () => {
+            await service.getPlantCareActivities(testUserId, baseActivityQuery);
+
+            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        eventType: expect.objectContaining({
+                            in: expect.not.arrayContaining([
+                                ActivityEventType.RACK_ADDED,
+                                ActivityEventType.PLANT_HARVESTED,
+                            ]) as string,
+                        }) as object,
+                    }) as object,
+                }),
+            );
+        });
+
+        it('should filter by specific rack IDs when rackId provided', async () => {
+            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
+
+            await service.getPlantCareActivities(testUserId, filteredActivityQuery);
+
+            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        rackId: { in: [testRackId] },
+                    }) as object,
+                }),
+            );
+        });
+
+        it('should apply date range filter when dates provided', async () => {
+            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
+
+            await service.getPlantCareActivities(testUserId, filteredActivityQuery);
+
+            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        timestamp: {
+                            gte: new Date(filteredActivityQuery.startDate!),
+                            lte: new Date(filteredActivityQuery.endDate!),
+                        },
+                    }) as object,
+                }),
+            );
+        });
+
+        it('should order results by timestamp descending', async () => {
+            await service.getPlantCareActivities(testUserId, baseActivityQuery);
+
+            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ orderBy: { timestamp: 'desc' } }),
+            );
+        });
+
+        it('should apply correct pagination skip and take', async () => {
+            await service.getPlantCareActivities(testUserId, { page: 3, limit: 20 });
+
+            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ skip: 40, take: 20 }),
+            );
+        });
+
+        it('should throw NotFoundException when rackId filter contains an unauthorized rack', async () => {
+            mockDatabaseService.rack.findFirst.mockResolvedValue(null);
+
+            await expect(
+                service.getPlantCareActivities(testUserId, filteredActivityQuery),
+            ).rejects.toThrow(NotFoundException);
+        });
+
+        it('should throw InternalServerErrorException on database error', async () => {
+            mockDatabaseService.rack.findMany.mockRejectedValue(new Error('DB error'));
+
+            await expect(
+                service.getPlantCareActivities(testUserId, baseActivityQuery),
+            ).rejects.toThrow(InternalServerErrorException);
+        });
+
+        it('should log error on failure', async () => {
+            mockDatabaseService.rack.findMany.mockRejectedValue(new Error('DB error'));
+
+            await expect(
+                service.getPlantCareActivities(testUserId, baseActivityQuery),
+            ).rejects.toThrow();
+
+            expect(mockLoggerService.error).toHaveBeenCalledWith(
+                `Error fetching plant care activities for user ${testUserId}`,
+                'DB error',
+                'PlantsService',
+            );
+        });
+    });
+
+    // ── getPlantingActivities ────────────────────────────────────────────────────
+
+    describe('getPlantingActivities', () => {
+        const plantingActivity = {
+            ...mockActivity,
+            id: 'activity-3',
+            eventType: ActivityEventType.PLANT_ADDED,
+        };
+
+        beforeEach(() => {
+            seedResolveAuthorizedRackIds(mockDatabaseService);
+            mockDatabaseService.activity.findMany.mockResolvedValue([plantingActivity]);
+            mockDatabaseService.activity.count.mockResolvedValue(1);
+        });
+
+        it('should return paginated planting activities', async () => {
+            const result = await service.getPlantingActivities(testUserId, baseActivityQuery);
+
+            expect(result).toEqual({
+                data: [plantingActivity],
+                meta: expectedPaginatedResponse.meta,
+            });
+        });
+
+        it('should query only PLANT_ADDED, PLANT_CHANGED, PLANT_REMOVED event types', async () => {
+            await service.getPlantingActivities(testUserId, baseActivityQuery);
+
+            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        eventType: {
+                            in: expect.arrayContaining([
+                                ActivityEventType.PLANT_ADDED,
+                                ActivityEventType.PLANT_CHANGED,
+                                ActivityEventType.PLANT_REMOVED,
+                            ]) as string[],
+                        },
+                    }) as object,
+                }),
+            );
+        });
+
+        it('should not include PLANT_HARVESTED in the event type filter', async () => {
+            await service.getPlantingActivities(testUserId, baseActivityQuery);
+
+            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        eventType: expect.objectContaining({
+                            in: expect.not.arrayContaining([
+                                ActivityEventType.PLANT_HARVESTED,
+                            ]) as string[],
+                        }) as object,
+                    }) as object,
+                }),
+            );
+        });
+
+        it('should filter by specific rack IDs when rackId provided', async () => {
+            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
+
+            await service.getPlantingActivities(testUserId, filteredActivityQuery);
+
+            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        rackId: { in: [testRackId] },
+                    }) as object,
+                }),
+            );
+        });
+
+        it('should apply date range filter when dates provided', async () => {
+            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
+
+            await service.getPlantingActivities(testUserId, filteredActivityQuery);
+
+            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        timestamp: {
+                            gte: new Date(filteredActivityQuery.startDate!),
+                            lte: new Date(filteredActivityQuery.endDate!),
+                        },
+                    }) as object,
+                }),
+            );
+        });
+
+        it('should order results by timestamp descending', async () => {
+            await service.getPlantingActivities(testUserId, baseActivityQuery);
+
+            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ orderBy: { timestamp: 'desc' } }),
+            );
+        });
+
+        it('should apply correct pagination skip and take', async () => {
+            await service.getPlantingActivities(testUserId, { page: 2, limit: 10 });
+
+            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ skip: 10, take: 10 }),
+            );
+        });
+
+        it('should throw NotFoundException when rackId filter contains an unauthorized rack', async () => {
+            mockDatabaseService.rack.findFirst.mockResolvedValue(null);
+
+            await expect(
+                service.getPlantingActivities(testUserId, filteredActivityQuery),
+            ).rejects.toThrow(NotFoundException);
+        });
+
+        it('should throw InternalServerErrorException on database error', async () => {
+            mockDatabaseService.rack.findMany.mockRejectedValue(new Error('DB error'));
+
+            await expect(
+                service.getPlantingActivities(testUserId, baseActivityQuery),
+            ).rejects.toThrow(InternalServerErrorException);
+        });
+
+        it('should log error on failure', async () => {
+            mockDatabaseService.rack.findMany.mockRejectedValue(new Error('DB error'));
+
+            await expect(
+                service.getPlantingActivities(testUserId, baseActivityQuery),
+            ).rejects.toThrow();
+
+            expect(mockLoggerService.error).toHaveBeenCalledWith(
+                `Error fetching planting activities for user ${testUserId}`,
+                'DB error',
+                'PlantsService',
+            );
+        });
+    });
+
+    // ── getHarvestActivities ─────────────────────────────────────────────────────
+
+    describe('getHarvestActivities', () => {
+        // getHarvestActivities makes THREE db calls:
+        //   1. activity.findMany  → paginated page of results
+        //   2. activity.count     → totalItems for pagination
+        //   3. activity.findMany  → ALL results in range (select metadata only) for totalHarvestCount
+        // All three share the same `where` filter so we use mockResolvedValueOnce to
+        // distinguish calls 1 and 3.
+
+        const harvestActivity = (quantity: number, id = 'activity-h1') => ({
+            id,
+            rackId: testRackId,
+            eventType: ActivityEventType.PLANT_HARVESTED,
+            description: 'Harvest',
+            metadata: { quantity },
+            timestamp: new Date('2024-08-01'),
+        });
+
+        beforeEach(() => {
+            seedResolveAuthorizedRackIds(mockDatabaseService);
+            mockDatabaseService.activity.count.mockResolvedValue(1);
+        });
+
+        it('should return paginated harvest activities with totalHarvestCount', async () => {
+            mockDatabaseService.activity.findMany
+                .mockResolvedValueOnce([harvestActivity(5)]) // paginated page
+                .mockResolvedValueOnce([{ metadata: { quantity: 5 } }]); // allInRange
+
+            const result = await service.getHarvestActivities(testUserId, baseActivityQuery);
+
+            expect(result).toEqual({
+                data: [harvestActivity(5)],
+                meta: {
+                    currentPage: 1,
+                    itemsPerPage: 10,
+                    totalItems: 1,
+                    totalPages: 1,
+                    hasNextPage: false,
+                    hasPreviousPage: false,
+                },
+                totalHarvestCount: 5,
+            });
+        });
+
+        it('should sum quantity values from all harvest activity metadata', async () => {
+            mockDatabaseService.activity.findMany
+                .mockResolvedValueOnce([harvestActivity(3), harvestActivity(7, 'h2')])
+                .mockResolvedValueOnce([
+                    { metadata: { quantity: 3 } },
+                    { metadata: { quantity: 7 } },
+                ]);
+            mockDatabaseService.activity.count.mockResolvedValue(2);
+
+            const result = await service.getHarvestActivities(testUserId, baseActivityQuery);
+
+            expect(result.totalHarvestCount).toBe(10);
+        });
+
+        it('should return totalHarvestCount of 0 when metadata quantity is missing', async () => {
+            mockDatabaseService.activity.findMany
+                .mockResolvedValueOnce([harvestActivity(0)])
+                .mockResolvedValueOnce([{ metadata: null }, { metadata: {} }]);
+
+            const result = await service.getHarvestActivities(testUserId, baseActivityQuery);
+
+            expect(result.totalHarvestCount).toBe(0);
+        });
+
+        it('should query only PLANT_HARVESTED event type', async () => {
+            mockDatabaseService.activity.findMany
+                .mockResolvedValueOnce([])
+                .mockResolvedValueOnce([]);
+
+            await service.getHarvestActivities(testUserId, baseActivityQuery);
+
+            const expectedFilter = expect.objectContaining({
+                where: expect.objectContaining({
+                    eventType: ActivityEventType.PLANT_HARVESTED,
+                }) as object,
+            }) as object;
+
+            expect(mockDatabaseService.activity.findMany).toHaveBeenNthCalledWith(
+                1,
+                expectedFilter,
+            );
+            expect(mockDatabaseService.activity.findMany).toHaveBeenNthCalledWith(
+                2,
+                expectedFilter,
+            );
+        });
+
+        it('should make three parallel db calls via Promise.all', async () => {
+            mockDatabaseService.activity.findMany
+                .mockResolvedValueOnce([harvestActivity(2)])
+                .mockResolvedValueOnce([{ metadata: { quantity: 2 } }]);
+
+            await service.getHarvestActivities(testUserId, baseActivityQuery);
+
+            // findMany called twice (paginated + allInRange), count called once
+            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledTimes(2);
+            expect(mockDatabaseService.activity.count).toHaveBeenCalledTimes(1);
+        });
+
+        it('should filter by specific rack IDs when rackId provided', async () => {
+            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
+            mockDatabaseService.activity.findMany
+                .mockResolvedValueOnce([harvestActivity(1)])
+                .mockResolvedValueOnce([{ metadata: { quantity: 1 } }]);
+
+            await service.getHarvestActivities(testUserId, filteredActivityQuery);
+
+            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        rackId: { in: [testRackId] },
+                    }) as object,
+                }),
+            );
+        });
+
+        it('should apply date range filter when dates provided', async () => {
+            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
+            mockDatabaseService.activity.findMany
+                .mockResolvedValueOnce([])
+                .mockResolvedValueOnce([]);
+
+            await service.getHarvestActivities(testUserId, filteredActivityQuery);
+
+            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        timestamp: {
+                            gte: new Date(filteredActivityQuery.startDate!),
+                            lte: new Date(filteredActivityQuery.endDate!),
+                        },
+                    }) as object,
+                }),
+            );
+        });
+
+        it('should order results by timestamp descending', async () => {
+            mockDatabaseService.activity.findMany
+                .mockResolvedValueOnce([harvestActivity(1)])
+                .mockResolvedValueOnce([{ metadata: { quantity: 1 } }]);
+
+            await service.getHarvestActivities(testUserId, baseActivityQuery);
+
+            // The first findMany call (paginated) must have the orderBy
+            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ orderBy: { timestamp: 'desc' } }),
+            );
+        });
+
+        it('should apply correct pagination skip and take to paginated call', async () => {
+            mockDatabaseService.activity.findMany
+                .mockResolvedValueOnce([])
+                .mockResolvedValueOnce([]);
+
+            await service.getHarvestActivities(testUserId, { page: 3, limit: 5 });
+
+            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ skip: 10, take: 5 }),
+            );
+        });
+
+        it('should select only metadata on the allInRange call', async () => {
+            mockDatabaseService.activity.findMany
+                .mockResolvedValueOnce([harvestActivity(4)])
+                .mockResolvedValueOnce([{ metadata: { quantity: 4 } }]);
+
+            await service.getHarvestActivities(testUserId, baseActivityQuery);
+
+            // The second findMany (allInRange) must have select: { metadata: true }
+            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({ select: { metadata: true } }),
+            );
+        });
+
+        it('should throw NotFoundException when rackId filter contains an unauthorized rack', async () => {
+            mockDatabaseService.rack.findFirst.mockResolvedValue(null);
+
+            await expect(
+                service.getHarvestActivities(testUserId, filteredActivityQuery),
+            ).rejects.toThrow(NotFoundException);
+        });
+
+        it('should throw InternalServerErrorException on database error', async () => {
+            mockDatabaseService.rack.findMany.mockRejectedValue(new Error('DB error'));
+
+            await expect(
+                service.getHarvestActivities(testUserId, baseActivityQuery),
+            ).rejects.toThrow(InternalServerErrorException);
+        });
+
+        it('should log error on failure', async () => {
+            mockDatabaseService.rack.findMany.mockRejectedValue(new Error('DB error'));
+
+            await expect(
+                service.getHarvestActivities(testUserId, baseActivityQuery),
+            ).rejects.toThrow();
+
+            expect(mockLoggerService.error).toHaveBeenCalledWith(
+                `Error fetching harvest activities for user ${testUserId}`,
+                'DB error',
+                'PlantsService',
+            );
+        });
+    });
+
+    // ─────────────────────────────────────────────
+    // RACK ASSIGNMENT OPERATIONS
+    // ─────────────────────────────────────────────
+
+    describe('harvestFromRack', () => {
+        // service signature: harvestFromRack(rackId, userId, dto)
+        beforeEach(() => {
+            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack); // ownership check
+            mockDatabaseService.rack.findUnique.mockResolvedValue(rackWithPlant);
+            // tx calls inside the transaction callback
+            mockDatabaseService.rackPlantingHistory.updateMany.mockResolvedValue({ count: 1 });
+            mockDatabaseService.rack.update.mockResolvedValue(mockRack);
+            mockDatabaseService.$transaction.mockImplementation(
+                async (cb: (tx: unknown) => Promise<unknown>) => cb(mockDatabaseService),
+            );
+        });
+
+        it('should harvest plant and return success message', async () => {
+            mockDatabaseService.rack.findUnique.mockResolvedValue(rackWithPlant);
+
+            const result = await service.harvestFromRack(testRackId, testUserId, harvestDto);
+
+            expect(result).toEqual({ message: 'Plant harvested successfully' });
+        });
+
+        it('should log PLANT_HARVESTED activity', async () => {
+            mockDatabaseService.rack.findUnique.mockResolvedValue(rackWithPlant);
+
+            await service.harvestFromRack(testRackId, testUserId, harvestDto);
+
+            expect(mockLogRackActivityHelper.logActivity).toHaveBeenCalledWith(
+                testRackId,
+                ActivityEventType.PLANT_HARVESTED,
+                expect.stringContaining('harvested'),
+                expect.objectContaining({ plantId: testPlantId }),
+            );
+        });
+
+        it('should increment harvest count on the rack', async () => {
+            const rackWithTwoHarvests = { ...rackWithPlant, harvestCount: 2 };
+            mockDatabaseService.rack.findUnique.mockResolvedValue(rackWithTwoHarvests);
+
+            await service.harvestFromRack(testRackId, testUserId, harvestDto);
+
+            expect(mockDatabaseService.rack.update).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        harvestCount: 3,
+                    }) as object,
+                }),
+            );
+        });
+
+        it('should clear currentPlantId, quantity and plantedAt after harvest', async () => {
+            mockDatabaseService.rack.findUnique.mockResolvedValue(rackWithPlant);
+
+            await service.harvestFromRack(testRackId, testUserId, harvestDto);
+
+            expect(mockDatabaseService.rack.update).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        currentPlantId: null,
+                        quantity: 0,
+                        plantedAt: null,
+                    }) as object,
+                }),
+            );
+        });
+
+        it('should call verifyRackOwnership', async () => {
+            mockDatabaseService.rack.findUnique.mockResolvedValue(rackWithPlant);
+
+            await service.harvestFromRack(testRackId, testUserId, harvestDto);
+
+            expect(mockDatabaseService.rack.findFirst).toHaveBeenCalledWith({
+                where: { id: testRackId, userId: testUserId },
+            });
+        });
+
+        it('should throw BadRequestException when plant is not in the rack', async () => {
+            mockDatabaseService.rack.findUnique.mockResolvedValue({
+                ...rackWithPlant,
+                currentPlantId: testPlantIds.secondary ?? 'plant-other',
+            });
+
+            await expect(
+                service.harvestFromRack(testRackId, testUserId, harvestDto),
+            ).rejects.toThrow(BadRequestException);
+        });
+
+        it('should log the correct harvest count in activity metadata', async () => {
+            const rackWith3Harvests = { ...rackWithPlant, harvestCount: 3 };
+            mockDatabaseService.rack.findUnique.mockResolvedValue(rackWith3Harvests);
+
+            await service.harvestFromRack(testRackId, testUserId, harvestDto);
+
+            expect(mockLogRackActivityHelper.logActivity).toHaveBeenCalledWith(
+                testRackId,
+                ActivityEventType.PLANT_HARVESTED,
+                expect.any(String),
+                expect.objectContaining({ harvestCount: 4 }),
+            );
+        });
+
+        it('should throw InternalServerErrorException on transaction error', async () => {
+            mockDatabaseService.rack.findUnique.mockResolvedValue(rackWithPlant);
+            mockDatabaseService.$transaction.mockRejectedValueOnce(new Error('DB error'));
+
+            await expect(
+                service.harvestFromRack(testRackId, testUserId, harvestDto),
+            ).rejects.toThrow(InternalServerErrorException);
+        });
+    });
+
+    describe('assignToRack', () => {
+        // service signature: assignToRack(rackId, userId, dto)
+        beforeEach(() => {
+            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack); // ownership check
+            // tx calls inside the transaction callback
+            mockDatabaseService.rackPlantingHistory.create.mockResolvedValue({});
+            mockDatabaseService.rack.update.mockResolvedValue(mockRack);
+            mockDatabaseService.$transaction.mockImplementation(
+                async (cb: (tx: unknown) => Promise<unknown>) => cb(mockDatabaseService),
+            );
+        });
+
+        it('should log PLANT_ADDED when rack has no current plant', async () => {
+            mockDatabaseService.plant.findUnique.mockResolvedValue(mockPlant);
+            mockDatabaseService.rack.findUnique.mockResolvedValue(emptyRackForPlant);
+
+            await service.assignToRack(testRackId, testUserId, validAssignPlantToRackDto);
+
+            expect(mockLogRackActivityHelper.logActivity).toHaveBeenCalledWith(
+                testRackId,
+                ActivityEventType.PLANT_ADDED,
+                expect.stringContaining('added to rack'),
+                expect.objectContaining({ plantId: testPlantId }),
+            );
+        });
+
+        it('should log PLANT_REMOVED + PLANT_CHANGED when rack has a different plant', async () => {
+            mockDatabaseService.plant.findUnique.mockResolvedValue(mockPlant);
+            mockDatabaseService.rack.findUnique.mockResolvedValue(rackWithDifferentPlant);
+
+            await service.assignToRack(testRackId, testUserId, validAssignPlantToRackDto);
+
+            expect(mockLogRackActivityHelper.logActivity).toHaveBeenCalledWith(
+                testRackId,
+                ActivityEventType.PLANT_REMOVED,
+                expect.stringContaining('replaced during crop rotation'),
+                expect.objectContaining({ replacedByPlantId: testPlantId }),
+            );
+            expect(mockLogRackActivityHelper.logActivity).toHaveBeenCalledWith(
+                testRackId,
+                ActivityEventType.PLANT_CHANGED,
+                expect.stringContaining(mockPlant.name),
+                expect.objectContaining({ newPlantId: testPlantId }),
+            );
+        });
+
+        it('should use provided plantedAt date when given', async () => {
+            mockDatabaseService.plant.findUnique.mockResolvedValue(mockPlant);
+            mockDatabaseService.rack.findUnique.mockResolvedValue(emptyRackForPlant);
+
+            await service.assignToRack(testRackId, testUserId, assignWithDateDto);
+
+            expect(mockDatabaseService.$transaction).toHaveBeenCalled();
+        });
+
+        it('should throw NotFoundException when plant does not exist', async () => {
+            mockDatabaseService.plant.findUnique.mockResolvedValue(null);
+
+            await expect(
+                service.assignToRack(testRackId, testUserId, {
+                    ...validAssignPlantToRackDto,
+                    plantId: testPlantIds.nonExistent ?? 'plant-nonexistent',
+                }),
+            ).rejects.toThrow(NotFoundException);
+        });
+
+        it('should throw BadRequestException when plant is inactive', async () => {
+            mockDatabaseService.plant.findUnique.mockResolvedValue(mockInactivePlant);
+
+            await expect(
+                service.assignToRack(testRackId, testUserId, {
+                    ...validAssignPlantToRackDto,
+                    plantId: mockInactivePlant.id,
+                }),
+            ).rejects.toThrow(BadRequestException);
+            await expect(
+                service.assignToRack(testRackId, testUserId, {
+                    ...validAssignPlantToRackDto,
+                    plantId: mockInactivePlant.id,
+                }),
+            ).rejects.toThrow('Cannot assign an inactive plant to a rack');
+        });
+
+        it('should call verifyRackOwnership to check authorization', async () => {
+            mockDatabaseService.plant.findUnique.mockResolvedValue(mockPlant);
+            mockDatabaseService.rack.findUnique.mockResolvedValue(emptyRackForPlant);
+
+            await service.assignToRack(testRackId, testUserId, validAssignPlantToRackDto);
+
+            expect(mockDatabaseService.rack.findFirst).toHaveBeenCalledWith({
+                where: { id: testRackId, userId: testUserId },
+            });
+        });
+
+        it('should run updates in a transaction', async () => {
+            mockDatabaseService.plant.findUnique.mockResolvedValue(mockPlant);
+            mockDatabaseService.rack.findUnique.mockResolvedValue(emptyRackForPlant);
+
+            await service.assignToRack(testRackId, testUserId, validAssignPlantToRackDto);
+
+            expect(mockDatabaseService.$transaction).toHaveBeenCalledTimes(1);
+        });
+
+        it('should create two RackPlantingHistory entries when changing plants', async () => {
+            mockDatabaseService.plant.findUnique.mockResolvedValue(mockPlant);
+            mockDatabaseService.rack.findUnique.mockResolvedValue(rackWithDifferentPlant);
+
+            await service.assignToRack(testRackId, testUserId, validAssignPlantToRackDto);
+
+            expect(mockDatabaseService.rackPlantingHistory.create).toHaveBeenCalledTimes(2);
+        });
+
+        it('should throw InternalServerErrorException on transaction error', async () => {
+            mockDatabaseService.plant.findUnique.mockResolvedValue(mockPlant);
+            mockDatabaseService.rack.findUnique.mockResolvedValue(emptyRackForPlant);
+            mockDatabaseService.$transaction.mockRejectedValueOnce(new Error('DB error'));
+
+            await expect(
+                service.assignToRack(testRackId, testUserId, validAssignPlantToRackDto),
+            ).rejects.toThrow(InternalServerErrorException);
+        });
+    });
+
+    describe('unassignFromRack', () => {
+        // service signature: unassignFromRack(rackId, userId, dto)
+        beforeEach(() => {
+            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack); // ownership check
+            mockDatabaseService.rack.findUnique.mockResolvedValue(rackWithPlant);
+            // tx calls inside the transaction callback
+            mockDatabaseService.rackPlantingHistory.updateMany.mockResolvedValue({ count: 1 });
+            mockDatabaseService.rack.update.mockResolvedValue(mockRack);
+            mockDatabaseService.$transaction.mockImplementation(
+                async (cb: (tx: unknown) => Promise<unknown>) => cb(mockDatabaseService),
+            );
+        });
+
+        it('should remove plant from rack and return success message', async () => {
+            mockDatabaseService.rack.findUnique.mockResolvedValue(rackWithPlant);
+
+            const result = await service.unassignFromRack(testRackId, testUserId, unassignDto);
+
+            expect(result).toEqual({ message: 'Plant removed from rack successfully' });
+        });
+
+        it('should log PLANT_REMOVED activity without harvest', async () => {
+            mockDatabaseService.rack.findUnique.mockResolvedValue(rackWithPlant);
+
+            await service.unassignFromRack(testRackId, testUserId, unassignDto);
+
+            expect(mockLogRackActivityHelper.logActivity).toHaveBeenCalledWith(
+                testRackId,
+                ActivityEventType.PLANT_REMOVED,
+                expect.stringContaining('without harvest'),
+                expect.objectContaining({ removedPlantId: testPlantId }),
+            );
+        });
+
+        it('should clear currentPlantId, quantity and plantedAt on the rack', async () => {
+            mockDatabaseService.rack.findUnique.mockResolvedValue(rackWithPlant);
+
+            await service.unassignFromRack(testRackId, testUserId, unassignDto);
+
+            expect(mockDatabaseService.rack.update).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        currentPlantId: null,
+                        quantity: 0,
+                        plantedAt: null,
+                    }) as object,
+                }),
+            );
+        });
+
+        it('should call verifyRackOwnership', async () => {
+            mockDatabaseService.rack.findUnique.mockResolvedValue(rackWithPlant);
+
+            await service.unassignFromRack(testRackId, testUserId, unassignDto);
+
+            expect(mockDatabaseService.rack.findFirst).toHaveBeenCalledWith({
+                where: { id: testRackId, userId: testUserId },
+            });
+        });
+
+        it('should throw BadRequestException when plant is not in the rack', async () => {
+            mockDatabaseService.rack.findUnique.mockResolvedValue({
+                ...rackWithPlant,
+                currentPlantId: testPlantIds.secondary ?? 'plant-other',
+            });
+
+            await expect(
+                service.unassignFromRack(testRackId, testUserId, unassignDto),
+            ).rejects.toThrow(BadRequestException);
+            await expect(
+                service.unassignFromRack(testRackId, testUserId, unassignDto),
+            ).rejects.toThrow('This plant is not currently assigned to that rack');
+        });
+
+        it('should throw InternalServerErrorException on transaction error', async () => {
+            mockDatabaseService.rack.findUnique.mockResolvedValue(rackWithPlant);
+            mockDatabaseService.$transaction.mockRejectedValueOnce(new Error('DB error'));
+
+            await expect(
+                service.unassignFromRack(testRackId, testUserId, unassignDto),
+            ).rejects.toThrow(InternalServerErrorException);
+        });
+    });
+
+    // ─────────────────────────────────────────────
+    // UTILITY METHODS
+    // ─────────────────────────────────────────────
+
+    describe('getRecentActivities', () => {
+        const mockActivities = [
+            {
+                id: 'activity-1',
+                rackId: testRackId,
+                eventType: ActivityEventType.DEVICE_ONLINE,
+                timestamp: new Date(),
+            },
+        ];
+
+        it('should retrieve recent activities', async () => {
+            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
+            mockDatabaseService.activity.findMany.mockResolvedValue(mockActivities as any);
+
+            const result = await service.getRecentActivities(testRackId, testDbIds.primary);
+
+            expect(result).toEqual(mockActivities);
+        });
+
+        it('should verify ownership before retrieving activities', async () => {
+            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
+            mockDatabaseService.activity.findMany.mockResolvedValue(mockActivities as any);
+
+            await service.getRecentActivities(testRackId, testDbIds.primary);
+
+            expect(mockDatabaseService.rack.findFirst).toHaveBeenCalled();
+        });
+
+        it('should use default limit of 50', async () => {
+            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
+            mockDatabaseService.activity.findMany.mockResolvedValue(mockActivities as any);
+
+            await service.getRecentActivities(testRackId, testDbIds.primary);
+
+            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith({
+                where: { rackId: testRackId },
+                orderBy: { timestamp: 'desc' },
+                take: 50,
+            });
+        });
+
+        it('should use custom limit when provided', async () => {
+            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
+            mockDatabaseService.activity.findMany.mockResolvedValue(mockActivities as any);
+
+            await service.getRecentActivities(testRackId, testDbIds.primary, 100);
+
+            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith({
+                where: { rackId: testRackId },
+                orderBy: { timestamp: 'desc' },
+                take: 100,
+            });
+        });
+
+        it('should throw NotFoundException if ownership verification fails', async () => {
+            mockDatabaseService.rack.findFirst.mockResolvedValue(null);
+
+            await expect(
+                service.getRecentActivities(testRackId, testDbIds.primary),
+            ).rejects.toThrow(NotFoundException);
+        });
+
+        it('should throw InternalServerErrorException on database error', async () => {
+            mockDatabaseService.rack.findFirst.mockRejectedValue(new Error('Database error'));
+
+            await expect(
+                service.getRecentActivities(testRackId, testDbIds.primary),
+            ).rejects.toThrow(InternalServerErrorException);
+        });
+
+        it('should log error on failure', async () => {
+            const dbError = new Error('Database error');
+            mockDatabaseService.rack.findFirst.mockRejectedValue(dbError);
+
+            await expect(
+                service.getRecentActivities(testRackId, testDbIds.primary),
+            ).rejects.toThrow();
+
+            expect(mockLoggerService.error).toHaveBeenCalledWith(
+                `Error fetching activities for rack ${testRackId}`,
                 'Database error',
                 'RacksService',
             );
@@ -1238,92 +2614,6 @@ describe('RacksService', () => {
 
             expect(mockLoggerService.error).toHaveBeenCalledWith(
                 `Error updating last seen for rack ${testRackId}`,
-                'Database error',
-                'RacksService',
-            );
-        });
-    });
-
-    describe('getRecentActivities', () => {
-        const mockActivities = [
-            {
-                id: 'activity-1',
-                rackId: testRackId,
-                eventType: ActivityEventType.DEVICE_ONLINE,
-                timestamp: new Date(),
-            },
-        ];
-
-        it('should retrieve recent activities', async () => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
-            mockDatabaseService.activity.findMany.mockResolvedValue(mockActivities as any);
-
-            const result = await service.getRecentActivities(testRackId, testDbIds.primary);
-
-            expect(result).toEqual(mockActivities);
-        });
-
-        it('should verify ownership before retrieving activities', async () => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
-            mockDatabaseService.activity.findMany.mockResolvedValue(mockActivities as any);
-
-            await service.getRecentActivities(testRackId, testDbIds.primary);
-
-            expect(mockDatabaseService.rack.findFirst).toHaveBeenCalled();
-        });
-
-        it('should use default limit of 50', async () => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
-            mockDatabaseService.activity.findMany.mockResolvedValue(mockActivities as any);
-
-            await service.getRecentActivities(testRackId, testDbIds.primary);
-
-            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith({
-                where: { rackId: testRackId },
-                orderBy: { timestamp: 'desc' },
-                take: 50,
-            });
-        });
-
-        it('should use custom limit when provided', async () => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
-            mockDatabaseService.activity.findMany.mockResolvedValue(mockActivities as any);
-
-            await service.getRecentActivities(testRackId, testDbIds.primary, 100);
-
-            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith({
-                where: { rackId: testRackId },
-                orderBy: { timestamp: 'desc' },
-                take: 100,
-            });
-        });
-
-        it('should throw NotFoundException if ownership verification fails', async () => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue(null);
-
-            await expect(
-                service.getRecentActivities(testRackId, testDbIds.primary),
-            ).rejects.toThrow(NotFoundException);
-        });
-
-        it('should throw InternalServerErrorException on database error', async () => {
-            mockDatabaseService.rack.findFirst.mockRejectedValue(new Error('Database error'));
-
-            await expect(
-                service.getRecentActivities(testRackId, testDbIds.primary),
-            ).rejects.toThrow(InternalServerErrorException);
-        });
-
-        it('should log error on failure', async () => {
-            const dbError = new Error('Database error');
-            mockDatabaseService.rack.findFirst.mockRejectedValue(dbError);
-
-            await expect(
-                service.getRecentActivities(testRackId, testDbIds.primary),
-            ).rejects.toThrow();
-
-            expect(mockLoggerService.error).toHaveBeenCalledWith(
-                `Error fetching activities for rack ${testRackId}`,
                 'Database error',
                 'RacksService',
             );

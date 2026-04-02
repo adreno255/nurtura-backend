@@ -273,6 +273,7 @@ describe('AutomationService', () => {
                     rackId: testRackId,
                     ruleName: rule.name,
                     executedActions: expect.any(Array) as string[],
+                    timestamp: expect.any(Date) as Date,
                 }),
             );
         });
