@@ -1,3 +1,9 @@
+## [4.1.0](https://github.com/adreno255/nurtura-backend/compare/v4.0.0...v4.1.0) (2026-04-03)
+
+### Features
+
+* add new harvest implementation endpoints ([53a2b53](https://github.com/adreno255/nurtura-backend/commit/53a2b53c2588d49eee112b1408c5686cc118f311))
+
 ## [4.0.0](https://github.com/adreno255/nurtura-backend/compare/v3.0.0...v4.0.0) (2026-04-02)
 
 ### ⚠ BREAKING CHANGES
