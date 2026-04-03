@@ -93,6 +93,6 @@ This directory contains AsyncAPI 3.0 specification documents for Nurtura's real-
 
 These AsyncAPI specs complement the OpenAPI/Swagger documentation for HTTP REST endpoints:
 
-- **OpenAPI (Swagger)**: HTTP REST API - `http://localhost:3000/api/docs`
+- **OpenAPI (Swagger)**: HTTP REST API - `http://localhost:3000/docs`
 - **AsyncAPI (MQTT)**: MQTT protocol - `asyncapi-mqtt.yaml`
 - **AsyncAPI (WebSocket)**: WebSocket protocol - `asyncapi-websocket.yaml`

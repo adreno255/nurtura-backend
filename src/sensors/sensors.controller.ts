@@ -60,7 +60,7 @@ export class SensorsController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/sensors/racks/clx123abc456/latest' },
+                path: { type: 'string', example: '/sensors/racks/clx123abc456/latest' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
@@ -72,7 +72,7 @@ export class SensorsController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/sensors/racks/clx123abc456/latest' },
+                path: { type: 'string', example: '/sensors/racks/clx123abc456/latest' },
                 message: { type: 'string', example: 'No sensor readings found' },
             },
         },
@@ -84,7 +84,7 @@ export class SensorsController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/sensors/racks/clx123abc456/latest' },
+                path: { type: 'string', example: '/sensors/racks/clx123abc456/latest' },
                 message: { type: 'string', example: 'Failed to retrieve latest sensor reading' },
             },
         },
@@ -152,7 +152,7 @@ export class SensorsController {
             properties: {
                 statusCode: { type: 'number', example: 400 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/sensors/racks/clx123abc456/history' },
+                path: { type: 'string', example: '/sensors/racks/clx123abc456/history' },
                 message: {
                     type: 'string',
                     example:
@@ -168,7 +168,7 @@ export class SensorsController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/sensors/racks/clx123abc456/history' },
+                path: { type: 'string', example: '/sensors/racks/clx123abc456/history' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
@@ -180,7 +180,7 @@ export class SensorsController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/sensors/racks/clx123abc456/history' },
+                path: { type: 'string', example: '/sensors/racks/clx123abc456/history' },
                 message: { type: 'string', example: 'Failed to retrieve sensor readings' },
             },
         },
@@ -255,7 +255,7 @@ export class SensorsController {
             properties: {
                 statusCode: { type: 'number', example: 400 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/sensors/racks/clx123abc456/aggregated' },
+                path: { type: 'string', example: '/sensors/racks/clx123abc456/aggregated' },
                 message: {
                     type: 'string',
                     example: 'Invalid hours parameter: must be a positive integer',
@@ -270,7 +270,7 @@ export class SensorsController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/sensors/racks/clx123abc456/aggregated' },
+                path: { type: 'string', example: '/sensors/racks/clx123abc456/aggregated' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
@@ -282,7 +282,7 @@ export class SensorsController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/sensors/clx123abc456/aggregated' },
+                path: { type: 'string', example: '/sensors/clx123abc456/aggregated' },
                 message: {
                     type: 'string',
                     example: 'Rack clx123abc456 not found or access denied',
@@ -297,7 +297,7 @@ export class SensorsController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/sensors/clx123abc456/aggregated' },
+                path: { type: 'string', example: '/sensors/clx123abc456/aggregated' },
                 message: { type: 'string', example: 'Failed to fetch aggregated data' },
             },
         },
@@ -370,7 +370,7 @@ export class SensorsController {
             properties: {
                 statusCode: { type: 'number', example: 400 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/sensors/clx123abc456/history' },
+                path: { type: 'string', example: '/sensors/clx123abc456/history' },
                 message: {
                     type: 'string',
                     example: 'Invalid hours parameter: must be a positive integer',
@@ -385,7 +385,7 @@ export class SensorsController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/sensors/racks/clx123abc456/history' },
+                path: { type: 'string', example: '/sensors/racks/clx123abc456/history' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
@@ -397,7 +397,7 @@ export class SensorsController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/sensors/clx123abc456/history' },
+                path: { type: 'string', example: '/sensors/clx123abc456/history' },
                 message: {
                     type: 'string',
                     example: 'Rack clx123abc456 not found or access denied',
@@ -412,7 +412,7 @@ export class SensorsController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/sensors/clx123abc456/history' },
+                path: { type: 'string', example: '/sensors/clx123abc456/history' },
                 message: { type: 'string', example: 'Failed to fetch sensor history' },
             },
         },
@@ -516,7 +516,7 @@ export class SensorsController {
             properties: {
                 statusCode: { type: 'number', example: 400 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/sensors/clx123abc456/statistics' },
+                path: { type: 'string', example: '/sensors/clx123abc456/statistics' },
                 message: {
                     type: 'string',
                     example: 'Invalid hours parameter: must be a positive integer',
@@ -531,7 +531,7 @@ export class SensorsController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/sensors/clx123abc456/statistics' },
+                path: { type: 'string', example: '/sensors/clx123abc456/statistics' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
@@ -543,7 +543,7 @@ export class SensorsController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/sensors/clx123abc456/statistics' },
+                path: { type: 'string', example: '/sensors/clx123abc456/statistics' },
                 message: {
                     type: 'string',
                     example: 'Rack clx123abc456 not found or access denied',
@@ -558,7 +558,7 @@ export class SensorsController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/sensors/clx123abc456/statistics' },
+                path: { type: 'string', example: '/sensors/clx123abc456/statistics' },
                 message: { type: 'string', example: 'Failed to calculate statistics' },
             },
         },

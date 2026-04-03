@@ -48,7 +48,7 @@ export class OtpController {
             properties: {
                 statusCode: { type: 'number', example: 400 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/auth/otp/registration' },
+                path: { type: 'string', example: '/auth/otp/registration' },
                 message: {
                     type: 'string',
                     example: 'Invalid email format',
@@ -63,7 +63,7 @@ export class OtpController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/auth/otp/registration' },
+                path: { type: 'string', example: '/auth/otp/registration' },
                 message: { type: 'string', example: 'Failed to send registration OTP email' },
             },
         },
@@ -104,7 +104,7 @@ export class OtpController {
             properties: {
                 statusCode: { type: 'number', example: 400 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/auth/otp/forgot-password' },
+                path: { type: 'string', example: '/auth/otp/forgot-password' },
                 message: {
                     type: 'string',
                     example: 'Invalid email format',
@@ -119,7 +119,7 @@ export class OtpController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/auth/otp/forgot-password' },
+                path: { type: 'string', example: '/auth/otp/forgot-password' },
                 message: { type: 'string', example: 'Failed to send forgot password OTP email' },
             },
         },
@@ -160,7 +160,7 @@ export class OtpController {
             properties: {
                 statusCode: { type: 'number', example: 400 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/auth/otp/password-reset' },
+                path: { type: 'string', example: '/auth/otp/password-reset' },
                 message: {
                     type: 'string',
                     example: 'Invalid email format',
@@ -175,7 +175,7 @@ export class OtpController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/auth/otp/password-reset' },
+                path: { type: 'string', example: '/auth/otp/password-reset' },
                 message: { type: 'string', example: 'Failed to send password reset OTP email' },
             },
         },
@@ -215,7 +215,7 @@ export class OtpController {
             properties: {
                 statusCode: { type: 'number', example: 400 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/auth/otp/email-reset' },
+                path: { type: 'string', example: '/auth/otp/email-reset' },
                 message: {
                     type: 'string',
                     example: 'Invalid email format',
@@ -230,7 +230,7 @@ export class OtpController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/auth/otp/email-reset' },
+                path: { type: 'string', example: '/auth/otp/email-reset' },
                 message: { type: 'string', example: 'Failed to send email reset OTP email' },
             },
         },
@@ -318,7 +318,7 @@ export class OtpController {
                         },
                         path: {
                             type: 'string',
-                            example: '/api/auth/otp/verify',
+                            example: '/auth/otp/verify',
                         },
                         message: {
                             type: 'string',
@@ -331,7 +331,7 @@ export class OtpController {
                         value: {
                             statusCode: 400,
                             timestamp: '2025-12-27T10:30:00.000Z',
-                            path: '/api/auth/otp/verify',
+                            path: '/auth/otp/verify',
                             message: 'Invalid OTP code. Please check and try again.',
                         },
                     },
@@ -340,7 +340,7 @@ export class OtpController {
                         value: {
                             statusCode: 400,
                             timestamp: '2025-12-27T10:30:00.000Z',
-                            path: '/api/auth/otp/verify',
+                            path: '/auth/otp/verify',
                             message: 'OTP has expired. Please request a new one.',
                         },
                     },
@@ -349,7 +349,7 @@ export class OtpController {
                         value: {
                             statusCode: 400,
                             timestamp: '2025-12-27T10:30:00.000Z',
-                            path: '/api/auth/otp/verify',
+                            path: '/auth/otp/verify',
                             message: 'No OTP found for this email. Please request a new one.',
                         },
                     },
@@ -358,7 +358,7 @@ export class OtpController {
                         value: {
                             statusCode: 400,
                             timestamp: '2025-12-27T10:30:00.000Z',
-                            path: '/api/auth/otp/verify',
+                            path: '/auth/otp/verify',
                             message:
                                 'Invalid OTP context. Please use the correct verification flow.',
                         },
@@ -368,7 +368,7 @@ export class OtpController {
                         value: {
                             statusCode: 400,
                             timestamp: '2025-12-27T10:30:00.000Z',
-                            path: '/api/auth/otp/verify',
+                            path: '/auth/otp/verify',
                             message: 'Invalid email format, OTP code must be exactly 5 digits.',
                         },
                     },
@@ -383,7 +383,7 @@ export class OtpController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/auth/otp/verify' },
+                path: { type: 'string', example: '/auth/otp/verify' },
                 message: { type: 'string', example: 'User not found' },
             },
         },
@@ -395,7 +395,7 @@ export class OtpController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/auth/otp/verify' },
+                path: { type: 'string', example: '/auth/otp/verify' },
                 message: { type: 'string', example: 'Failed to create login token for email' },
             },
         },

@@ -30,7 +30,9 @@ import { LogRackActivityHelper } from '../common/utils/log-rack-activity.helper'
 import { ActivityQueryDto } from '../common/dto/activity-query.dto';
 import {
     AssignPlantToRackDto,
-    HarvestFromRackDto,
+    HarvestPlantDto,
+    HarvestLeavesDto,
+    HarvestSeedsDto,
     UnassignFromRackDto,
 } from './dto/rack-operations.dto';
 
@@ -908,13 +910,87 @@ export class RacksService {
     // ─────────────────────────────────────────────
 
     /**
-     * Harvest the current plant from a rack (successful completion).
-     * Logs PLANT_HARVESTED activity.
+     * Scenario 1: Harvest Leaves — increments harvestCount, rack and plant assignment unchanged.
+     * Logs LEAVES_HARVESTED activity.
      */
-    async harvestFromRack(
+    async harvestLeavesFromRack(
         rackId: string,
         userId: string,
-        dto: HarvestFromRackDto,
+        dto: HarvestLeavesDto,
+    ): Promise<{ message: string }> {
+        try {
+            const plantId = dto.plantId;
+
+            this.logger.log(
+                `Harvesting leaves from plant ${plantId} in rack ${rackId}`,
+                'RacksService',
+            );
+
+            await this.verifyRackOwnership(rackId, userId);
+
+            const rack = (await this.databaseService.rack.findUnique({
+                where: { id: rackId },
+                include: { currentPlant: { select: { name: true } } },
+            })) as Rack & { currentPlant: { name: string } };
+
+            if (rack.currentPlantId !== plantId) {
+                throw new BadRequestException('This plant is not currently assigned to that rack');
+            }
+
+            const now = new Date();
+            const newHarvestCount = rack.harvestCount + 1;
+
+            // No transaction needed — only one write, rack stays planted
+            await this.databaseService.rack.update({
+                where: { id: rackId },
+                data: {
+                    lastHarvestAt: now,
+                    harvestCount: newHarvestCount,
+                    lastActivityAt: now,
+                },
+            });
+
+            await this.logRackActivityHelper.logActivity(
+                rackId,
+                ActivityEventType.LEAVES_HARVESTED,
+                `Leaves harvested from plant "${rack.currentPlant?.name ?? plantId}"`,
+                {
+                    rackName: rack.name,
+                    macAddress: rack.macAddress,
+                    plantId,
+                    plantName: rack.currentPlant?.name,
+                    harvestCount: newHarvestCount,
+                    harvestedAt: now.toISOString(),
+                },
+            );
+
+            this.logger.log(
+                `Leaves harvested from plant ${plantId} in rack ${rackId} (total harvests: ${newHarvestCount})`,
+                'RacksService',
+            );
+
+            return { message: 'Leaves harvested successfully' };
+        } catch (error) {
+            if (error instanceof NotFoundException || error instanceof BadRequestException)
+                throw error;
+
+            this.logger.error(
+                `Error harvesting leaves from plant ${dto.plantId} in rack ${rackId}`,
+                error instanceof Error ? error.message : String(error),
+                'RacksService',
+            );
+            throw new InternalServerErrorException('Failed to harvest leaves');
+        }
+    }
+
+    /**
+     * Scenario 2: Harvest All — removes plant from rack, increments harvestCount.
+     * Logs PLANT_HARVESTED activity.
+     */
+    async harvestPlantFromRack(
+        rackId: string,
+        userId: string,
+        dto: HarvestPlantDto,
     ): Promise<{ message: string }> {
         try {
             const plantId = dto.plantId;
@@ -1000,6 +1076,98 @@ export class RacksService {
     }
 
     /**
+     * Scenario 3: Take Seeds — decrements rack quantity, increments harvestCount.
+     * Quantity taken must be between 1 and (current quantity - 1).
+     * Logs SEEDS_HARVESTED activity.
+     */
+    async harvestSeedsFromRack(
+        rackId: string,
+        userId: string,
+        dto: HarvestSeedsDto,
+    ): Promise<{ message: string }> {
+        try {
+            const { plantId, quantity } = dto;
+
+            this.logger.log(
+                `Taking ${quantity} seeds from plant ${plantId} in rack ${rackId}`,
+                'RacksService',
+            );
+
+            await this.verifyRackOwnership(rackId, userId);
+
+            const rack = (await this.databaseService.rack.findUnique({
+                where: { id: rackId },
+                include: { currentPlant: { select: { name: true } } },
+            })) as Rack & { currentPlant: { name: string } };
+
+            if (rack.currentPlantId !== plantId) {
+                throw new BadRequestException('This plant is not currently assigned to that rack');
+            }
+
+            const maxSeedsAllowed = rack.quantity - 1;
+
+            if (maxSeedsAllowed < 1) {
+                throw new BadRequestException(
+                    'Cannot harvest seeds — rack must have at least 2 seeds to harvest any (quantity must be at least 2)',
+                );
+            }
+
+            if (quantity > maxSeedsAllowed) {
+                throw new BadRequestException(
+                    `Cannot harvest ${quantity} seeds — maximum allowed is ${maxSeedsAllowed} (rack quantity minus 1)`,
+                );
+            }
+
+            const now = new Date();
+            const newQuantity = rack.quantity - quantity;
+            const newHarvestCount = rack.harvestCount + 1;
+
+            await this.databaseService.rack.update({
+                where: { id: rackId },
+                data: {
+                    quantity: newQuantity,
+                    lastHarvestAt: now,
+                    harvestCount: newHarvestCount,
+                    lastActivityAt: now,
+                },
+            });
+
+            await this.logRackActivityHelper.logActivity(
+                rackId,
+                ActivityEventType.SEEDS_HARVESTED,
+                `${quantity} seed(s) harvested from plant "${rack.currentPlant?.name ?? plantId}"`,
+                {
+                    rackName: rack.name,
+                    macAddress: rack.macAddress,
+                    plantId,
+                    plantName: rack.currentPlant?.name,
+                    quantityTaken: quantity,
+                    remainingQuantity: newQuantity,
+                    harvestCount: newHarvestCount,
+                    harvestedAt: now.toISOString(),
+                },
+            );
+
+            this.logger.log(
+                `${quantity} seed(s) harvested from plant ${plantId} in rack ${rackId} — remaining: ${newQuantity}`,
+                'RacksService',
+            );
+
+            return { message: 'Seeds harvested successfully' };
+        } catch (error) {
+            if (error instanceof NotFoundException || error instanceof BadRequestException)
+                throw error;
+
+            this.logger.error(
+                `Error harvesting seeds from plant ${dto.plantId} in rack ${rackId}`,
+                error instanceof Error ? error.message : String(error),
+                'RacksService',
+            );
+            throw new InternalServerErrorException('Failed to harvest seeds');
+        }
+    }
+
+    /**
      * Assign a plant to a rack.
      *
      * Activity logic:
@@ -1040,6 +1208,13 @@ export class RacksService {
             const now = new Date();
             const hadPreviousPlant = rack.currentPlantId !== null;
             const isChangingPlant = hadPreviousPlant && rack.currentPlantId !== plantId;
+            const isSamePlantReassignment = hadPreviousPlant && rack.currentPlantId === plantId;
+
+            if (isSamePlantReassignment) {
+                throw new BadRequestException(
+                    'This plant is already assigned to that rack. To update quantity or planted date, please use the appropriate update endpoint.',
+                );
+            }
 
             await this.databaseService.$transaction(async (tx) => {
                 if (isChangingPlant && rack.plantedAt) {

@@ -50,7 +50,7 @@ jobs:
             - name: Verify deployment
               if: steps.trigger.outcome == 'success'
               run: |
-                  HEALTH_URL="${{ secrets.RENDER_SERVICE_URL }}/api"
+                  HEALTH_URL="${{ secrets.RENDER_SERVICE_URL }}"
                   MAX_RETRIES=10
                   RETRY_COUNT=0
 

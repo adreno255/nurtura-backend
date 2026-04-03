@@ -73,7 +73,7 @@ export class UsersController {
             properties: {
                 statusCode: { type: 'number', example: 400 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/users/exists' },
+                path: { type: 'string', example: '/users/exists' },
                 message: { type: 'string', example: 'Invalid email format' },
             },
         },
@@ -85,7 +85,7 @@ export class UsersController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/users/exists' },
+                path: { type: 'string', example: '/users/exists' },
                 message: { type: 'string', example: 'Failed to check email availability' },
             },
         },
@@ -138,7 +138,7 @@ export class UsersController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/users' },
+                path: { type: 'string', example: '/users' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
@@ -150,7 +150,7 @@ export class UsersController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/users' },
+                path: { type: 'string', example: '/users' },
                 message: { type: 'string', example: 'User not found' },
             },
         },
@@ -162,7 +162,7 @@ export class UsersController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/users' },
+                path: { type: 'string', example: '/users' },
                 message: { type: 'string', example: 'Failed to fetch user by Firebase UID' },
             },
         },
@@ -196,7 +196,7 @@ export class UsersController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/users' },
+                path: { type: 'string', example: '/users' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
@@ -208,7 +208,7 @@ export class UsersController {
             properties: {
                 statusCode: { type: 'number', example: 400 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/users' },
+                path: { type: 'string', example: '/users' },
                 message: {
                     type: 'string',
                     example: 'First name is required, Last name is required',
@@ -223,7 +223,7 @@ export class UsersController {
             properties: {
                 statusCode: { type: 'number', example: 409 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/users' },
+                path: { type: 'string', example: '/users' },
                 message: { type: 'string', example: 'User profile already exists' },
             },
         },
@@ -235,7 +235,7 @@ export class UsersController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/users' },
+                path: { type: 'string', example: '/users' },
                 message: { type: 'string', example: 'Failed to register user to the database' },
             },
         },
@@ -292,7 +292,7 @@ export class UsersController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/users' },
+                path: { type: 'string', example: '/users' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
@@ -304,7 +304,7 @@ export class UsersController {
             properties: {
                 statusCode: { type: 'number', example: 400 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/users' },
+                path: { type: 'string', example: '/users' },
                 message: {
                     type: 'string',
                     example: 'Validation failed',
@@ -319,7 +319,7 @@ export class UsersController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/users' },
+                path: { type: 'string', example: '/users' },
                 message: { type: 'string', example: 'User not found' },
             },
         },
@@ -331,7 +331,7 @@ export class UsersController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/users' },
+                path: { type: 'string', example: '/users' },
                 message: { type: 'string', example: 'Failed to update user to the database' },
             },
         },

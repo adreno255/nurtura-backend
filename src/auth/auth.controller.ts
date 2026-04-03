@@ -56,7 +56,7 @@ export class AuthController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/auth/providers' },
+                path: { type: 'string', example: '/auth/providers' },
                 message: { type: 'string', example: 'No user found for this email' },
             },
         },
@@ -68,7 +68,7 @@ export class AuthController {
             properties: {
                 statusCode: { type: 'number', example: 400 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/auth/providers' },
+                path: { type: 'string', example: '/auth/providers' },
                 message: { type: 'string', example: 'Invalid email format' },
             },
         },
@@ -80,7 +80,7 @@ export class AuthController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/auth/providers' },
+                path: { type: 'string', example: '/auth/providers' },
                 message: { type: 'string', example: 'Failed to check sign-in providers' },
             },
         },
@@ -150,7 +150,7 @@ export class AuthController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/auth/onboarding-status' },
+                path: { type: 'string', example: '/auth/onboarding-status' },
                 message: { type: 'string', example: 'No user found for this email' },
             },
         },
@@ -164,7 +164,7 @@ export class AuthController {
                     properties: {
                         statusCode: { type: 'number', example: 400 },
                         timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                        path: { type: 'string', example: '/api/auth/onboarding-status' },
+                        path: { type: 'string', example: '/auth/onboarding-status' },
                         message: { type: 'string' },
                     },
                 },
@@ -174,7 +174,7 @@ export class AuthController {
                         value: {
                             statusCode: 400,
                             timestamp: '2025-12-27T10:30:00.000Z',
-                            path: '/api/auth/onboarding-status',
+                            path: '/auth/onboarding-status',
                             message: 'Invalid email format',
                         },
                     },
@@ -183,7 +183,7 @@ export class AuthController {
                         value: {
                             statusCode: 400,
                             timestamp: '2025-12-27T10:30:00.000Z',
-                            path: '/api/auth/onboarding-status',
+                            path: '/auth/onboarding-status',
                             message: 'No sign-in methods found for this user',
                         },
                     },
@@ -198,7 +198,7 @@ export class AuthController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/auth/onboarding-status' },
+                path: { type: 'string', example: '/auth/onboarding-status' },
                 message: { type: 'string', example: 'Failed to check user status' },
             },
         },
@@ -234,7 +234,7 @@ export class AuthController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/auth/update-password' },
+                path: { type: 'string', example: '/auth/update-password' },
                 message: { type: 'string', example: 'No user found for this email' },
             },
         },
@@ -246,7 +246,7 @@ export class AuthController {
             properties: {
                 statusCode: { type: 'number', example: 400 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/auth/update-password' },
+                path: { type: 'string', example: '/auth/update-password' },
                 message: {
                     type: 'string',
                     example:
@@ -262,7 +262,7 @@ export class AuthController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/auth/update-password' },
+                path: { type: 'string', example: '/auth/update-password' },
                 message: { type: 'string', example: 'Failed to update password' },
             },
         },
