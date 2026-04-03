@@ -102,7 +102,7 @@ async function bootstrap(): Promise<void> {
     logger.bootstrap(`Server running on http://${host}:${port}`, 'Bootstrap');
     logger.bootstrap(`Environment: ${env}`, 'Bootstrap');
     if (!isProduction)
-        logger.bootstrap(`Swagger docs available at http://${host}:${port}/api/docs`, 'Bootstrap');
+        logger.bootstrap(`Swagger docs available at http://${host}:${port}/docs`, 'Bootstrap');
 }
 
 void bootstrap();

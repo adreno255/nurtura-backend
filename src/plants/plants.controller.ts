@@ -121,7 +121,7 @@ export class PlantsController {
             properties: {
                 statusCode: { type: 'number', example: 400 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/plants' },
+                path: { type: 'string', example: '/plants' },
                 message: {
                     type: 'string',
                     example:
@@ -137,7 +137,7 @@ export class PlantsController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/plants' },
+                path: { type: 'string', example: '/plants' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
@@ -149,7 +149,7 @@ export class PlantsController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/plants' },
+                path: { type: 'string', example: '/plants' },
                 message: { type: 'string', example: 'Failed to fetch plants' },
             },
         },
@@ -207,7 +207,7 @@ export class PlantsController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/plants/clx1abc123' },
+                path: { type: 'string', example: '/plants/clx1abc123' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
@@ -219,7 +219,7 @@ export class PlantsController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/plants/clx1abc123' },
+                path: { type: 'string', example: '/plants/clx1abc123' },
                 message: { type: 'string', example: 'Plant with ID clx1abc123 not found' },
             },
         },
@@ -231,12 +231,12 @@ export class PlantsController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/plants/clx1abc123' },
+                path: { type: 'string', example: '/plants/clx1abc123' },
                 message: { type: 'string', example: 'Failed to fetch plant' },
             },
         },
     })
-    async findOne(@Param('id') id: string) {
+    async findOne(@Param('plantId') id: string) {
         return this.plantsService.findOne(id);
     }
 
@@ -288,7 +288,7 @@ export class PlantsController {
             properties: {
                 statusCode: { type: 'number', example: 400 },
                 timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/plants' },
+                path: { type: 'string', example: '/plants' },
                 message: {
                     type: 'string',
                     example:
@@ -304,7 +304,7 @@ export class PlantsController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/plants' },
+                path: { type: 'string', example: '/plants' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
@@ -316,7 +316,7 @@ export class PlantsController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/plants' },
+                path: { type: 'string', example: '/plants' },
                 message: { type: 'string', example: 'Failed to create plant' },
             },
         },
@@ -374,7 +374,7 @@ export class PlantsController {
             properties: {
                 statusCode: { type: 'number', example: 400 },
                 timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/plants/clx1abc123' },
+                path: { type: 'string', example: '/plants/clx1abc123' },
                 message: {
                     type: 'string',
                     example: 'name must be shorter than or equal to 200 characters',
@@ -389,7 +389,7 @@ export class PlantsController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/plants/clx1abc123' },
+                path: { type: 'string', example: '/plants/clx1abc123' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
@@ -401,7 +401,7 @@ export class PlantsController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/plants/clx1abc123' },
+                path: { type: 'string', example: '/plants/clx1abc123' },
                 message: { type: 'string', example: 'Plant with ID clx1abc123 not found' },
             },
         },
@@ -413,12 +413,12 @@ export class PlantsController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/plants/clx1abc123' },
+                path: { type: 'string', example: '/plants/clx1abc123' },
                 message: { type: 'string', example: 'Failed to update plant' },
             },
         },
     })
-    async update(@Param('id') id: string, @Body() dto: UpdatePlantDto) {
+    async update(@Param('plantId') id: string, @Body() dto: UpdatePlantDto) {
         return this.plantsService.update(id, dto);
     }
 
@@ -447,7 +447,7 @@ export class PlantsController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/plants/clx1abc123' },
+                path: { type: 'string', example: '/plants/clx1abc123' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
@@ -459,7 +459,7 @@ export class PlantsController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/plants/clx1abc123' },
+                path: { type: 'string', example: '/plants/clx1abc123' },
                 message: { type: 'string', example: 'Plant with ID clx1abc123 not found' },
             },
         },
@@ -471,7 +471,7 @@ export class PlantsController {
             properties: {
                 statusCode: { type: 'number', example: 409 },
                 timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/plants/clx1abc123' },
+                path: { type: 'string', example: '/plants/clx1abc123' },
                 message: {
                     type: 'string',
                     example:
@@ -487,12 +487,12 @@ export class PlantsController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/plants/clx1abc123' },
+                path: { type: 'string', example: '/plants/clx1abc123' },
                 message: { type: 'string', example: 'Failed to delete plant' },
             },
         },
     })
-    async remove(@Param('id') id: string) {
+    async remove(@Param('plantId') id: string) {
         return this.plantsService.remove(id);
     }
 }

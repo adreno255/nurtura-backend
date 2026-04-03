@@ -21,11 +21,37 @@ export class AssignPlantToRackDto {
     plantedAt?: string;
 }
 
-export class HarvestFromRackDto {
+export class HarvestPlantDto {
     @ApiProperty({ example: 'clx000plant123', description: 'ID of the plant to harvest' })
     @IsString()
     @IsNotEmpty()
     plantId!: string;
+}
+
+export class HarvestLeavesDto {
+    @ApiProperty({
+        example: 'clx000plant123',
+        description: 'ID of the plant to harvest leaves from',
+    })
+    @IsString()
+    @IsNotEmpty()
+    plantId!: string;
+}
+
+export class HarvestSeedsDto {
+    @ApiProperty({ example: 'clx000plant123', description: 'ID of the plant to take seeds from' })
+    @IsString()
+    @IsNotEmpty()
+    plantId!: string;
+
+    @ApiProperty({
+        example: 3,
+        description:
+            'Number of seeds to take. Minimum 1, maximum is current rack quantity minus 1.',
+    })
+    @IsInt()
+    @Min(1)
+    quantity!: number;
 }
 
 export class UnassignFromRackDto {

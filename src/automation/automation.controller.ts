@@ -100,7 +100,7 @@ export class AutomationController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/automation/racks/clx123abc456/rules' },
+                path: { type: 'string', example: '/automation/racks/clx123abc456/rules' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
@@ -112,7 +112,7 @@ export class AutomationController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/automation/racks/clx123abc456/rules' },
+                path: { type: 'string', example: '/automation/racks/clx123abc456/rules' },
                 message: { type: 'string', example: 'Rack not found' },
             },
         },
@@ -124,7 +124,7 @@ export class AutomationController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/automation/racks/clx123abc456/rules' },
+                path: { type: 'string', example: '/automation/racks/clx123abc456/rules' },
                 message: { type: 'string', example: 'Failed to retrieve automation rules' },
             },
         },
@@ -181,7 +181,7 @@ export class AutomationController {
             properties: {
                 statusCode: { type: 'number', example: 400 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/automation/rules' },
+                path: { type: 'string', example: '/automation/rules' },
                 message: { type: 'string', example: 'At least one condition must be specified' },
             },
         },
@@ -193,7 +193,7 @@ export class AutomationController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/automation/rules' },
+                path: { type: 'string', example: '/automation/rules' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
@@ -205,7 +205,7 @@ export class AutomationController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/automation/rules' },
+                path: { type: 'string', example: '/automation/rules' },
                 message: { type: 'string', example: 'Rack not found' },
             },
         },
@@ -217,7 +217,7 @@ export class AutomationController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/automation/rules' },
+                path: { type: 'string', example: '/automation/rules' },
                 message: { type: 'string', example: 'Failed to create automation rule' },
             },
         },
@@ -268,7 +268,7 @@ export class AutomationController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/automation/rules/clx789xyz123' },
+                path: { type: 'string', example: '/automation/rules/clx789xyz123' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
@@ -280,7 +280,7 @@ export class AutomationController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/automation/rules/clx789xyz123' },
+                path: { type: 'string', example: '/automation/rules/clx789xyz123' },
                 message: { type: 'string', example: 'Automation rule not found' },
             },
         },
@@ -292,7 +292,7 @@ export class AutomationController {
             properties: {
                 statusCode: { type: 'number', example: 400 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/automation/rules/clx789xyz123' },
+                path: { type: 'string', example: '/automation/rules/clx789xyz123' },
                 message: {
                     type: 'string',
                     example: 'Moisture threshold must be between 0 and 100',
@@ -307,7 +307,7 @@ export class AutomationController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/automation/rules/clx789xyz123' },
+                path: { type: 'string', example: '/automation/rules/clx789xyz123' },
                 message: { type: 'string', example: 'Failed to update automation rule' },
             },
         },
@@ -350,7 +350,7 @@ export class AutomationController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/automation/rules/clx789xyz123' },
+                path: { type: 'string', example: '/automation/rules/clx789xyz123' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
@@ -362,7 +362,7 @@ export class AutomationController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/automation/rules/clx789xyz123' },
+                path: { type: 'string', example: '/automation/rules/clx789xyz123' },
                 message: { type: 'string', example: 'Automation rule not found' },
             },
         },
@@ -374,7 +374,7 @@ export class AutomationController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/automation/rules/clx789xyz123' },
+                path: { type: 'string', example: '/automation/rules/clx789xyz123' },
                 message: { type: 'string', example: 'Failed to delete automation rule' },
             },
         },

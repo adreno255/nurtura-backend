@@ -32,8 +32,10 @@ import {
     CreateRackDto,
     UpdateRackDto,
     AssignPlantToRackDto,
-    HarvestFromRackDto,
+    HarvestPlantDto,
     UnassignFromRackDto,
+    HarvestLeavesDto,
+    HarvestSeedsDto,
 } from './dto';
 
 @ApiTags('Racks')
@@ -132,6 +134,20 @@ export class RacksController {
                             },
                             createdAt: { type: 'string', example: '2025-01-15T08:00:00.000Z' },
                             updatedAt: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
+                            currentPlant: {
+                                type: 'object',
+                                nullable: true,
+                                properties: {
+                                    name: { type: 'string', example: 'Basil' },
+                                    category: { type: 'string', example: 'Herb' },
+                                    recommendedSoil: { type: 'string', example: 'Loamy soil' },
+                                    description: {
+                                        type: 'string',
+                                        example:
+                                            'Basil is a fragrant herb commonly used in cooking.',
+                                    },
+                                },
+                            },
                         },
                     },
                 },
@@ -156,7 +172,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 400 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks' },
+                path: { type: 'string', example: '/racks' },
                 message: {
                     type: 'string',
                     example: 'Page and limit query parameters must be positive integers',
@@ -171,7 +187,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks' },
+                path: { type: 'string', example: '/racks' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
@@ -183,7 +199,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks' },
+                path: { type: 'string', example: '/racks' },
                 message: { type: 'string', example: 'Failed to fetch racks' },
             },
         },
@@ -377,7 +393,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2026-01-09T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/racks/activities' },
+                path: { type: 'string', example: '/racks/activities' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
@@ -389,7 +405,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2026-01-09T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/racks/activities' },
+                path: { type: 'string', example: '/racks/activities' },
                 message: {
                     type: 'string',
                     example: 'Rack clx123abc456 not found or access denied',
@@ -404,7 +420,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2026-01-09T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/racks/activities' },
+                path: { type: 'string', example: '/racks/activities' },
                 message: { type: 'string', example: 'Failed to fetch rack activities' },
             },
         },
@@ -496,6 +512,19 @@ export class RacksController {
                         },
                         createdAt: { type: 'string', example: '2025-01-15T08:00:00.000Z' },
                         updatedAt: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
+                        currentPlant: {
+                            type: 'object',
+                            nullable: true,
+                            properties: {
+                                name: { type: 'string', example: 'Basil' },
+                                category: { type: 'string', example: 'Herb' },
+                                recommendedSoil: { type: 'string', example: 'Loamy soil' },
+                                description: {
+                                    type: 'string',
+                                    example: 'Basil is a fragrant herb commonly used in cooking.',
+                                },
+                            },
+                        },
                     },
                 },
             },
@@ -508,7 +537,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456' },
+                path: { type: 'string', example: '/racks/clx123abc456' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
@@ -520,7 +549,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456' },
+                path: { type: 'string', example: '/racks/clx123abc456' },
                 message: {
                     type: 'string',
                     example: 'Rack clx123abc456 not found or access denied',
@@ -535,7 +564,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456' },
+                path: { type: 'string', example: '/racks/clx123abc456' },
                 message: { type: 'string', example: 'Failed to fetch rack details' },
             },
         },
@@ -592,7 +621,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456/sensors/current' },
+                path: { type: 'string', example: '/racks/clx123abc456/sensors/current' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
@@ -604,7 +633,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456/sensors/current' },
+                path: { type: 'string', example: '/racks/clx123abc456/sensors/current' },
                 message: {
                     type: 'string',
                     example: 'Rack clx123abc456 not found or access denied',
@@ -619,7 +648,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456/sensors/current' },
+                path: { type: 'string', example: '/racks/clx123abc456/sensors/current' },
                 message: { type: 'string', example: 'Failed to fetch current rack state' },
             },
         },
@@ -662,7 +691,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456/status' },
+                path: { type: 'string', example: '/racks/clx123abc456/status' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
@@ -674,7 +703,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456/status' },
+                path: { type: 'string', example: '/racks/clx123abc456/status' },
                 message: {
                     type: 'string',
                     example: 'Rack clx123abc456 not found or access denied',
@@ -689,7 +718,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456/status' },
+                path: { type: 'string', example: '/racks/clx123abc456/status' },
                 message: { type: 'string', example: 'Failed to fetch device status' },
             },
         },
@@ -958,7 +987,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/activities/plant-care' },
+                path: { type: 'string', example: '/racks/activities/plant-care' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
@@ -970,7 +999,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/activities/plant-care' },
+                path: { type: 'string', example: '/racks/activities/plant-care' },
                 message: {
                     type: 'string',
                     example: 'Rack clx123abc456 not found or access denied',
@@ -985,7 +1014,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/activities/plant-care' },
+                path: { type: 'string', example: '/racks/activities/plant-care' },
                 message: { type: 'string', example: 'Failed to fetch plant care activities' },
             },
         },
@@ -1106,7 +1135,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/activities/harvest' },
+                path: { type: 'string', example: '/racks/activities/harvest' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
@@ -1118,7 +1147,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/activities/harvest' },
+                path: { type: 'string', example: '/racks/activities/harvest' },
                 message: {
                     type: 'string',
                     example: 'Rack clx123abc456 not found or access denied',
@@ -1133,7 +1162,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/plants/activities/harvest' },
+                path: { type: 'string', example: '/plants/activities/harvest' },
                 message: { type: 'string', example: 'Failed to fetch harvest activities' },
             },
         },
@@ -1365,7 +1394,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/activities/planting' },
+                path: { type: 'string', example: '/racks/activities/planting' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
@@ -1377,7 +1406,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/activities/planting' },
+                path: { type: 'string', example: '/racks/activities/planting' },
                 message: {
                     type: 'string',
                     example: 'Rack clx123abc456 not found or access denied',
@@ -1392,7 +1421,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/plants/activities/planting' },
+                path: { type: 'string', example: '/plants/activities/planting' },
                 message: { type: 'string', example: 'Failed to fetch planting activities' },
             },
         },
@@ -1402,6 +1431,86 @@ export class RacksController {
         @Query() query: ActivityQueryDto,
     ) {
         return this.racksService.getPlantingActivities(user.dbId, query);
+    }
+
+    @Post(':rackId/harvest-leaves')
+    @HttpCode(HttpStatus.CREATED)
+    @ApiOperation({
+        summary: 'Harvest leaves of current plant from a rack',
+        description:
+            'Marks the leaves of the current plant as successfully harvested while keeping the plant in the rack. Increments the harvest count and logs a LEAVES_HARVESTED activity, but does not clear the rack or mark the plant as fully harvested.',
+    })
+    @ApiParam({ name: 'rackId', description: 'Rack ID', example: 'clx123abc456' })
+    @ApiResponse({
+        status: HttpStatus.CREATED,
+        description: 'Leaves harvested successfully',
+        schema: {
+            type: 'object',
+            properties: {
+                message: { type: 'string', example: 'Leaves harvested successfully' },
+            },
+        },
+    })
+    @ApiBadRequestResponse({
+        description: 'Plant is not assigned to this rack',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 400 },
+                timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
+                path: { type: 'string', example: '/racks/clx123abc456/harvest-leaves' },
+                message: {
+                    type: 'string',
+                    example: 'This plant is not currently assigned to that rack',
+                },
+            },
+        },
+    })
+    @ApiUnauthorizedResponse({
+        description: 'Missing or invalid authentication token',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 401 },
+                timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
+                path: { type: 'string', example: '/racks/clx123abc456/harvest-leaves' },
+                message: { type: 'string', example: 'Authentication required' },
+            },
+        },
+    })
+    @ApiNotFoundResponse({
+        description: 'Rack not found or access denied',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 404 },
+                timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
+                path: { type: 'string', example: '/racks/clx123abc456/harvest-leaves' },
+                message: {
+                    type: 'string',
+                    example: 'Rack clx123abc456 not found or access denied',
+                },
+            },
+        },
+    })
+    @ApiInternalServerErrorResponse({
+        description: 'Internal server error',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 500 },
+                timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
+                path: { type: 'string', example: '/racks/clx123abc456/harvest-leaves' },
+                message: { type: 'string', example: 'Failed to harvest leaves' },
+            },
+        },
+    })
+    async harvestLeavesFromRack(
+        @Param('rackId') rackId: string,
+        @Body() dto: HarvestLeavesDto,
+        @CurrentUser() user: CurrentUserPayload,
+    ) {
+        return this.racksService.harvestLeavesFromRack(rackId, user.dbId, dto);
     }
 
     @Post(':rackId/harvest')
@@ -1429,7 +1538,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 400 },
                 timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456/harvest' },
+                path: { type: 'string', example: '/racks/clx123abc456/harvest' },
                 message: {
                     type: 'string',
                     example: 'This plant is not currently assigned to that rack',
@@ -1444,7 +1553,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456/harvest' },
+                path: { type: 'string', example: '/racks/clx123abc456/harvest' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
@@ -1456,7 +1565,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456/harvest' },
+                path: { type: 'string', example: '/racks/clx123abc456/harvest' },
                 message: {
                     type: 'string',
                     example: 'Rack clx123abc456 not found or access denied',
@@ -1471,17 +1580,142 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456/harvest' },
+                path: { type: 'string', example: '/racks/clx123abc456/harvest' },
                 message: { type: 'string', example: 'Failed to harvest plant' },
             },
         },
     })
-    async harvestFromRack(
+    async harvestPlantFromRack(
         @Param('rackId') rackId: string,
-        @Body() dto: HarvestFromRackDto,
+        @Body() dto: HarvestPlantDto,
         @CurrentUser() user: CurrentUserPayload,
     ) {
-        return this.racksService.harvestFromRack(rackId, user.dbId, dto);
+        return this.racksService.harvestPlantFromRack(rackId, user.dbId, dto);
+    }
+
+    @Post(':rackId/harvest-seeds')
+    @HttpCode(HttpStatus.CREATED)
+    @ApiOperation({
+        summary: 'Harvest seeds of current plant from a rack',
+        description:
+            'Marks the seeds of the current plant as successfully harvested while keeping the plant in the rack. Increments the harvest count and logs a SEEDS_HARVESTED activity, but does not clear the rack or mark the plant as fully harvested.',
+    })
+    @ApiParam({ name: 'rackId', description: 'Rack ID', example: 'clx123abc456' })
+    @ApiResponse({
+        status: HttpStatus.CREATED,
+        description: 'Seeds harvested successfully',
+        schema: {
+            type: 'object',
+            properties: {
+                message: { type: 'string', example: 'Seeds harvested successfully' },
+            },
+        },
+    })
+    @ApiBadRequestResponse({
+        description:
+            'Plant is not assigned to this rack, exceeds available seeds, or depletes the rack below minimum seed threshold.',
+        content: {
+            'application/json': {
+                schema: {
+                    type: 'object',
+                    properties: {
+                        statusCode: {
+                            type: 'number',
+                            example: 400,
+                        },
+                        timestamp: {
+                            type: 'string',
+                            format: 'date-time',
+                            example: '2025-12-27T10:30:00.000Z',
+                        },
+                        path: {
+                            type: 'string',
+                            example: '/racks/clx123abc456/harvest-seeds',
+                        },
+                        message: {
+                            type: 'string',
+                        },
+                    },
+                },
+                examples: {
+                    plantNotAssigned: {
+                        summary: 'Plant not assigned to rack',
+                        value: {
+                            statusCode: 400,
+                            timestamp: '2025-12-27T10:30:00.000Z',
+                            path: '/racks/clx123abc456/harvest-seeds',
+                            message: 'This plant is not currently assigned to that rack',
+                        },
+                    },
+                    aboveMaximumThreshold: {
+                        summary: 'Exceeds available seeds',
+                        value: {
+                            statusCode: 400,
+                            timestamp: '2025-12-27T10:30:00.000Z',
+                            path: '/racks/clx123abc456/harvest-seeds',
+                            message:
+                                'Cannot harvest 10 seeds — maximum allowed is 9 (rack quantity minus 1)',
+                        },
+                    },
+                    belowMinimumThreshold: {
+                        summary: 'Below minimum threshold',
+                        value: {
+                            statusCode: 400,
+                            timestamp: '2025-12-27T10:30:00.000Z',
+                            path: '/racks/clx123abc456/harvest-seeds',
+                            message:
+                                'Cannot harvest seeds — rack must have at least 2 seeds to harvest any (quantity must be at least 2)',
+                        },
+                    },
+                },
+            },
+        },
+    })
+    @ApiUnauthorizedResponse({
+        description: 'Missing or invalid authentication token',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 401 },
+                timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
+                path: { type: 'string', example: '/racks/clx123abc456/harvest-seeds' },
+                message: { type: 'string', example: 'Authentication required' },
+            },
+        },
+    })
+    @ApiNotFoundResponse({
+        description: 'Rack not found or access denied',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 404 },
+                timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
+                path: { type: 'string', example: '/racks/clx123abc456/harvest-seeds' },
+                message: {
+                    type: 'string',
+                    example: 'Rack clx123abc456 not found or access denied',
+                },
+            },
+        },
+    })
+    @ApiInternalServerErrorResponse({
+        description: 'Internal server error',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 500 },
+                timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
+                path: { type: 'string', example: '/racks/clx123abc456/harvest-seeds' },
+                message: { type: 'string', example: 'Failed to harvest seeds' },
+            },
+        },
+    })
+    async harvestSeedsFromRack(
+        @Param('rackId') rackId: string,
+        @Body() dto: HarvestSeedsDto,
+        @CurrentUser() user: CurrentUserPayload,
+    ) {
+        return this.racksService.harvestSeedsFromRack(rackId, user.dbId, dto);
     }
 
     @Post(':rackId/assign')
@@ -1509,7 +1743,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 400 },
                 timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456/assign' },
+                path: { type: 'string', example: '/racks/clx123abc456/assign' },
                 message: { type: 'string', example: 'Cannot assign an inactive plant to a rack' },
             },
         },
@@ -1521,7 +1755,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456/assign' },
+                path: { type: 'string', example: '/racks/clx123abc456/assign' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
@@ -1533,7 +1767,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456/assign' },
+                path: { type: 'string', example: '/racks/clx123abc456/assign' },
                 message: {
                     type: 'string',
                     example: 'Rack clx123abc456 not found or access denied',
@@ -1548,7 +1782,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456/assign' },
+                path: { type: 'string', example: '/racks/clx123abc456/assign' },
                 message: { type: 'string', example: 'Failed to assign plant to rack' },
             },
         },
@@ -1586,7 +1820,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 400 },
                 timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456/unassign' },
+                path: { type: 'string', example: '/racks/clx123abc456/unassign' },
                 message: {
                     type: 'string',
                     example: 'This plant is not currently assigned to that rack',
@@ -1601,7 +1835,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456/unassign' },
+                path: { type: 'string', example: '/racks/clx123abc456/unassign' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
@@ -1613,7 +1847,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456/unassign' },
+                path: { type: 'string', example: '/racks/clx123abc456/unassign' },
                 message: {
                     type: 'string',
                     example: 'Rack clx123abc456 not found or access denied',
@@ -1628,7 +1862,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456/unassign' },
+                path: { type: 'string', example: '/racks/clx123abc456/unassign' },
                 message: { type: 'string', example: 'Failed to remove plant from rack' },
             },
         },
@@ -1665,7 +1899,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 400 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks' },
+                path: { type: 'string', example: '/racks' },
                 message: {
                     type: 'string',
                     example: 'MAC address must be in format XX:XX:XX:XX:XX:XX',
@@ -1680,7 +1914,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks' },
+                path: { type: 'string', example: '/racks' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
@@ -1692,7 +1926,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 409 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks' },
+                path: { type: 'string', example: '/racks' },
                 message: { type: 'string', example: 'MAC address already registered' },
             },
         },
@@ -1704,7 +1938,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks' },
+                path: { type: 'string', example: '/racks' },
                 message: { type: 'string', example: 'Failed to register rack' },
             },
         },
@@ -1755,7 +1989,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 400 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456' },
+                path: { type: 'string', example: '/racks/clx123abc456' },
                 message: { type: 'string', example: 'Validation failed' },
             },
         },
@@ -1767,7 +2001,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456' },
+                path: { type: 'string', example: '/racks/clx123abc456' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
@@ -1779,7 +2013,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456' },
+                path: { type: 'string', example: '/racks/clx123abc456' },
                 message: {
                     type: 'string',
                     example: 'Rack clx123abc456 not found or access denied',
@@ -1794,7 +2028,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456' },
+                path: { type: 'string', example: '/racks/clx123abc456' },
                 message: { type: 'string', example: 'Failed to update rack' },
             },
         },
@@ -1835,7 +2069,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456' },
+                path: { type: 'string', example: '/racks/clx123abc456' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
@@ -1847,7 +2081,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456' },
+                path: { type: 'string', example: '/racks/clx123abc456' },
                 message: {
                     type: 'string',
                     example: 'Rack clx123abc456 not found or access denied',
@@ -1862,7 +2096,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456' },
+                path: { type: 'string', example: '/racks/clx123abc456' },
                 message: { type: 'string', example: 'Failed to delete rack' },
             },
         },
@@ -1902,7 +2136,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 400 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456/commands/water' },
+                path: { type: 'string', example: '/racks/clx123abc456/commands/water' },
                 message: {
                     type: 'string',
                     example: 'Watering duration must be between 1000ms and 60000ms',
@@ -1917,7 +2151,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456/commands/water' },
+                path: { type: 'string', example: '/racks/clx123abc456/commands/water' },
                 message: { type: 'string', example: 'Rack clx123abc456 not found or access denied' },
             },
         },
@@ -1929,7 +2163,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456/commands/water' },
+                path: { type: 'string', example: '/racks/clx123abc456/commands/water' },
                 message: { type: 'string', example: 'Failed to send watering command' },
             },
         },
@@ -1976,7 +2210,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 400 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456/commands/light' },
+                path: { type: 'string', example: '/racks/clx123abc456/commands/light' },
                 message: { type: 'string', example: 'Action must be either "on" or "off"' },
             },
         },
@@ -1988,7 +2222,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456/commands/light' },
+                path: { type: 'string', example: '/racks/clx123abc456/commands/light' },
                 message: { type: 'string', example: 'Rack clx123abc456 not found or access denied' },
             },
         },
@@ -2000,7 +2234,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456/commands/light' },
+                path: { type: 'string', example: '/racks/clx123abc456/commands/light' },
                 message: { type: 'string', example: 'Failed to send grow light command' },
             },
         },
@@ -2043,7 +2277,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 400 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456/commands/sensors' },
+                path: { type: 'string', example: '/racks/clx123abc456/commands/sensors' },
                 message: { type: 'string', example: 'Action must be either "on" or "off"' },
             },
         },
@@ -2055,7 +2289,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456/commands/sensors' },
+                path: { type: 'string', example: '/racks/clx123abc456/commands/sensors' },
                 message: { type: 'string', example: 'Rack clx123abc456 not found or access denied' },
             },
         },
@@ -2067,7 +2301,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456/commands/sensors' },
+                path: { type: 'string', example: '/racks/clx123abc456/commands/sensors' },
                 message: { type: 'string', example: 'Failed to send sensors command' },
             },
         },
@@ -2131,7 +2365,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456/activities' },
+                path: { type: 'string', example: '/racks/clx123abc456/activities' },
                 message: { type: 'string', example: 'Rack clx123abc456 not found or access denied' },
             },
         },
@@ -2143,7 +2377,7 @@ export class RacksController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-02-01T10:30:00.000Z' },
-                path: { type: 'string', example: '/api/racks/clx123abc456/activities' },
+                path: { type: 'string', example: '/racks/clx123abc456/activities' },
                 message: { type: 'string', example: 'Failed to fetch activities' },
             },
         },
