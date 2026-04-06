@@ -4,9 +4,6 @@ import {
     IsNotEmpty,
     IsEnum,
     IsOptional,
-    IsNumber,
-    Min,
-    Max,
     IsObject,
     ValidateNested,
     IsString,
@@ -23,18 +20,6 @@ export class WateringActionDto {
     @IsNotEmpty()
     @IsEnum(['start', 'stop'])
     action!: 'start' | 'stop';
-
-    @ApiPropertyOptional({
-        description: 'Watering duration in milliseconds (required for "start" action)',
-        example: 5000,
-        minimum: 1000,
-        maximum: 60000,
-    })
-    @IsOptional()
-    @IsNumber()
-    @Min(1000)
-    @Max(60000)
-    duration?: number;
 }
 
 export class GrowLightActionDto {

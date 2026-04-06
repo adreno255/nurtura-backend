@@ -270,9 +270,7 @@ components:
                       v: '1.0.3'
                       ip: '192.168.1.100'
                       mac: 'AA:BB:CC:DD:EE:FF'
-                      s: -65
                       u: 3600000
-                      fm: 45000
 
         DeviceErrorMessage:
             name: DeviceError
@@ -310,10 +308,9 @@ components:
                 $ref: '#/components/schemas/WateringCommandPayload'
             examples:
                 - name: startWatering
-                  summary: Start watering for 5 seconds
+                  summary: Start watering
                   payload:
                       action: 'start'
-                      duration: 5000
                 - name: stopWatering
                   summary: Stop watering immediately
                   payload:
@@ -409,21 +406,11 @@ components:
                     type: string
                     description: MAC address of the device
                     example: 'AA:BB:CC:DD:EE:FF'
-                s:
-                    type: integer
-                    description: WiFi signal strength (RSSI)
-                    maximum: 0
-                    example: -65
                 u:
                     type: integer
                     description: Uptime in milliseconds
                     minimum: 0
                     example: 3600000
-                fm:
-                    type: integer
-                    description: Free heap memory in bytes
-                    minimum: 0
-                    example: 45000
 
         DeviceErrorPayload:
             type: object
@@ -434,6 +421,17 @@ components:
             properties:
                 c:
                     type: string
+                    enum:
+                        - SENSOR_FAILURE
+                        - SENSOR_TIMEOUT
+                        - SENSOR_NOT_FOUND
+                        - SENSOR_OUT_OF_RANGE
+                        - PUMP_FAILURE
+                        - PUMP_TIMEOUT
+                        - PUMP_NO_WATER
+                        - PUMP_FALSE_START
+                        - LIGHT_FAILURE
+                        - UNKNOWN_ERROR
                     description: Error code
                     example: 'SENSOR_FAILURE'
                 m:
@@ -460,6 +458,8 @@ components:
                         - HUMIDITY
                         - MOISTURE
                         - LIGHT
+                        - GROW_LIGHT
+                        - WATER_PUMP
                     description: Type of sensor involved in the error
                     example: 'TEMPERATURE'
                 d:
@@ -493,12 +493,6 @@ components:
                         - stop
                     description: Action to perform
                     example: 'start'
-                duration:
-                    type: integer
-                    description: Duration in milliseconds (required for "start")
-                    minimum: 1000
-                    maximum: 60000
-                    example: 5000
 
         LightingCommandPayload:
             type: object

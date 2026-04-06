@@ -27,7 +27,6 @@ export interface RuleConditions {
 export interface RuleActions {
     watering?: {
         action: 'start' | 'stop';
-        duration?: number;
     };
     growLight?: {
         action: 'on' | 'off';

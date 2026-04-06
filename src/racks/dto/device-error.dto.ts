@@ -9,6 +9,26 @@ import {
     IsDefined,
 } from 'class-validator';
 
+export enum ErrorCode {
+    // Sensor Errors
+    SENSOR_FAILURE = 'SENSOR_FAILURE',
+    SENSOR_TIMEOUT = 'SENSOR_TIMEOUT',
+    SENSOR_NOT_FOUND = 'SENSOR_NOT_FOUND',
+    SENSOR_OUT_OF_RANGE = 'SENSOR_OUT_OF_RANGE',
+
+    // Water Pump Errors
+    PUMP_FAILURE = 'PUMP_FAILURE',
+    PUMP_TIMEOUT = 'PUMP_TIMEOUT',
+    PUMP_NO_WATER = 'PUMP_NO_WATER',
+    PUMP_FALSE_START = 'PUMP_FALSE_START',
+
+    // Grow Light Errors
+    LIGHT_FAILURE = 'LIGHT_FAILURE',
+
+    // Unknown
+    UNKNOWN_ERROR = 'UNKNOWN_ERROR',
+}
+
 // Define Enums for validation
 export enum ErrorSeverity {
     LOW = 'LOW',
@@ -17,11 +37,13 @@ export enum ErrorSeverity {
     CRITICAL = 'CRITICAL',
 }
 
-export enum SensorType {
+export enum HardwareType {
     TEMPERATURE = 'TEMPERATURE',
     HUMIDITY = 'HUMIDITY',
     MOISTURE = 'MOISTURE',
     LIGHT = 'LIGHT',
+    GROW_LIGHT = 'GROW_LIGHT',
+    WATER_PUMP = 'WATER_PUMP',
 }
 
 class ErrorDetailsDto {
@@ -47,9 +69,9 @@ class ErrorDetailsDto {
 
 export class DeviceErrorDto {
     @Expose({ name: 'c' })
-    @IsString()
+    @IsEnum(ErrorCode)
     @IsDefined()
-    code!: string;
+    code!: ErrorCode;
 
     @Expose({ name: 'm' })
     @IsString()
@@ -67,8 +89,8 @@ export class DeviceErrorDto {
 
     @Expose({ name: 'st' })
     @IsOptional()
-    @IsEnum(SensorType)
-    sensorType?: SensorType;
+    @IsEnum(HardwareType)
+    sensorType?: HardwareType;
 
     @Expose({ name: 'd' })
     @IsOptional()

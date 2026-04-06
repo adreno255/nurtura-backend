@@ -256,14 +256,11 @@ export class AutomationService {
             if (actions.watering) {
                 const wateringCommand: WateringActionDto = {
                     action: actions.watering.action,
-                    ...(actions.watering.duration && { duration: actions.watering.duration }),
                 };
 
                 this.eventEmitter.emit('publishCommand', macAddress, 'watering', wateringCommand);
 
-                executedActions.push(
-                    `watering:${actions.watering.action} for ${actions.watering.duration ?? 'default'}ms`,
-                );
+                executedActions.push(`watering:${actions.watering.action}`);
 
                 await this.logRackActivityHelper.logActivity(
                     rackId,
@@ -277,7 +274,6 @@ export class AutomationService {
                         source: 'automation',
                         ruleId,
                         ruleName,
-                        duration: actions.watering.duration,
                     } as Prisma.InputJsonValue,
                 );
 
@@ -286,7 +282,7 @@ export class AutomationService {
                     rackId,
                     type: NotificationType.INFO,
                     title: `Watering ${actions.watering.action === 'start' ? 'Started' : 'Stopped'}`,
-                    message: `Rule "${ruleName}" ${actions.watering.action === 'start' ? `activated the water pump for ${actions.watering.duration ?? 'default'}ms` : 'stopped the water pump'}.`,
+                    message: `Rule "${ruleName}" ${actions.watering.action === 'start' ? `activated the water pump` : 'stopped the water pump'}.`,
                     metadata: { ruleId, ruleName, action: actions.watering.action },
                 } satisfies CreateNotificationPayload);
             }
@@ -709,14 +705,6 @@ export class AutomationService {
         if (actions.watering) {
             if (!['start', 'stop'].includes(actions.watering.action)) {
                 throw new BadRequestException('Watering action must be "start" or "stop"');
-            }
-            if (
-                actions.watering.duration !== undefined &&
-                (actions.watering.duration < 1000 || actions.watering.duration > 60000)
-            ) {
-                throw new BadRequestException(
-                    'Watering duration must be between 1000 and 60000 milliseconds',
-                );
             }
         }
 

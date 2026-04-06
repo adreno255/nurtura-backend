@@ -33,17 +33,18 @@ import { type PaginationQueryDto } from '../common/dto/pagination-query.dto';
 export class AutomationController {
     constructor(private readonly automationService: AutomationService) {}
 
-    @Get('racks/:rackId/rules')
+    @Get('racks/:plantId/rules')
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
-        summary: 'Get all automation rules for a rack',
-        description: 'Retrieves all automation rules configured for a specific rack',
+        summary: 'Get all automation rules for a plant',
+        description:
+            'Retrieves all automation rules configured for a specific plant with pagination support',
     })
     @ApiParam({
-        name: 'rackId',
+        name: 'plantId',
         required: true,
         type: String,
-        description: 'Rack ID',
+        description: 'Plant ID',
         example: 'clx123abc456',
     })
     @ApiResponse({
@@ -67,7 +68,7 @@ export class AutomationController {
                             conditions: { type: 'object', example: { moisture: { lessThan: 30 } } },
                             actions: {
                                 type: 'object',
-                                example: { watering: { action: 'start', duration: 5000 } },
+                                example: { watering: { action: 'start' } },
                             },
                             cooldownMinutes: { type: 'number', example: 30 },
                             isEnabled: { type: 'boolean', example: true },
