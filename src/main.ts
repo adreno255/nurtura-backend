@@ -54,6 +54,7 @@ async function bootstrap(): Promise<void> {
             .addTag('Plants', 'Plant management')
             .addTag('Sensors', 'Device sensors data and statistics')
             .addTag('Automation', 'Device commands and rulesets')
+            .addTag('Notifications', 'Notification management')
             .addBearerAuth(
                 {
                     type: 'http',

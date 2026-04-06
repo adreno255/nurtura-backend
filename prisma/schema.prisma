@@ -108,6 +108,9 @@ model User {
     suffix     String? @db.VarChar(20)
     address    String  @db.VarChar(500)
 
+    // Push notifications
+    expoPushToken String? @map("expo_push_token") @db.VarChar(255)
+
     // Timestamps
     createdAt DateTime @default(now()) @map("created_at")
     updatedAt DateTime @updatedAt @map("updated_at")

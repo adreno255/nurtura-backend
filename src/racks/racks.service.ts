@@ -790,7 +790,13 @@ export class RacksService {
 
             const where = {
                 rackId: { in: queryRackIds },
-                eventType: ActivityEventType.PLANT_HARVESTED,
+                eventType: {
+                    in: [
+                        ActivityEventType.LEAVES_HARVESTED,
+                        ActivityEventType.PLANT_HARVESTED,
+                        ActivityEventType.SEEDS_HARVESTED,
+                    ],
+                },
                 ...dateFilter,
             };
 
@@ -902,6 +908,50 @@ export class RacksService {
                 'PlantsService',
             );
             throw new InternalServerErrorException('Failed to fetch planting activities');
+        }
+    }
+
+    async getRackCount(userId: string): Promise<{ count: number }> {
+        try {
+            const count = await this.databaseService.rack.count({
+                where: { userId, isActive: true },
+            });
+
+            this.logger.log(`Rack count retrieved for user ${userId}: ${count}`, 'RacksService');
+
+            return { count };
+        } catch (error) {
+            this.logger.error(
+                `Error fetching rack count for user ${userId}`,
+                error instanceof Error ? error.message : String(error),
+                'RacksService',
+            );
+            throw new InternalServerErrorException('Failed to fetch rack count');
+        }
+    }
+
+    async getPlantedQuantity(userId: string): Promise<{ totalQuantity: number }> {
+        try {
+            const racks = await this.databaseService.rack.findMany({
+                where: { userId, isActive: true, currentPlantId: { not: null } },
+                select: { quantity: true },
+            });
+
+            const totalQuantity = racks.reduce((sum, rack) => sum + rack.quantity, 0);
+
+            this.logger.log(
+                `Total planted quantity retrieved for user ${userId}: ${totalQuantity}`,
+                'RacksService',
+            );
+
+            return { totalQuantity };
+        } catch (error) {
+            this.logger.error(
+                `Error fetching planted quantity for user ${userId}`,
+                error instanceof Error ? error.message : String(error),
+                'RacksService',
+            );
+            throw new InternalServerErrorException('Failed to fetch planted quantity');
         }
     }
 

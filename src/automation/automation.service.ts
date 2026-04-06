@@ -7,7 +7,7 @@ import {
 import { DatabaseService } from '../database/database.service';
 import { MyLoggerService } from '../my-logger/my-logger.service';
 import { SensorData, RuleConditions, RuleActions } from './interfaces/automation.interface';
-import { type Prisma, ActivityEventType, Rack } from '../generated/prisma/client';
+import { type Prisma, ActivityEventType, NotificationType, Rack } from '../generated/prisma/client';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { LogRackActivityHelper } from '../common/utils/log-rack-activity.helper';
 import { PaginationHelper } from '../common/utils/pagination.helper';
@@ -19,6 +19,7 @@ import {
     UpdateAutomationRuleDto,
     WateringActionDto,
 } from './dto';
+import { CreateNotificationPayload } from '../notifications/interfaces/notification.interface';
 
 @Injectable()
 export class AutomationService {
@@ -47,6 +48,7 @@ export class AutomationService {
             const rack = await this.databaseService.rack.findUnique({
                 where: { id: rackId },
                 select: {
+                    userId: true,
                     macAddress: true,
                     name: true,
                     currentPlantId: true,
@@ -251,7 +253,6 @@ export class AutomationService {
         const executedActions: string[] = [];
 
         try {
-            // Execute watering action
             if (actions.watering) {
                 const wateringCommand: WateringActionDto = {
                     action: actions.watering.action,
@@ -279,9 +280,17 @@ export class AutomationService {
                         duration: actions.watering.duration,
                     } as Prisma.InputJsonValue,
                 );
+
+                this.eventEmitter.emit('createNotification', {
+                    userId: rack.userId!,
+                    rackId,
+                    type: NotificationType.INFO,
+                    title: `Watering ${actions.watering.action === 'start' ? 'Started' : 'Stopped'}`,
+                    message: `Rule "${ruleName}" ${actions.watering.action === 'start' ? `activated the water pump for ${actions.watering.duration ?? 'default'}ms` : 'stopped the water pump'}.`,
+                    metadata: { ruleId, ruleName, action: actions.watering.action },
+                } satisfies CreateNotificationPayload);
             }
 
-            // Execute grow light action
             if (actions.growLight) {
                 const lightingCommand: GrowLightActionDto = {
                     action: actions.growLight.action,
@@ -305,6 +314,15 @@ export class AutomationService {
                         ruleName,
                     } as Prisma.InputJsonValue,
                 );
+
+                this.eventEmitter.emit('createNotification', {
+                    userId: rack.userId!,
+                    rackId,
+                    type: NotificationType.INFO,
+                    title: `Grow Light ${actions.growLight.action === 'on' ? 'Turned On' : 'Turned Off'}`,
+                    message: `Rule "${ruleName}" turned the grow light ${actions.growLight.action}.`,
+                    metadata: { ruleId, ruleName, action: actions.growLight.action },
+                } satisfies CreateNotificationPayload);
             }
 
             const automatedEvents: AutomatedEventDto = {
