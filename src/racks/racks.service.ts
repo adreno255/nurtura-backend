@@ -750,7 +750,7 @@ export class RacksService {
 
             this.logger.log(
                 `Retrieved ${activities.length} plant care activities for user ${userId}`,
-                'PlantsService',
+                'RacksService',
             );
 
             return PaginationHelper.createResponse(activities, totalItems, query);
@@ -760,7 +760,7 @@ export class RacksService {
             this.logger.error(
                 `Error fetching plant care activities for user ${userId}`,
                 error instanceof Error ? error.message : String(error),
-                'PlantsService',
+                'RacksService',
             );
             throw new InternalServerErrorException('Failed to fetch plant care activities');
         }
@@ -788,7 +788,7 @@ export class RacksService {
                       }
                     : {};
 
-            const where = {
+            const activityWhere = {
                 rackId: { in: queryRackIds },
                 eventType: {
                     in: [
@@ -800,31 +800,31 @@ export class RacksService {
                 ...dateFilter,
             };
 
+            const rackWhere = {
+                id: { in: queryRackIds },
+            };
+
             const { skip, take } = PaginationHelper.getPrismaOptions(query);
 
-            const [activities, totalItems, allInRange] = await Promise.all([
+            const [activities, totalItems, aggregation] = await Promise.all([
                 this.databaseService.activity.findMany({
-                    where,
+                    where: activityWhere,
                     orderBy: { timestamp: 'desc' },
                     skip,
                     take,
                 }),
-                this.databaseService.activity.count({ where }),
-                this.databaseService.activity.findMany({
-                    where,
-                    select: { metadata: true },
+                this.databaseService.activity.count({ where: activityWhere }),
+                this.databaseService.rack.aggregate({
+                    where: rackWhere,
+                    _sum: { harvestCount: true },
                 }),
             ]);
 
-            const totalHarvestCount = allInRange.reduce((sum, act) => {
-                const meta = act.metadata as Record<string, unknown> | null;
-                const qty = typeof meta?.['quantity'] === 'number' ? meta['quantity'] : 0;
-                return sum + qty;
-            }, 0);
+            const totalHarvestCount = aggregation._sum.harvestCount ?? 0;
 
             this.logger.log(
                 `Retrieved ${activities.length} harvest activities for user ${userId} (total count: ${totalHarvestCount})`,
-                'PlantsService',
+                'RacksService',
             );
 
             return {
@@ -837,7 +837,7 @@ export class RacksService {
             this.logger.error(
                 `Error fetching harvest activities for user ${userId}`,
                 error instanceof Error ? error.message : String(error),
-                'PlantsService',
+                'RacksService',
             );
             throw new InternalServerErrorException('Failed to fetch harvest activities');
         }
@@ -895,7 +895,7 @@ export class RacksService {
 
             this.logger.log(
                 `Retrieved ${activities.length} planting activities for user ${userId}`,
-                'PlantsService',
+                'RacksService',
             );
 
             return PaginationHelper.createResponse(activities, totalItems, query);
@@ -905,7 +905,7 @@ export class RacksService {
             this.logger.error(
                 `Error fetching planting activities for user ${userId}`,
                 error instanceof Error ? error.message : String(error),
-                'PlantsService',
+                'RacksService',
             );
             throw new InternalServerErrorException('Failed to fetch planting activities');
         }
@@ -1045,7 +1045,7 @@ export class RacksService {
         try {
             const plantId = dto.plantId;
 
-            this.logger.log(`Harvesting plant ${plantId} from rack ${rackId}`, 'PlantsService');
+            this.logger.log(`Harvesting plant ${plantId} from rack ${rackId}`, 'RacksService');
 
             await this.verifyRackOwnership(rackId, userId);
 
@@ -1108,7 +1108,7 @@ export class RacksService {
 
             this.logger.log(
                 `Plant ${plantId} harvested from rack ${rackId} (total harvests: ${newHarvestCount})`,
-                'PlantsService',
+                'RacksService',
             );
 
             return { message: 'Plant harvested successfully' };
@@ -1119,7 +1119,7 @@ export class RacksService {
             this.logger.error(
                 `Error harvesting plant ${dto.plantId} from rack ${rackId}`,
                 error instanceof Error ? error.message : String(error),
-                'PlantsService',
+                'RacksService',
             );
             throw new InternalServerErrorException('Failed to harvest plant');
         }

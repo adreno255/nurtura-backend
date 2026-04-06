@@ -432,6 +432,97 @@ export class RacksController {
         return this.racksService.getRackActivities(user.dbId, query);
     }
 
+    @Get('count')
+    @HttpCode(HttpStatus.OK)
+    @ApiBearerAuth('firebase-jwt')
+    @ApiOperation({
+        summary: 'Get rack count',
+        description: 'Returns the total number of active racks owned by the authenticated user',
+    })
+    @ApiResponse({
+        status: HttpStatus.OK,
+        description: 'Rack count retrieved successfully',
+        schema: {
+            type: 'object',
+            properties: {
+                count: { type: 'number', example: 3 },
+            },
+        },
+    })
+    @ApiUnauthorizedResponse({
+        description: 'Missing or invalid authentication token',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 401 },
+                timestamp: { type: 'string', example: '2026-01-09T08:00:00.000Z' },
+                path: { type: 'string', example: '/api/racks/count' },
+                message: { type: 'string', example: 'Authentication required' },
+            },
+        },
+    })
+    @ApiInternalServerErrorResponse({
+        description: 'Internal server error',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 500 },
+                timestamp: { type: 'string', example: '2026-01-09T08:00:00.000Z' },
+                path: { type: 'string', example: '/api/racks/count' },
+                message: { type: 'string', example: 'Failed to fetch rack count' },
+            },
+        },
+    })
+    async getRackCount(@CurrentUser() user: CurrentUserPayload) {
+        return this.racksService.getRackCount(user.dbId);
+    }
+
+    @Get('planted-quantity')
+    @HttpCode(HttpStatus.OK)
+    @ApiBearerAuth('firebase-jwt')
+    @ApiOperation({
+        summary: 'Get total planted quantity',
+        description:
+            'Returns the sum of plant quantities across all active racks owned by the authenticated user that currently have a plant assigned',
+    })
+    @ApiResponse({
+        status: HttpStatus.OK,
+        description: 'Total planted quantity retrieved successfully',
+        schema: {
+            type: 'object',
+            properties: {
+                totalQuantity: { type: 'number', example: 28 },
+            },
+        },
+    })
+    @ApiUnauthorizedResponse({
+        description: 'Missing or invalid authentication token',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 401 },
+                timestamp: { type: 'string', example: '2026-01-09T08:00:00.000Z' },
+                path: { type: 'string', example: '/api/racks/planted-quantity' },
+                message: { type: 'string', example: 'Authentication required' },
+            },
+        },
+    })
+    @ApiInternalServerErrorResponse({
+        description: 'Internal server error',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 500 },
+                timestamp: { type: 'string', example: '2026-01-09T08:00:00.000Z' },
+                path: { type: 'string', example: '/api/racks/planted-quantity' },
+                message: { type: 'string', example: 'Failed to fetch planted quantity' },
+            },
+        },
+    })
+    async getPlantedQuantity(@CurrentUser() user: CurrentUserPayload) {
+        return this.racksService.getPlantedQuantity(user.dbId);
+    }
+
     @Get(':rackId')
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
@@ -1031,7 +1122,7 @@ export class RacksController {
     @ApiOperation({
         summary: 'Get harvest activity',
         description:
-            'Retrieves harvest activities (LEAVES_HARVESTED, PLANT_HARVESTED, and SEEDS_HARVESTED) across all racks owned by the authenticated user. Supports date range filtering, pagination, and rack ID filtering. Also returns `totalHarvestCount` — the sum of harvested quantities within the date range.',
+            'Retrieves harvest activities (LEAVES_HARVESTED, PLANT_HARVESTED, and SEEDS_HARVESTED) across all racks owned by the authenticated user. Supports date range filtering, pagination, and rack ID filtering. Also returns `totalHarvestCount` — the sum of harvest events within the date range.',
     })
     @ApiQuery({
         name: 'startDate',
@@ -1431,97 +1522,6 @@ export class RacksController {
         @Query() query: ActivityQueryDto,
     ) {
         return this.racksService.getPlantingActivities(user.dbId, query);
-    }
-
-    @Get('count')
-    @HttpCode(HttpStatus.OK)
-    @ApiBearerAuth('firebase-jwt')
-    @ApiOperation({
-        summary: 'Get rack count',
-        description: 'Returns the total number of active racks owned by the authenticated user',
-    })
-    @ApiResponse({
-        status: HttpStatus.OK,
-        description: 'Rack count retrieved successfully',
-        schema: {
-            type: 'object',
-            properties: {
-                count: { type: 'number', example: 3 },
-            },
-        },
-    })
-    @ApiUnauthorizedResponse({
-        description: 'Missing or invalid authentication token',
-        schema: {
-            type: 'object',
-            properties: {
-                statusCode: { type: 'number', example: 401 },
-                timestamp: { type: 'string', example: '2026-01-09T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/racks/count' },
-                message: { type: 'string', example: 'Authentication required' },
-            },
-        },
-    })
-    @ApiInternalServerErrorResponse({
-        description: 'Internal server error',
-        schema: {
-            type: 'object',
-            properties: {
-                statusCode: { type: 'number', example: 500 },
-                timestamp: { type: 'string', example: '2026-01-09T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/racks/count' },
-                message: { type: 'string', example: 'Failed to fetch rack count' },
-            },
-        },
-    })
-    async getRackCount(@CurrentUser() user: CurrentUserPayload) {
-        return this.racksService.getRackCount(user.dbId);
-    }
-
-    @Get('planted-quantity')
-    @HttpCode(HttpStatus.OK)
-    @ApiBearerAuth('firebase-jwt')
-    @ApiOperation({
-        summary: 'Get total planted quantity',
-        description:
-            'Returns the sum of plant quantities across all active racks owned by the authenticated user that currently have a plant assigned',
-    })
-    @ApiResponse({
-        status: HttpStatus.OK,
-        description: 'Total planted quantity retrieved successfully',
-        schema: {
-            type: 'object',
-            properties: {
-                totalQuantity: { type: 'number', example: 28 },
-            },
-        },
-    })
-    @ApiUnauthorizedResponse({
-        description: 'Missing or invalid authentication token',
-        schema: {
-            type: 'object',
-            properties: {
-                statusCode: { type: 'number', example: 401 },
-                timestamp: { type: 'string', example: '2026-01-09T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/racks/planted-quantity' },
-                message: { type: 'string', example: 'Authentication required' },
-            },
-        },
-    })
-    @ApiInternalServerErrorResponse({
-        description: 'Internal server error',
-        schema: {
-            type: 'object',
-            properties: {
-                statusCode: { type: 'number', example: 500 },
-                timestamp: { type: 'string', example: '2026-01-09T08:00:00.000Z' },
-                path: { type: 'string', example: '/api/racks/planted-quantity' },
-                message: { type: 'string', example: 'Failed to fetch planted quantity' },
-            },
-        },
-    })
-    async getPlantedQuantity(@CurrentUser() user: CurrentUserPayload) {
-        return this.racksService.getPlantedQuantity(user.dbId);
     }
 
     @Post(':rackId/harvest-leaves')

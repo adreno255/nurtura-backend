@@ -27,8 +27,20 @@ export class NotificationsController {
         summary: 'Get notifications for the authenticated user',
         description: 'Returns a paginated list of notifications. Optionally filter to unread only.',
     })
-    @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
-    @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
+    @ApiQuery({
+        name: 'page',
+        required: false,
+        type: Number,
+        description: 'Page number (1-based)',
+        example: 1,
+    })
+    @ApiQuery({
+        name: 'limit',
+        required: false,
+        type: Number,
+        description: 'Number of items per page',
+        example: 10,
+    })
     @ApiQuery({
         name: 'unreadOnly',
         required: false,
