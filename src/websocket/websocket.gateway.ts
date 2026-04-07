@@ -22,7 +22,7 @@ import { AutomatedEventDto } from '../automation/dto';
         origin: '*',
         credentials: true,
     },
-    namespace: 'sensors',
+    namespace: 'updates',
 })
 export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
     @WebSocketServer()
@@ -188,5 +188,59 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
 
     getConnectionStats() {
         return this.websocketService.getConnectionStats();
+    }
+
+    // ==================== User Notification Events ====================
+
+    @SubscribeMessage('subscribeToUserNotifications')
+    async handleSubscribeToUserNotifications(@ConnectedSocket() client: AuthenticatedSocket) {
+        try {
+            await this.websocketService.joinUserRoom(client);
+
+            client.emit('subscribedToNotificationsAck', {
+                message: 'Subscribed to user notifications',
+                userId: client.data.user.dbId,
+            });
+        } catch (error) {
+            this.logger.error(
+                `Error subscribing client ${client.id} to user notifications`,
+                error instanceof Error ? error.message : String(error),
+                'WebsocketGateway',
+            );
+
+            client.emit('error', {
+                message: 'Failed to subscribe to user notifications',
+                error: error instanceof Error ? error.message : 'Unknown error',
+            });
+        }
+    }
+
+    // Unsubscribe from user-scoped notification updates
+    @SubscribeMessage('unsubscribeFromUserNotifications')
+    async handleUnsubscribeFromUserNotifications(@ConnectedSocket() client: AuthenticatedSocket) {
+        try {
+            await this.websocketService.leaveUserRoom(client);
+
+            client.emit('unsubscribedFromNotificationsAck', {
+                message: 'Unsubscribed from user notifications',
+            });
+        } catch (error) {
+            this.logger.error(
+                `Error unsubscribing client ${client.id} from user notifications`,
+                error instanceof Error ? error.message : String(error),
+                'WebsocketGateway',
+            );
+
+            client.emit('error', {
+                message: 'Failed to unsubscribe from user notifications',
+                error: error instanceof Error ? error.message : 'Unknown error',
+            });
+        }
+    }
+
+    // Add this alongside the other @OnEvent handlers
+    @OnEvent('broadcastUserNotification')
+    broadcastUserNotification(userId: string, notification: Notification) {
+        this.websocketService.broadcastUserNotification(userId, notification);
     }
 }

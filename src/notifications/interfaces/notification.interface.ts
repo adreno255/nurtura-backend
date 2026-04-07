@@ -22,3 +22,7 @@ export interface NotificationDeletedResponse {
 export interface NotificationListResponse extends PaginatedResponse<Notification> {
     unreadCount: number;
 }
+
+export interface HasUnreadNotificationsResponse {
+    hasUnread: boolean;
+}

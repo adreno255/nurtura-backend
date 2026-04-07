@@ -14,23 +14,23 @@ import {
 export class WateringActionDto {
     @ApiProperty({
         description: 'Watering action',
-        enum: ['start', 'stop'],
-        example: 'start',
+        enum: ['watering_start', 'watering_stop'],
+        example: 'watering_start',
     })
     @IsNotEmpty()
-    @IsEnum(['start', 'stop'])
-    action!: 'start' | 'stop';
+    @IsEnum(['watering_start', 'watering_stop'])
+    action!: 'watering_start' | 'watering_stop';
 }
 
 export class GrowLightActionDto {
     @ApiProperty({
         description: 'Grow light action',
-        enum: ['on', 'off'],
-        example: 'on',
+        enum: ['light_on', 'light_off'],
+        example: 'light_on',
     })
     @IsNotEmpty()
-    @IsEnum(['on', 'off'])
-    action!: 'on' | 'off';
+    @IsEnum(['light_on', 'light_off'])
+    action!: 'light_on' | 'light_off';
 }
 
 export class RuleActionsDto {

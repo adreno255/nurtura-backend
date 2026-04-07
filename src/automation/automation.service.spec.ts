@@ -481,23 +481,23 @@ describe('AutomationService', () => {
             );
         });
 
-        it('should log WATERING_ON activity for watering start', async () => {
+        it('should log WATERING_START activity for watering start', async () => {
             await triggerRuleWithActions(mockAutomationRule.actions);
 
             expect(mockLogRackActivityHelper.logActivity).toHaveBeenCalledWith(
                 testRackId,
-                ActivityEventType.WATERING_ON,
+                ActivityEventType.WATERING_START,
                 expect.stringContaining('Watering start'),
                 expect.any(Object),
             );
         });
 
-        it('should log WATERING_OFF activity for watering stop', async () => {
+        it('should log WATERING_STOP activity for watering stop', async () => {
             await triggerRuleWithActions(wateringStopAction);
 
             expect(mockLogRackActivityHelper.logActivity).toHaveBeenCalledWith(
                 testRackId,
-                ActivityEventType.WATERING_OFF,
+                ActivityEventType.WATERING_STOP,
                 expect.stringContaining('Watering stop'),
                 expect.any(Object),
             );

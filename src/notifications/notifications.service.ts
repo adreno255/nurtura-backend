@@ -1,15 +1,16 @@
 import { Injectable, NotFoundException, InternalServerErrorException } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
+import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { DatabaseService } from '../database/database.service';
 import { MyLoggerService } from '../my-logger/my-logger.service';
 import { PaginationHelper } from '../common/utils/pagination.helper';
 import { type PaginationQueryDto } from '../common/dto/pagination-query.dto';
-import { type Prisma } from '../generated/prisma';
+import { NotificationType, type Prisma } from '../generated/prisma';
 import {
     type CreateNotificationPayload,
     type NotificationListResponse,
     type NotificationResponse,
     type NotificationDeletedResponse,
+    HasUnreadNotificationsResponse,
 } from './interfaces/notification.interface';
 
 // Uses fetch directly to avoid adding expo-server-sdk as a dependency.
@@ -21,6 +22,7 @@ export class NotificationsService {
     constructor(
         private readonly databaseService: DatabaseService,
         private readonly logger: MyLoggerService,
+        private readonly eventEmitter: EventEmitter2,
     ) {}
 
     // ==================== Event Listener ====================
@@ -49,26 +51,48 @@ export class NotificationsService {
     @OnEvent('createNotification')
     async handleCreateNotification(payload: CreateNotificationPayload): Promise<void> {
         // Step 1: Persist to database
-        let notificationId: string;
+        let notificationId: string | null = null;
 
         try {
-            const notification = await this.databaseService.notification.create({
-                data: {
-                    userId: payload.userId,
-                    rackId: payload.rackId ?? null,
-                    type: payload.type,
-                    title: payload.title,
-                    message: payload.message,
-                    metadata: (payload.metadata as Prisma.InputJsonValue) ?? undefined,
-                },
-            });
+            let rackId: string | null = null;
 
-            notificationId = notification.id;
+            if (payload.rackId) {
+                const rack = await this.databaseService.rack.findUnique({
+                    where: { id: payload.rackId },
+                    select: { id: true },
+                });
 
-            this.logger.log(
-                `Notification created for user ${payload.userId}: "${payload.title}" (${notificationId})`,
-                'NotificationsService',
-            );
+                if (!rack) {
+                    this.logger.warn(
+                        `Rack ${payload.rackId} not found — creating notification without rackId`,
+                        'NotificationsService',
+                    );
+                } else {
+                    rackId = rack.id;
+                }
+            }
+
+            if (!(payload.type === NotificationType.AUTOMATION)) {
+                const notification = await this.databaseService.notification.create({
+                    data: {
+                        userId: payload.userId,
+                        rackId, // null-safe: either a verified ID or null
+                        type: payload.type,
+                        title: payload.title,
+                        message: payload.message,
+                        metadata: (payload.metadata as Prisma.InputJsonValue) ?? undefined,
+                    },
+                });
+
+                notificationId = notification.id;
+
+                this.logger.log(
+                    `Notification created for user ${payload.userId}: "${payload.title}" (${notificationId})`,
+                    'NotificationsService',
+                );
+
+                this.eventEmitter.emit('broadcastUserNotification', payload.userId, notification);
+            }
         } catch (error) {
             this.logger.error(
                 `Failed to persist notification for user ${payload.userId}`,
@@ -151,6 +175,27 @@ export class NotificationsService {
                 'NotificationsService',
             );
             throw new InternalServerErrorException('Failed to fetch notifications');
+        }
+    }
+
+    async hasUnreadNotifications(userId: string): Promise<HasUnreadNotificationsResponse> {
+        try {
+            const unread = await this.databaseService.notification.findFirst({
+                where: {
+                    userId,
+                    status: 'UNREAD',
+                },
+                select: { id: true },
+            });
+
+            return { hasUnread: !!unread };
+        } catch (error) {
+            this.logger.error(
+                `Failed to check unread notifications for user: ${userId}`,
+                error instanceof Error ? error.message : String(error),
+                'NotificationsService',
+            );
+            throw new InternalServerErrorException('Failed to check unread notifications');
         }
     }
 

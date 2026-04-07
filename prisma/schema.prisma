@@ -52,8 +52,8 @@ enum ActivityEventType {
     // Device control events
     LIGHT_ON
     LIGHT_OFF
-    WATERING_ON
-    WATERING_OFF
+    WATERING_START
+    WATERING_STOP
     
     // System events
     AUTOMATION_TRIGGERED
@@ -64,11 +64,9 @@ enum ActivityEventType {
 }
 
 enum NotificationType {
-    SYSTEM
-    ALERT
-    WARNING
     INFO
-    SUCCESS
+    ERROR
+    AUTOMATION
 
     @@map("notification_type")
 }
@@ -76,7 +74,6 @@ enum NotificationType {
 enum NotificationStatus {
     UNREAD
     READ
-    ARCHIVED
 
     @@map("notification_status")
 }
@@ -110,6 +107,10 @@ model User {
 
     // Push notifications
     expoPushToken String? @map("expo_push_token") @db.VarChar(255)
+
+    // Onboarding state
+    completedPages String[] @default([]) @map("completed_pages")
+    hasCompletedOnboarding Boolean @default(false) @map("has_completed_onboarding")
 
     // Timestamps
     createdAt DateTime @default(now()) @map("created_at")

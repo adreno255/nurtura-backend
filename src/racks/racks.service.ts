@@ -24,7 +24,7 @@ import { type PaginatedResponse } from '../common/interfaces/pagination.interfac
 import { type Rack } from '../generated/prisma/client';
 import { MqttMessageParser } from '../common/utils/mqtt-parser.helper';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { DeviceErrorDto, DeviceStatusDto, ErrorSeverity } from './dto';
+import { DeviceErrorDto, DeviceStatusDto } from './dto';
 import { Activity, NotificationType, Prisma } from '../generated/prisma';
 import { LogRackActivityHelper } from '../common/utils/log-rack-activity.helper';
 import { ActivityQueryDto } from '../common/dto/activity-query.dto';
@@ -35,6 +35,7 @@ import {
     HarvestSeedsDto,
     UnassignFromRackDto,
 } from './dto/rack-operations.dto';
+import { CreateNotificationPayload } from '../notifications/interfaces/notification.interface';
 
 @Injectable()
 export class RacksService {
@@ -380,15 +381,12 @@ export class RacksService {
     async processDeviceStatus(macAddress: string, message: string): Promise<void> {
         this.logger.log(`Processing device status from: ${macAddress}`, 'RacksService');
 
-        // Step 1: Parse and validate the JSON message
-        const statusData = await MqttMessageParser.parseAndValidate(
-            message,
-            DeviceStatusDto,
-            macAddress,
-        );
-
-        // Step 2: Find the rack by MAC address
-        const rack = await this.findByMacAddress(macAddress);
+        const rack = await this.databaseService.rack.findUnique({
+            where: { macAddress },
+            include: {
+                user: { select: { id: true, email: true } },
+            },
+        });
 
         if (!rack) {
             this.logger.warn(
@@ -400,19 +398,27 @@ export class RacksService {
             );
         }
 
-        // Step 3: Update rack status in database
-        try {
-            const newStatus: DeviceStatus = statusData.online
-                ? DeviceStatus.ONLINE
-                : DeviceStatus.OFFLINE;
-            const oldStatus = rack.status;
+        const statusData = await MqttMessageParser.parseAndValidate(
+            rack,
+            message,
+            DeviceStatusDto,
+            macAddress,
+            this.eventEmitter,
+        );
 
+        const newStatus: DeviceStatus = statusData.online
+            ? DeviceStatus.ONLINE
+            : DeviceStatus.OFFLINE;
+        const oldStatus = rack.status;
+        const statusChanged = oldStatus !== newStatus;
+
+        try {
             await this.databaseService.rack.update({
                 where: { id: rack.id },
                 data: {
                     status: newStatus,
                     lastSeenAt: new Date(),
-                    ...(statusData.online ? { lastActivityAt: new Date() } : {}),
+                    ...(statusData.online && { lastActivityAt: new Date() }),
                 },
             });
 
@@ -421,13 +427,19 @@ export class RacksService {
                 'RacksService',
             );
 
-            // Step 4: Log status change activity if status changed
-            if (oldStatus !== newStatus) {
+            this.eventEmitter.emit('broadcastDeviceStatus', rack.id, newStatus);
+
+            this.logger.log(
+                `Status update broadcasted to WebSocket clients for rack: ${rack.id}`,
+                'RacksService',
+            );
+
+            if (statusChanged) {
+                const isOnline = newStatus === DeviceStatus.ONLINE;
+
                 await this.logRackActivityHelper.logActivity(
                     rack.id,
-                    statusData.online
-                        ? ActivityEventType.DEVICE_ONLINE
-                        : ActivityEventType.DEVICE_OFFLINE,
+                    isOnline ? ActivityEventType.DEVICE_ONLINE : ActivityEventType.DEVICE_OFFLINE,
                     `Device status changed from ${oldStatus} to ${newStatus}`,
                     statusData as unknown as Prisma.InputJsonValue,
                 );
@@ -436,22 +448,27 @@ export class RacksService {
                     `Activity logged for rack ${rack.id}: ${oldStatus} → ${newStatus}`,
                     'RacksService',
                 );
+
+                this.eventEmitter.emit('createNotification', {
+                    userId: rack.userId,
+                    rackId: rack.id,
+                    type: NotificationType.INFO,
+                    title: isOnline ? 'Rack Connected' : 'Rack Disconnected',
+                    message: isOnline
+                        ? `"${rack.name}" has been connected. Last seen at ${rack.lastSeenAt?.toLocaleString()}.`
+                        : `"${rack.name}" has been disconnected. Last seen at ${rack.lastSeenAt?.toLocaleString()}.`,
+                    metadata: {
+                        screen: `/(tabs)/(racks)/${rack.id}`,
+                        ...statusData,
+                    },
+                } satisfies CreateNotificationPayload);
             }
-
-            // Step 5: Broadcast status update to connected clients via WebSocket
-            this.eventEmitter.emit('broadcastDeviceStatus', newStatus);
-
-            this.logger.log(
-                `Status update broadcasted to WebSocket clients for rack: ${rack.id}`,
-                'RacksService',
-            );
         } catch (error) {
             this.logger.error(
                 `Failed to process device status for: ${macAddress}`,
                 error instanceof Error ? error.message : String(error),
                 'RacksService',
             );
-
             throw new InternalServerErrorException('Failed to process device status');
         }
     }
@@ -466,15 +483,18 @@ export class RacksService {
     async processDeviceError(macAddress: string, message: string): Promise<void> {
         this.logger.warn(`Processing device error from: ${macAddress}`, 'RacksService');
 
-        // Step 1: Parse and validate the JSON message
-        const errorData = await MqttMessageParser.parseAndValidate(
-            message,
-            DeviceErrorDto,
-            macAddress,
-        );
-
-        // Step 2: Find the rack by MAC address
-        const rack = await this.findByMacAddress(macAddress);
+        // Step 1: Find the rack by MAC address
+        const rack = await this.databaseService.rack.findUnique({
+            where: { macAddress },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        email: true,
+                    },
+                },
+            },
+        });
 
         if (!rack) {
             this.logger.warn(
@@ -485,6 +505,15 @@ export class RacksService {
                 `Device with MAC address ${macAddress} is not registered`,
             );
         }
+
+        // Step 2: Parse and validate the JSON message
+        const errorData = await MqttMessageParser.parseAndValidate(
+            rack,
+            message,
+            DeviceErrorDto,
+            macAddress,
+            this.eventEmitter,
+        );
 
         // Step 3: Update rack status to ERROR
         try {
@@ -501,35 +530,27 @@ export class RacksService {
                     `Rack ${rack.name} (${rack.id}) marked as ERROR due to: ${errorData.code}`,
                     'RacksService',
                 );
-                // Step 4: Create notification for the user
-                const alert = await this.databaseService.notification.create({
-                    data: {
-                        userId: rack.userId,
-                        rackId: rack.id,
-                        type:
-                            errorData.severity === ErrorSeverity.CRITICAL
-                                ? NotificationType.ALERT
-                                : NotificationType.WARNING,
-                        title: `Device Error: ${errorData.code}`,
-                        message: errorData.message,
-                        metadata: errorData as unknown as Prisma.InputJsonValue,
-                    },
-                });
 
-                this.logger.log(
-                    `Notification created for rack ${rack.name} (${rack.id}) regarding error: ${errorData.code}`,
-                    'RacksService',
-                );
-
-                // Step 5: Broadcast error to connected clients via WebSocket
-                this.eventEmitter.emit('broadcastNotification', alert);
-
-                this.eventEmitter.emit('broadcastDeviceStatus', rack.status);
+                // Step 4: Broadcast error to connected clients via WebSocket
+                this.eventEmitter.emit('broadcastDeviceStatus', rack.id, rack.status);
 
                 this.logger.warn(
                     `Device error broadcasted to WebSocket clients for rack: ${rack.id}`,
                     'RacksService',
                 );
+
+                // Step 5: Emit notification about the device error
+                this.eventEmitter.emit('createNotification', {
+                    userId: rack.userId,
+                    rackId: rack.id,
+                    type: NotificationType.ERROR,
+                    title: `Component Malfunction Detected`,
+                    message: `An error with code "${errorData.code}" occurred with component on rack "${rack.name}".`,
+                    metadata: {
+                        screen: `/(tabs)/(racks)/${rack.id}`,
+                        ...errorData,
+                    },
+                } satisfies CreateNotificationPayload);
             }
         } catch (error) {
             this.logger.error(
@@ -702,7 +723,7 @@ export class RacksService {
 
     /**
      * Get Plant Care Activity — watering and grow light events across all user racks.
-     * Event types: WATERING_ON, WATERING_OFF, LIGHT_ON, LIGHT_OFF.
+     * Event types: WATERING_START, WATERING_STOP, LIGHT_ON, LIGHT_OFF.
      * Includes associated rack and current plant info.
      * Returns paginated results + `amount` count within the date range.
      */
@@ -727,8 +748,8 @@ export class RacksService {
                 rackId: { in: queryRackIds },
                 eventType: {
                     in: [
-                        ActivityEventType.WATERING_ON,
-                        ActivityEventType.WATERING_OFF,
+                        ActivityEventType.WATERING_START,
+                        ActivityEventType.WATERING_STOP,
                         ActivityEventType.LIGHT_ON,
                         ActivityEventType.LIGHT_OFF,
                     ],

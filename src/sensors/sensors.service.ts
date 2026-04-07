@@ -245,14 +245,7 @@ export class SensorsService {
     async processSensorData(macAddress: string, message: string): Promise<void> {
         this.logger.log(`Processing sensor data from device: ${macAddress}`, 'SensorsService');
 
-        // Step 1: Parse and validate the JSON message
-        const sensorData = await MqttMessageParser.parseAndValidate(
-            message,
-            SensorDataDto,
-            macAddress,
-        );
-
-        // Step 2: Find the rack by MAC address
+        // Step 1: Find the rack by MAC address
         const rack = await this.databaseService.rack.findUnique({
             where: { macAddress },
             include: {
@@ -274,6 +267,15 @@ export class SensorsService {
                 `Device with MAC address ${macAddress} is not registered`,
             );
         }
+
+        // Step 2: Parse and validate the JSON message
+        const sensorData = await MqttMessageParser.parseAndValidate(
+            rack,
+            message,
+            SensorDataDto,
+            macAddress,
+            this.eventEmitter,
+        );
 
         // Step 3: Save sensor reading to database
         try {

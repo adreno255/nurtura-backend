@@ -50,10 +50,10 @@ info:
 #region Servers
 servers:
     production:
-        host: nurturaloam.tech
+        host: api.nurturaloam.tech
         protocol: wss
         description: Production WebSocket server (TLS)
-        pathname: /sensors
+        pathname: /updates
         security:
             - $ref: '#/components/securitySchemes/firebaseAuth'
         tags:
@@ -64,7 +64,7 @@ servers:
         host: localhost:3000
         protocol: ws
         description: Development WebSocket server (no TLS)
-        pathname: /sensors
+        pathname: /updates
         security:
             - $ref: '#/components/securitySchemes/firebaseAuth'
         tags:
@@ -81,7 +81,7 @@ defaultContentType: application/json
 #region Channels
 channels:
     root:
-        address: /sensors
+        address: /updates
         title: Root Channel
         description: |
             Main WebSocket connection endpoint
@@ -90,7 +90,7 @@ channels:
                 - Authorization: Bearer \<Firebase ID Token\>
 
             - Socket.IO clients may also send the token via handshake auth:
-                - io.connect('/sensors', {
+                - io.connect('/updates', {
                     auth: { token: '\<Firebase ID Token\>' }
                 })
         bindings:
@@ -130,6 +130,16 @@ channels:
             payload:
                 $ref: '#/components/messages/getStatusMessage'
 
+    subscribeToUserNotifications:
+        address: subscribeToUserNotifications
+        title: Subscribe to User Notifications
+        description: Subscribe to user-specific notifications and alerts
+
+    unsubscribeFromUserNotifications:
+        address: unsubscribeFromUserNotifications
+        title: Unsubscribe from User Notifications
+        description: Unsubscribe from user-specific notifications and alerts
+
     sensorUpdate:
         address: sensorData
         title: Sensor Data Update
@@ -154,6 +164,11 @@ channels:
         address: automationEvent
         title: Automation Event
         description: Automation rule triggered events
+
+    userNotificationUpdate:
+        address: userNotification
+        title: User Notification Update
+        description: User-specific notifications and alerts
 #endregion
 
 #region Operations
@@ -214,6 +229,29 @@ operations:
             messages:
                 - $ref: '#/components/messages/statusAck'
 
+    subscribeToUserNotifications:
+        action: send
+        channel:
+            $ref: '#/channels/subscribeToUserNotifications'
+        summary: Subscribe to user notifications
+        description: |
+            Client subscribes to receive user-specific notifications and alerts.
+            Server confirms subscription and starts sending relevant notifications.
+        reply:
+            messages:
+                - $ref: '#/components/messages/subscribedUserNotificationsAck'
+    unsubscribeFromUserNotifications:
+        action: send
+        channel:
+            $ref: '#/channels/unsubscribeFromUserNotifications'
+        summary: Unsubscribe from user notifications
+        description: |
+            Client unsubscribes from user-specific notifications and alerts.
+            Server confirms unsubscription and stops sending relevant notifications.
+        reply:
+            messages:
+                - $ref: '#/components/messages/unsubscribedUserNotificationsAck'
+
     broadcastSensorData:
         action: receive
         channel:
@@ -261,6 +299,18 @@ operations:
         reply:
             messages:
                 - $ref: '#/components/messages/automationEvent'
+
+    broadcastUserNotifications:
+        action: receive
+        channel:
+            $ref: '#/channels/userNotificationUpdate'
+        summary: Receive user-specific notifications
+        description: |
+            Server sends user-specific notifications such as alerts, reminders, and system messages.
+            Clients subscribe to this channel to receive personalized updates.
+        reply:
+            messages:
+                - $ref: '#/components/messages/userNotification'
     #endregion
 
 components:
@@ -399,6 +449,32 @@ components:
                           - 'clx456def789'
                       totalConnections: 5
 
+        subscribedUserNotificationsAck:
+            name: SubscribedUserNotifications
+            title: Subscribed to User Notifications
+            summary: Sent when subscription to user notifications is successful
+            contentType: application/json
+            payload:
+                $ref: '#/components/schemas/SubscribeToUserNotificationsAckPayload'
+            examples:
+                - name: subscribedUserNotifications
+                  payload:
+                      message: 'Subscribed to user notifications'
+                      userId: 'clx123abc456'
+
+        unsubscribedUserNotificationsAck:
+            name: UnsubscribedUserNotifications
+            title: Unsubscribed from User Notifications
+            summary: Sent when unsubscription from user notifications is successful
+            contentType: application/json
+            payload:
+                $ref: '#/components/schemas/UnsubscribeFromUserNotificationsAckPayload'
+            examples:
+                - name: unsubscribedUserNotifications
+                  payload:
+                      message: 'Unsubscribed from user notifications'
+                      userId: 'clx123abc456'
+
         sensorData:
             name: SensorUpdate
             title: Sensor Data Update
@@ -490,6 +566,30 @@ components:
                               - 'watering: start for 5000ms'
                               - 'growLight: on'
                       timestamp: '2025-02-05T14:45:00.000Z'
+
+        userNotification:
+            name: UserNotification
+            title: User-Specific Notification
+            summary: User-specific alert or notification
+            contentType: application/json
+            payload:
+                $ref: '#/components/schemas/NotificationPayload'
+            examples:
+                - name: userReminder
+                  payload:
+                      notification:
+                          id: 'clx998reminder'
+                          userId: 'clx123abc456'
+                          rackId: 'clx789xyz123'
+                          type: 'INFO'
+                          status: 'UNREAD'
+                          title: 'Rack Connected'
+                          message: 'Your rack clx789xyz123 is now connected and streaming data.'
+                          metadata:
+                              screen: 'dashboard'
+                          createdAt: '2025-02-05T14:50:00.000Z'
+                          updatedAt: '2025-02-05T14:50:00.000Z'
+                      timestamp: '2025-02-05T14:50:00.000Z'
     #endregion
 
     #region Schemas
@@ -613,6 +713,26 @@ components:
                     type: integer
                     example: 5
 
+        SubscribeToUserNotificationsAckPayload:
+            type: object
+            properties:
+                message:
+                    type: string
+                    example: 'Subscribed to user notifications'
+                userId:
+                    type: string
+                    example: 'clx123abc456'
+
+        UnsubscribeFromUserNotificationsAckPayload:
+            type: object
+            properties:
+                message:
+                    type: string
+                    example: 'Unsubscribed from user notifications'
+                userId:
+                    type: string
+                    example: 'clx123abc456'
+
         SensorUpdatePayload:
             type: object
             properties:
@@ -693,18 +813,14 @@ components:
                         type:
                             type: string
                             enum:
-                                - SYSTEM
-                                - ALERT
-                                - WARNING
                                 - INFO
-                                - SUCCESS
-                            example: 'ALERT'
+                                - ERROR
+                            example: 'INFO'
                         status:
                             type: string
                             enum:
                                 - UNREAD
                                 - READ
-                                - ARCHIVED
                             example: 'UNREAD'
                         title:
                             type: string

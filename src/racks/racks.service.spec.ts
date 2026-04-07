@@ -18,9 +18,9 @@ import {
     DeviceStatusDto,
     DeviceErrorDto,
     ErrorSeverity,
-    SensorType,
     type HarvestLeavesDto,
     type HarvestSeedsDto,
+    ErrorCode,
 } from './dto';
 import {
     createMockDatabaseService,
@@ -1073,15 +1073,14 @@ describe('RacksService', () => {
 
     describe('processDeviceError', () => {
         const errorMessage = JSON.stringify({
-            c: 'ERR_SENSOR_FAIL',
+            c: 'SENSOR_FAILURE',
             m: 'Sensor failed',
             s: 'CRITICAL',
         });
         const errorData: DeviceErrorDto = {
-            code: 'ERR_SENSOR_FAIL',
+            code: ErrorCode.SENSOR_FAILURE,
             message: 'Sensor failed',
             severity: ErrorSeverity.CRITICAL,
-            sensorType: SensorType.TEMPERATURE,
         };
 
         beforeEach(() => {
@@ -1095,7 +1094,7 @@ describe('RacksService', () => {
                 id: 'notif-1',
                 userId: testDbIds.primary,
                 rackId: testRackId,
-                type: NotificationType.ALERT,
+                type: NotificationType.ERROR,
                 title: `Device Error: ${errorData.code}`,
                 message: errorData.message,
             });
@@ -1134,7 +1133,7 @@ describe('RacksService', () => {
 
             expect(mockDatabaseService.notification.create).toHaveBeenCalledWith({
                 data: expect.objectContaining({
-                    type: NotificationType.ALERT,
+                    type: NotificationType.ERROR,
                 }) as Partial<Notification>,
             });
         });
@@ -1150,7 +1149,7 @@ describe('RacksService', () => {
 
             expect(mockDatabaseService.notification.create).toHaveBeenCalledWith({
                 data: expect.objectContaining({
-                    type: NotificationType.WARNING,
+                    type: NotificationType.ERROR,
                 }) as Partial<Notification>,
             });
         });
@@ -1159,7 +1158,7 @@ describe('RacksService', () => {
             const notification = {
                 id: 'notif-1',
                 userId: testDbIds.primary,
-                type: NotificationType.ALERT,
+                type: NotificationType.ERROR,
             };
             mockDatabaseService.rack.findUnique.mockResolvedValue(mockRack);
             mockDatabaseService.rack.update.mockResolvedValue(mockRack);
@@ -1613,7 +1612,7 @@ describe('RacksService', () => {
         const plantCareActivity = {
             ...mockActivity,
             id: 'activity-2',
-            eventType: ActivityEventType.WATERING_ON,
+            eventType: ActivityEventType.WATERING_START,
         };
 
         beforeEach(() => {
@@ -1631,7 +1630,7 @@ describe('RacksService', () => {
             });
         });
 
-        it('should query only WATERING_ON, WATERING_OFF, LIGHT_ON, LIGHT_OFF event types', async () => {
+        it('should query only WATERING_START, WATERING_STOP, LIGHT_ON, LIGHT_OFF event types', async () => {
             await service.getPlantCareActivities(testUserId, baseActivityQuery);
 
             expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith(
@@ -1639,8 +1638,8 @@ describe('RacksService', () => {
                     where: expect.objectContaining({
                         eventType: {
                             in: expect.arrayContaining([
-                                ActivityEventType.WATERING_ON,
-                                ActivityEventType.WATERING_OFF,
+                                ActivityEventType.WATERING_START,
+                                ActivityEventType.WATERING_STOP,
                                 ActivityEventType.LIGHT_ON,
                                 ActivityEventType.LIGHT_OFF,
                             ]) as string[],

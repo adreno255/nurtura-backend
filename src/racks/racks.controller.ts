@@ -823,7 +823,7 @@ export class RacksController {
     @ApiOperation({
         summary: 'Get plant care activity',
         description:
-            'Retrieves watering and grow light activities (WATERING_ON, WATERING_OFF, LIGHT_ON, LIGHT_OFF) across all racks owned by the authenticated user. Supports date range filtering, pagination, and rack ID filtering.',
+            'Retrieves watering and grow light activities (WATERING_START, WATERING_STOP, LIGHT_ON, LIGHT_OFF) across all racks owned by the authenticated user. Supports date range filtering, pagination, and rack ID filtering.',
     })
     @ApiQuery({
         name: 'startDate',
@@ -878,8 +878,8 @@ export class RacksController {
                                     eventType: {
                                         type: 'string',
                                         enum: [
-                                            'WATERING_ON',
-                                            'WATERING_OFF',
+                                            'WATERING_START',
+                                            'WATERING_STOP',
                                             'LIGHT_ON',
                                             'LIGHT_OFF',
                                         ],
@@ -925,14 +925,14 @@ export class RacksController {
                     },
                 },
                 examples: {
-                    WATERING_ON: {
-                        summary: 'WATERING_ON — watering started',
+                    WATERING_START: {
+                        summary: 'WATERING_START — watering started',
                         value: {
                             data: [
                                 {
                                     id: 'clx789def012',
                                     rackId: 'clx123abc456',
-                                    eventType: 'WATERING_ON',
+                                    eventType: 'WATERING_START',
                                     details:
                                         'Watering start triggered by automation rule "Auto Watering - Lettuce"',
                                     metadata: {
@@ -961,14 +961,14 @@ export class RacksController {
                             },
                         },
                     },
-                    WATERING_OFF: {
-                        summary: 'WATERING_OFF — watering stopped',
+                    WATERING_STOP: {
+                        summary: 'WATERING_STOP — watering stopped',
                         value: {
                             data: [
                                 {
                                     id: 'clx789def013',
                                     rackId: 'clx123abc456',
-                                    eventType: 'WATERING_OFF',
+                                    eventType: 'WATERING_STOP',
                                     details:
                                         'Watering stop triggered by automation rule "Auto Watering - Lettuce"',
                                     metadata: {
@@ -2436,7 +2436,7 @@ export class RacksController {
                         type: 'object',
                         properties: {
                             id: { type: 'string', example: 'clx789def012' },
-                            eventType: { type: 'string', example: 'WATERING_ON' },
+                            eventType: { type: 'string', example: 'WATERING_START' },
                             details: {
                                 type: 'string',
                                 example: 'Manual watering triggered (5000ms)',

@@ -310,11 +310,11 @@ components:
                 - name: startWatering
                   summary: Start watering
                   payload:
-                      action: 'start'
+                      action: 'watering_start'
                 - name: stopWatering
                   summary: Stop watering immediately
                   payload:
-                      action: 'stop'
+                      action: 'watering_stop'
 
         LightingCommandMessage:
             name: LightingCommand
@@ -330,11 +330,11 @@ components:
                 - name: turnOn
                   summary: Turn lights on
                   payload:
-                      action: 'on'
+                      action: 'light_on'
                 - name: turnOff
                   summary: Turn lights off
                   payload:
-                      action: 'off'
+                      action: 'light_off'
     #endregion
 
     #region Schemas
@@ -489,10 +489,10 @@ components:
                 action:
                     type: string
                     enum:
-                        - start
-                        - stop
+                        - watering_start
+                        - watering_stop
                     description: Action to perform
-                    example: 'start'
+                    example: 'watering_start'
 
         LightingCommandPayload:
             type: object
@@ -502,10 +502,10 @@ components:
                 action:
                     type: string
                     enum:
-                        - 'on'
-                        - 'off'
+                        - 'light_on'
+                        - 'light_off'
                     description: Action to perform
-                    example: 'on'
+                    example: 'light_on'
     #endregion
 
     #region Parameters

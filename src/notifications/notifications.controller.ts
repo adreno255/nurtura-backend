@@ -1,4 +1,14 @@
-import { Controller, Get, Patch, Delete, Param, Query, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+    Controller,
+    Get,
+    Patch,
+    Delete,
+    Param,
+    Query,
+    HttpCode,
+    HttpStatus,
+    Post,
+} from '@nestjs/common';
 import {
     ApiTags,
     ApiOperation,
@@ -11,9 +21,11 @@ import {
     ApiInternalServerErrorResponse,
 } from '@nestjs/swagger';
 import { NotificationsService } from './notifications.service';
-import { CurrentUser } from '../common/decorators';
+import { CurrentUser, Public } from '../common/decorators';
 import { type CurrentUserPayload } from '../common/interfaces';
 import { type PaginationQueryDto } from '../common/dto/pagination-query.dto';
+import type { CreateNotificationPayload } from './interfaces/notification.interface';
+import { NotificationType } from '../generated/prisma';
 
 @ApiTags('Notifications')
 @ApiBearerAuth('firebase-jwt')
@@ -142,6 +154,50 @@ export class NotificationsController {
         @Query('unreadOnly') unreadOnly?: boolean,
     ) {
         return this.notificationsService.findAll(user.dbId, query, unreadOnly);
+    }
+
+    @Get('has-unread')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({
+        summary: 'Check if a user has unread notifications',
+        description: 'Checks if a user has any unread notifications.',
+    })
+    @ApiResponse({
+        status: HttpStatus.OK,
+        description: 'User has unread notifications',
+        schema: {
+            type: 'object',
+            properties: {
+                hasUnread: { type: 'boolean', example: true },
+            },
+        },
+    })
+    @ApiUnauthorizedResponse({
+        description: 'Missing or invalid authentication token',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 401 },
+                timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
+                path: { type: 'string', example: '/notifications/has-unread' },
+                message: { type: 'string', example: 'Authentication required' },
+            },
+        },
+    })
+    @ApiInternalServerErrorResponse({
+        description: 'Internal server error',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 500 },
+                timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
+                path: { type: 'string', example: '/notifications/has-unread' },
+                message: { type: 'string', example: 'Failed to check unread notifications' },
+            },
+        },
+    })
+    async hasUnreadNotifications(@CurrentUser() user: CurrentUserPayload) {
+        return this.notificationsService.hasUnreadNotifications(user.dbId);
     }
 
     @Patch(':notificationId/read')
@@ -327,5 +383,25 @@ export class NotificationsController {
         @CurrentUser() user: CurrentUserPayload,
     ) {
         return this.notificationsService.remove(notificationId, user.dbId);
+    }
+
+    @Post('send-test')
+    @Public()
+    async sendTestNotification() {
+        const payload = {
+            userId: 'cmnngfrav00003wuu012xn9g7',
+            rackId: 'cmnngfrqg00013wuucpfsn5f6',
+            type: NotificationType.INFO,
+            title: 'Test Notification',
+            message: 'This is a test notification from the API',
+            metadata: {
+                screen: '/(tabs)/(account)/user-info',
+                firebaseUid: 'Ft1S6yUjNlNk6wSroDcF1tLPdT33',
+                email: 'neonimo123@gmail.com',
+            },
+        } as CreateNotificationPayload;
+
+        await this.notificationsService.handleCreateNotification(payload);
+        return { message: 'Test notification sent' };
     }
 }
