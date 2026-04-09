@@ -25,6 +25,7 @@ import {
     testRackIds,
     testMacAddresses,
 } from '../../test/fixtures';
+import { SensorDataDto } from './dto/sensor-data.dto';
 
 // Mock MqttMessageParser
 jest.mock('../common/utils/mqtt-parser.helper', () => ({
@@ -535,16 +536,24 @@ describe('SensorsService', () => {
         });
 
         it('should parse and validate message', async () => {
+            // Arrange
             mockDatabaseService.rack.findUnique.mockResolvedValue(mockRack);
             mockDatabaseService.sensorReading.create.mockResolvedValue(mockSensorReading);
             mockDatabaseService.rack.update.mockResolvedValue(mockRack);
 
+            // Create the spy
+            const parseSpy = jest.spyOn(MqttMessageParser, 'parseAndValidate');
+
+            // Act
             await service.processSensorData(testMacAddress, rawMessage);
 
-            expect(jest.spyOn(MqttMessageParser, 'parseAndValidate')).toHaveBeenCalledWith(
-                rawMessage,
-                expect.anything(),
-                testMacAddress,
+            // Assert
+            expect(parseSpy).toHaveBeenCalledWith(
+                mockRack, // Argument 1: rack
+                rawMessage, // Argument 2: payload (message)
+                SensorDataDto, // Argument 3: dtoClass
+                testMacAddress, // Argument 4: deviceId (macAddress)
+                expect.anything(), // Argument 5: eventEmitter
             );
         });
 

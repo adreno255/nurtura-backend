@@ -389,10 +389,7 @@ export class WebsocketService {
                 'WebsocketService',
             );
 
-            server.to(room).emit('userNotification', {
-                notification,
-                timestamp: new Date().toISOString(),
-            });
+            server.to(room).emit('userNotification', { notification });
         } catch (error) {
             this.logger.error(
                 `Failed to broadcast notification to user ${userId}`,

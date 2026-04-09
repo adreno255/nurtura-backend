@@ -589,7 +589,6 @@ components:
                               screen: 'dashboard'
                           createdAt: '2025-02-05T14:50:00.000Z'
                           updatedAt: '2025-02-05T14:50:00.000Z'
-                      timestamp: '2025-02-05T14:50:00.000Z'
     #endregion
 
     #region Schemas

@@ -294,7 +294,6 @@ model AutomationRule {
     actions    Json
     
     // Execution tracking
-    cooldownMinutes Int?        @map("cooldown_minutes")
     lastTriggeredAt DateTime?   @map("last_triggered_at")
     triggerCount    Int         @default(0) @map("trigger_count")
 

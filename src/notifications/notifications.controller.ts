@@ -389,15 +389,15 @@ export class NotificationsController {
     @Public()
     async sendTestNotification() {
         const payload = {
-            userId: 'cmnngfrav00003wuu012xn9g7',
-            rackId: 'cmnngfrqg00013wuucpfsn5f6',
+            userId: 'cmnpggecf002e04uu9m7y67gb',
+            rackId: 'cmnr7b0ku0000k0uu1dtss97i',
             type: NotificationType.INFO,
             title: 'Test Notification',
             message: 'This is a test notification from the API',
             metadata: {
                 screen: '/(tabs)/(account)/user-info',
-                firebaseUid: 'Ft1S6yUjNlNk6wSroDcF1tLPdT33',
-                email: 'neonimo123@gmail.com',
+                firebaseUid: '99us9vHHLDbxXbkWCjrJOaKgaLd2',
+                email: 'nimo.neoisaiahbscs2023@gmail.com',
             },
         } as CreateNotificationPayload;
 

@@ -45,7 +45,10 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
             const mqttUrl = `${protocol}://${host}:${port}`;
             const clientId = `nurtura-backend-${Math.random().toString(16).slice(2, 8)}`;
 
-            this.logger.bootstrap(`Connecting to MQTT broker: ${mqttUrl}`, 'MqttService');
+            this.logger.bootstrap(
+                `Connecting to MQTT broker: ${mqttUrl} with username: ${username}`,
+                'MqttService',
+            );
 
             this.client = mqtt.connect(mqttUrl, {
                 username,

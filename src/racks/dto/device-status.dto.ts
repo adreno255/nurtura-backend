@@ -12,8 +12,8 @@ export class DeviceStatusDto {
 
     @Expose({ name: 'tm' })
     @IsOptional()
-    @IsNumber()
-    timestamp?: number;
+    @IsString()
+    timestamp?: string;
 
     @Expose({ name: 'v' })
     @IsOptional()

@@ -21,6 +21,7 @@ import {
     type HarvestLeavesDto,
     type HarvestSeedsDto,
     ErrorCode,
+    HardwareType,
 } from './dto';
 import {
     createMockDatabaseService,
@@ -312,51 +313,6 @@ describe('RacksService', () => {
 
             expect(mockLoggerService.error).toHaveBeenCalledWith(
                 `Error fetching rack ${testRackId}`,
-                'Database error',
-                'RacksService',
-            );
-        });
-    });
-
-    describe('findByMacAddress', () => {
-        it('should find rack by MAC address', async () => {
-            mockDatabaseService.rack.findUnique.mockResolvedValue(mockRack);
-
-            const result = await service.findByMacAddress(testMacAddress);
-
-            expect(result).toEqual(mockRack);
-            expect(mockDatabaseService.rack.findUnique).toHaveBeenCalledWith({
-                where: { macAddress: testMacAddress },
-            });
-        });
-
-        it('should return null if rack not found', async () => {
-            mockDatabaseService.rack.findUnique.mockResolvedValue(null);
-
-            const result = await service.findByMacAddress(testMacAddress);
-
-            expect(result).toBeNull();
-        });
-
-        it('should throw InternalServerErrorException on database error', async () => {
-            mockDatabaseService.rack.findUnique.mockRejectedValue(new Error('Database error'));
-
-            await expect(service.findByMacAddress(testMacAddress)).rejects.toThrow(
-                InternalServerErrorException,
-            );
-            await expect(service.findByMacAddress(testMacAddress)).rejects.toThrow(
-                'Failed to find rack by MAC address',
-            );
-        });
-
-        it('should log error on failure', async () => {
-            const dbError = new Error('Database error');
-            mockDatabaseService.rack.findUnique.mockRejectedValue(dbError);
-
-            await expect(service.findByMacAddress(testMacAddress)).rejects.toThrow();
-
-            expect(mockLoggerService.error).toHaveBeenCalledWith(
-                `Error finding rack by MAC address: ${testMacAddress}`,
                 'Database error',
                 'RacksService',
             );
@@ -927,7 +883,7 @@ describe('RacksService', () => {
     describe('processDeviceStatus', () => {
         const statusData: DeviceStatusDto = {
             online: true,
-            timestamp: Date.now(),
+            timestamp: new Date().toISOString(),
         };
 
         beforeEach(() => {
@@ -1076,11 +1032,13 @@ describe('RacksService', () => {
             c: 'SENSOR_FAILURE',
             m: 'Sensor failed',
             s: 'CRITICAL',
+            ht: 'TEMPERATURE',
         });
         const errorData: DeviceErrorDto = {
             code: ErrorCode.SENSOR_FAILURE,
             message: 'Sensor failed',
             severity: ErrorSeverity.CRITICAL,
+            hardwareType: HardwareType.TEMPERATURE,
         };
 
         beforeEach(() => {

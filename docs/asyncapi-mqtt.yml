@@ -290,7 +290,7 @@ components:
                       m: 'BME280 sensor not responding'
                       s: 'CRITICAL'
                       tm: 1707112300000
-                      st: 'TEMPERATURE'
+                      ht: 'TEMPERATURE'
                       d:
                           ac: '3'
                           lsr: 1707111600000
@@ -451,7 +451,7 @@ components:
                     type: number
                     description: Timestamp of the error occurrence (milliseconds since epoch)
                     example: 1707112300000
-                st:
+                ht:
                     type: string
                     enum:
                         - TEMPERATURE
@@ -460,7 +460,7 @@ components:
                         - LIGHT
                         - GROW_LIGHT
                         - WATER_PUMP
-                    description: Type of sensor involved in the error
+                    description: Type of hardware involved in the error
                     example: 'TEMPERATURE'
                 d:
                     type: object

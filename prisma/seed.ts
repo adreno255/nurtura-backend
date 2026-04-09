@@ -128,7 +128,6 @@ async function main() {
                 isEnabled: true,
                 conditions: { moisture: { lessThan: 60 } },
                 actions: { watering: { action: 'watering_start' } },
-                cooldownMinutes: 60,
             },
             {
                 plantId: lettuce.id,
@@ -137,7 +136,6 @@ async function main() {
                 isEnabled: true,
                 conditions: { moisture: { greaterThan: 80 } },
                 actions: { watering: { action: 'watering_stop' } },
-                cooldownMinutes: 30,
             },
             {
                 plantId: lettuce.id,
@@ -146,7 +144,6 @@ async function main() {
                 isEnabled: true,
                 conditions: { temperature: { greaterThan: 18 } },
                 actions: {},
-                cooldownMinutes: 120,
             },
             {
                 plantId: lettuce.id,
@@ -155,7 +152,6 @@ async function main() {
                 isEnabled: true,
                 conditions: { lightLevel: { lessThan: 16000 } },
                 actions: { growLight: { action: 'light_on' } },
-                cooldownMinutes: 30,
             },
         ],
     });
@@ -181,7 +177,6 @@ async function main() {
                 isEnabled: true,
                 conditions: { moisture: { lessThan: 70 } },
                 actions: { watering: { action: 'watering_start' } },
-                cooldownMinutes: 60,
             },
             {
                 plantId: malabarSpinach.id,
@@ -190,7 +185,6 @@ async function main() {
                 isEnabled: true,
                 conditions: { moisture: { greaterThan: 90 } },
                 actions: { watering: { action: 'watering_stop' } },
-                cooldownMinutes: 30,
             },
             {
                 plantId: malabarSpinach.id,
@@ -199,7 +193,6 @@ async function main() {
                 isEnabled: true,
                 conditions: { temperature: { lessThan: 24 } },
                 actions: {},
-                cooldownMinutes: 120,
             },
             {
                 plantId: malabarSpinach.id,
@@ -208,7 +201,6 @@ async function main() {
                 isEnabled: true,
                 conditions: { lightLevel: { lessThan: 80000 } },
                 actions: { growLight: { action: 'light_on' } },
-                cooldownMinutes: 30,
             },
         ],
     });
@@ -234,7 +226,6 @@ async function main() {
                 isEnabled: true,
                 conditions: { moisture: { lessThan: 50 } },
                 actions: { watering: { action: 'watering_start' } },
-                cooldownMinutes: 60,
             },
             {
                 plantId: basil.id,
@@ -243,7 +234,6 @@ async function main() {
                 isEnabled: true,
                 conditions: { moisture: { greaterThan: 70 } },
                 actions: { watering: { action: 'watering_stop' } },
-                cooldownMinutes: 30,
             },
             {
                 plantId: basil.id,
@@ -252,7 +242,6 @@ async function main() {
                 isEnabled: true,
                 conditions: { lightLevel: { lessThan: 15000 } },
                 actions: { growLight: { action: 'light_on' } },
-                cooldownMinutes: 30,
             },
         ],
     });
@@ -278,7 +267,6 @@ async function main() {
                 isEnabled: true,
                 conditions: { moisture: { lessThan: 30 } },
                 actions: { watering: { action: 'watering_start' } },
-                cooldownMinutes: 120,
             },
             {
                 plantId: oregano.id,
@@ -287,7 +275,6 @@ async function main() {
                 isEnabled: true,
                 conditions: { moisture: { greaterThan: 50 } },
                 actions: { watering: { action: 'watering_stop' } },
-                cooldownMinutes: 30,
             },
             {
                 plantId: oregano.id,
@@ -296,7 +283,6 @@ async function main() {
                 isEnabled: true,
                 conditions: { lightLevel: { lessThan: 32000 } },
                 actions: { growLight: { action: 'light_on' } },
-                cooldownMinutes: 30,
             },
         ],
     });
@@ -322,7 +308,6 @@ async function main() {
                 isEnabled: true,
                 conditions: { moisture: { lessThan: 20 } },
                 actions: { watering: { action: 'watering_start' } },
-                cooldownMinutes: 180,
             },
             {
                 plantId: rosemary.id,
@@ -331,7 +316,6 @@ async function main() {
                 isEnabled: true,
                 conditions: { moisture: { greaterThan: 40 } },
                 actions: { watering: { action: 'watering_stop' } },
-                cooldownMinutes: 30,
             },
             {
                 plantId: rosemary.id,
@@ -340,7 +324,6 @@ async function main() {
                 isEnabled: true,
                 conditions: { lightLevel: { lessThan: 30000 } },
                 actions: { growLight: { action: 'light_on' } },
-                cooldownMinutes: 30,
             },
         ],
     });
@@ -366,7 +349,6 @@ async function main() {
                 isEnabled: true,
                 conditions: { moisture: { lessThan: 50 } },
                 actions: { watering: { action: 'watering_start' } },
-                cooldownMinutes: 60,
             },
             {
                 plantId: cilantro.id,
@@ -375,7 +357,6 @@ async function main() {
                 isEnabled: true,
                 conditions: { moisture: { greaterThan: 70 } },
                 actions: { watering: { action: 'watering_stop' } },
-                cooldownMinutes: 30,
             },
             {
                 plantId: cilantro.id,
@@ -384,7 +365,6 @@ async function main() {
                 isEnabled: true,
                 conditions: { lightLevel: { lessThan: 32000 } },
                 actions: { growLight: { action: 'light_on' } },
-                cooldownMinutes: 30,
             },
         ],
     });
@@ -410,7 +390,6 @@ async function main() {
                 isEnabled: true,
                 conditions: { moisture: { lessThan: 70 } },
                 actions: { watering: { action: 'watering_start' } },
-                cooldownMinutes: 60,
             },
             {
                 plantId: celery.id,
@@ -419,7 +398,6 @@ async function main() {
                 isEnabled: true,
                 conditions: { moisture: { greaterThan: 90 } },
                 actions: { watering: { action: 'watering_stop' } },
-                cooldownMinutes: 30,
             },
             {
                 plantId: celery.id,
@@ -428,7 +406,6 @@ async function main() {
                 isEnabled: true,
                 conditions: { lightLevel: { lessThan: 80000 } },
                 actions: { growLight: { action: 'light_on' } },
-                cooldownMinutes: 30,
             },
         ],
     });
@@ -454,7 +431,6 @@ async function main() {
                 isEnabled: true,
                 conditions: { moisture: { lessThan: 50 } },
                 actions: { watering: { action: 'watering_start' } },
-                cooldownMinutes: 60,
             },
             {
                 plantId: parsley.id,
@@ -463,7 +439,6 @@ async function main() {
                 isEnabled: true,
                 conditions: { moisture: { greaterThan: 70 } },
                 actions: { watering: { action: 'watering_stop' } },
-                cooldownMinutes: 30,
             },
             {
                 plantId: parsley.id,
@@ -472,7 +447,6 @@ async function main() {
                 isEnabled: true,
                 conditions: { lightLevel: { lessThan: 80000 } },
                 actions: { growLight: { action: 'light_on' } },
-                cooldownMinutes: 30,
             },
         ],
     });

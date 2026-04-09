@@ -19,6 +19,7 @@ import {
     type RackDetailsResponse,
     type DeviceStatusResponse,
     type RackCurrentStateResponse,
+    RackExistsResponse,
 } from './interfaces/rack.interface';
 import { type PaginatedResponse } from '../common/interfaces/pagination.interface';
 import { type Rack } from '../generated/prisma/client';
@@ -138,20 +139,24 @@ export class RacksService {
         }
     }
 
-    async findByMacAddress(macAddress: string): Promise<Rack | null> {
+    async rackExists(macAddress: string, userId: string): Promise<RackExistsResponse> {
         try {
             const rack = await this.databaseService.rack.findUnique({
-                where: { macAddress },
+                where: { macAddress, userId },
             });
 
-            return rack;
+            if (!rack) {
+                return { exists: false };
+            }
+
+            return { exists: true, rack };
         } catch (error) {
             this.logger.error(
-                `Error finding rack by MAC address: ${macAddress}`,
+                `Error checking rack existence: ${macAddress}`,
                 error instanceof Error ? error.message : String(error),
                 'RacksService',
             );
-            throw new InternalServerErrorException('Failed to find rack by MAC address');
+            throw new InternalServerErrorException('Failed to check rack existence');
         }
     }
 
@@ -169,6 +174,20 @@ export class RacksService {
             });
 
             if (existingRack) {
+                if (!existingRack.isActive) {
+                    await this.databaseService.rack.update({
+                        where: { id: existingRack.id },
+                        data: {
+                            name: dto.name,
+                            isActive: true,
+                        },
+                    });
+
+                    return {
+                        message: 'Archived rack recovered succefully.',
+                        rackId: existingRack.id,
+                    };
+                }
                 throw new ConflictException(`MAC address already registered to ${userId}`);
             }
 
@@ -545,7 +564,7 @@ export class RacksService {
                     rackId: rack.id,
                     type: NotificationType.ERROR,
                     title: `Component Malfunction Detected`,
-                    message: `An error with code "${errorData.code}" occurred with component on rack "${rack.name}".`,
+                    message: `An error with code "${errorData.code}" occurred with on rack "${rack.name}".`,
                     metadata: {
                         screen: `/(tabs)/(racks)/${rack.id}`,
                         ...errorData,

@@ -144,4 +144,7 @@ export const createMockWebsocketService = () => ({
     broadcastDeviceStatus: jest.fn(),
     broadcastNotification: jest.fn(),
     broadcastAutomationEvent: jest.fn(),
+    broadcastUserNotification: jest.fn(),
+    joinUserRoom: jest.fn(),
+    leaveUserRoom: jest.fn(),
 });

@@ -41,6 +41,7 @@ export const createMockUsersService = () => ({
     findById: jest.fn(),
     findByFirebaseUid: jest.fn(),
     update: jest.fn(),
+    getOnboardingState: jest.fn(),
 });
 
 export const createMockSensorsService = () => ({
@@ -57,7 +58,7 @@ export const createMockRacksService = () => ({
     create: jest.fn(),
     findAll: jest.fn(),
     findById: jest.fn(),
-    findByMacAddress: jest.fn(),
+    rackExists: jest.fn(),
     update: jest.fn(),
     delete: jest.fn(),
     verifyRackOwnership: jest.fn(),
@@ -99,4 +100,13 @@ export const createMockAutomationService = () => ({
     delete: jest.fn(),
     validateConditions: jest.fn(),
     validateActions: jest.fn(),
+});
+
+export const createMockNotificationsService = () => ({
+    findAll: jest.fn(),
+    hasUnreadNotifications: jest.fn(),
+    markAsRead: jest.fn(),
+    markAllAsRead: jest.fn(),
+    remove: jest.fn(),
+    handleCreateNotification: jest.fn(),
 });

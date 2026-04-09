@@ -95,36 +95,34 @@ export const rangeCondition: RuleConditions = {
  */
 export const wateringStartAction: RuleActions = {
     watering: {
-        action: 'start',
-        duration: 5000,
+        action: 'watering_start',
     },
 };
 
 export const wateringStopAction: RuleActions = {
     watering: {
-        action: 'stop',
+        action: 'watering_stop',
     },
 };
 
 export const growLightOnAction: RuleActions = {
     growLight: {
-        action: 'on',
+        action: 'light_on',
     },
 };
 
 export const growLightOffAction: RuleActions = {
     growLight: {
-        action: 'off',
+        action: 'light_off',
     },
 };
 
 export const multipleActions: RuleActions = {
     watering: {
-        action: 'start',
-        duration: 5000,
+        action: 'watering_start',
     },
     growLight: {
-        action: 'on',
+        action: 'light_on',
     },
 };
 
@@ -138,7 +136,6 @@ export const mockAutomationRule = {
     description: 'Automatically waters plants when soil moisture drops below 30%',
     conditions: moistureLessThanCondition,
     actions: wateringStartAction,
-    cooldownMinutes: 30,
     isEnabled: true,
     lastTriggeredAt: null,
     triggerCount: 0,
@@ -149,14 +146,12 @@ export const mockAutomationRule = {
 export const mockAutomationRuleWithCooldown = {
     ...mockAutomationRule,
     lastTriggeredAt: new Date(Date.now() - 10 * 60 * 1000), // 10 minutes ago
-    cooldownMinutes: 30,
     triggerCount: 1,
 };
 
 export const mockAutomationRuleExpiredCooldown = {
     ...mockAutomationRule,
     lastTriggeredAt: new Date(Date.now() - 35 * 60 * 1000), // 35 minutes ago
-    cooldownMinutes: 30,
     triggerCount: 1,
 };
 
@@ -193,7 +188,6 @@ export const validCreateAutomationRuleDto: CreateAutomationRuleDto = {
     description: 'Automatically waters plants when soil moisture drops below 30%',
     conditions: moistureLessThanCondition,
     actions: wateringStartAction,
-    cooldownMinutes: 30,
 };
 
 export const minimalCreateAutomationRuleDto: CreateAutomationRuleDto = {
@@ -209,7 +203,6 @@ export const lightingCreateRuleDto: CreateAutomationRuleDto = {
     description: 'Turns on lights when dark',
     conditions: lightLevelLessThanCondition,
     actions: growLightOnAction,
-    cooldownMinutes: 60,
 };
 
 export const multiConditionRuleDto: CreateAutomationRuleDto = {
@@ -218,7 +211,6 @@ export const multiConditionRuleDto: CreateAutomationRuleDto = {
     description: 'Multiple conditions and actions',
     conditions: multipleConditions,
     actions: multipleActions,
-    cooldownMinutes: 15,
 };
 
 export const validUpdateAutomationRuleDto: UpdateAutomationRuleDto = {
@@ -233,10 +225,6 @@ export const updateConditionsDto: UpdateAutomationRuleDto = {
 
 export const updateActionsDto: UpdateAutomationRuleDto = {
     actions: growLightOffAction,
-};
-
-export const updateCooldownDto: UpdateAutomationRuleDto = {
-    cooldownMinutes: 60,
 };
 
 export const disableRuleDto: UpdateAutomationRuleDto = {
@@ -305,7 +293,7 @@ export const invalidWateringActionDto: CreateAutomationRuleDto = {
     name: 'Invalid watering action',
     conditions: moistureLessThanCondition,
     actions: {
-        watering: { action: 'invalid' as unknown as 'start' | 'stop' },
+        watering: { action: 'invalid' as unknown as 'watering_start' | 'watering_stop' },
     },
 };
 
@@ -315,8 +303,7 @@ export const invalidWateringDurationDto: CreateAutomationRuleDto = {
     conditions: moistureLessThanCondition,
     actions: {
         watering: {
-            action: 'start',
-            duration: 100000, // Invalid: > 60000
+            action: 'watering_start',
         },
     },
 };
@@ -326,7 +313,7 @@ export const invalidGrowLightActionDto: CreateAutomationRuleDto = {
     name: 'Invalid grow light action',
     conditions: lightLevelLessThanCondition,
     actions: {
-        growLight: { action: 'toggle' as unknown as 'on' | 'off' },
+        growLight: { action: 'toggle' as unknown as 'light_on' | 'light_off' },
     },
 };
 

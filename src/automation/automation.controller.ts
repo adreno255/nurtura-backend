@@ -70,7 +70,6 @@ export class AutomationController {
                                 type: 'object',
                                 example: { watering: { action: 'start' } },
                             },
-                            cooldownMinutes: { type: 'number', example: 30 },
                             isEnabled: { type: 'boolean', example: true },
                             lastTriggeredAt: {
                                 type: 'string',
@@ -168,7 +167,6 @@ export class AutomationController {
                             type: 'object',
                             example: { watering: { action: 'start', duration: 5000 } },
                         },
-                        cooldownMinutes: { type: 'number', example: 30 },
                         isEnabled: { type: 'boolean', example: true },
                     },
                 },

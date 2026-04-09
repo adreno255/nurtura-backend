@@ -84,13 +84,13 @@ export class DeviceErrorDto {
 
     @Expose({ name: 'tm' })
     @IsOptional()
-    @IsNumber()
-    timestamp?: number;
+    @IsString()
+    timestamp?: string;
 
-    @Expose({ name: 'st' })
+    @Expose({ name: 'ht' })
     @IsOptional()
     @IsEnum(HardwareType)
-    sensorType?: HardwareType;
+    hardwareType?: HardwareType;
 
     @Expose({ name: 'd' })
     @IsOptional()

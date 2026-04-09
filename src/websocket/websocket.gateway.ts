@@ -197,7 +197,7 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
         try {
             await this.websocketService.joinUserRoom(client);
 
-            client.emit('subscribedToNotificationsAck', {
+            client.emit('subscribedToUserNotificationsAck', {
                 message: 'Subscribed to user notifications',
                 userId: client.data.user.dbId,
             });
@@ -221,7 +221,7 @@ export class WebsocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
         try {
             await this.websocketService.leaveUserRoom(client);
 
-            client.emit('unsubscribedFromNotificationsAck', {
+            client.emit('unsubscribedFromUserNotificationsAck', {
                 message: 'Unsubscribed from user notifications',
             });
         } catch (error) {

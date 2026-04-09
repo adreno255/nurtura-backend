@@ -950,4 +950,200 @@ describe('WebsocketGateway', () => {
             );
         });
     });
+
+    describe('handleSubscribeToUserNotifications', () => {
+        it('should join user notification room', async () => {
+            const mockClient = createMockAuthenticatedSocket();
+            mockClient.data.user = testUser;
+
+            mockWebsocketService.joinUserRoom.mockResolvedValue(undefined);
+
+            await gateway.handleSubscribeToUserNotifications(mockClient);
+
+            expect(mockWebsocketService.joinUserRoom).toHaveBeenCalledWith(mockClient);
+        });
+
+        it('should emit subscription acknowledgment', async () => {
+            const mockClient = createMockAuthenticatedSocket();
+            mockClient.data.user = {
+                dbId: testUserIds.primary,
+                firebaseUid: 'firebase-uid-123',
+                email: 'user@example.com',
+            };
+
+            mockWebsocketService.joinUserRoom.mockResolvedValue(undefined);
+
+            await gateway.handleSubscribeToUserNotifications(mockClient);
+
+            expect(jest.spyOn(mockClient, 'emit')).toHaveBeenCalledWith(
+                'subscribedToUserNotificationsAck',
+                {
+                    message: 'Subscribed to user notifications',
+                    userId: testUserIds.primary,
+                },
+            );
+        });
+
+        it('should handle join room error gracefully', async () => {
+            const mockClient = createMockAuthenticatedSocket();
+            mockClient.data.user = testUser;
+            const joinError = new Error('Failed to join room');
+
+            mockWebsocketService.joinUserRoom.mockRejectedValue(joinError);
+
+            await gateway.handleSubscribeToUserNotifications(mockClient);
+
+            expect(mockLogger.error).toHaveBeenCalledWith(
+                `Error subscribing client ${mockClient.id} to user notifications`,
+                'Failed to join room',
+                'WebsocketGateway',
+            );
+            expect(jest.spyOn(mockClient, 'emit')).toHaveBeenCalledWith('error', {
+                message: 'Failed to subscribe to user notifications',
+                error: 'Failed to join room',
+            });
+        });
+
+        it('should handle non-Error exceptions gracefully', async () => {
+            const mockClient = createMockAuthenticatedSocket();
+            mockClient.data.user = testUser;
+
+            mockWebsocketService.joinUserRoom.mockRejectedValue('String error');
+
+            await gateway.handleSubscribeToUserNotifications(mockClient);
+
+            expect(jest.spyOn(mockClient, 'emit')).toHaveBeenCalledWith('error', {
+                message: 'Failed to subscribe to user notifications',
+                error: 'Unknown error',
+            });
+        });
+
+        it('should call joinUserRoom once', async () => {
+            const mockClient = createMockAuthenticatedSocket();
+            mockClient.data.user = testUser;
+
+            mockWebsocketService.joinUserRoom.mockResolvedValue(undefined);
+
+            await gateway.handleSubscribeToUserNotifications(mockClient);
+
+            expect(mockWebsocketService.joinUserRoom).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    describe('handleUnsubscribeFromUserNotifications', () => {
+        it('should leave user notification room', async () => {
+            const mockClient = createMockAuthenticatedSocket();
+            mockClient.data.user = testUser;
+
+            mockWebsocketService.leaveUserRoom.mockResolvedValue(undefined);
+
+            await gateway.handleUnsubscribeFromUserNotifications(mockClient);
+
+            expect(mockWebsocketService.leaveUserRoom).toHaveBeenCalledWith(mockClient);
+        });
+
+        it('should emit unsubscription acknowledgment', async () => {
+            const mockClient = createMockAuthenticatedSocket();
+            mockClient.data.user = testUser;
+
+            mockWebsocketService.leaveUserRoom.mockResolvedValue(undefined);
+
+            await gateway.handleUnsubscribeFromUserNotifications(mockClient);
+
+            expect(jest.spyOn(mockClient, 'emit')).toHaveBeenCalledWith(
+                'unsubscribedFromUserNotificationsAck',
+                {
+                    message: 'Unsubscribed from user notifications',
+                },
+            );
+        });
+
+        it('should handle leave room error gracefully', async () => {
+            const mockClient = createMockAuthenticatedSocket();
+            mockClient.data.user = testUser;
+            const leaveError = new Error('Failed to leave room');
+
+            mockWebsocketService.leaveUserRoom.mockRejectedValue(leaveError);
+
+            await gateway.handleUnsubscribeFromUserNotifications(mockClient);
+
+            expect(mockLogger.error).toHaveBeenCalledWith(
+                `Error unsubscribing client ${mockClient.id} from user notifications`,
+                'Failed to leave room',
+                'WebsocketGateway',
+            );
+            expect(jest.spyOn(mockClient, 'emit')).toHaveBeenCalledWith('error', {
+                message: 'Failed to unsubscribe from user notifications',
+                error: 'Failed to leave room',
+            });
+        });
+
+        it('should handle non-Error exceptions gracefully', async () => {
+            const mockClient = createMockAuthenticatedSocket();
+            mockClient.data.user = testUser;
+
+            mockWebsocketService.leaveUserRoom.mockRejectedValue('String error');
+
+            await gateway.handleUnsubscribeFromUserNotifications(mockClient);
+
+            expect(jest.spyOn(mockClient, 'emit')).toHaveBeenCalledWith('error', {
+                message: 'Failed to unsubscribe from user notifications',
+                error: 'Unknown error',
+            });
+        });
+
+        it('should call leaveUserRoom once', async () => {
+            const mockClient = createMockAuthenticatedSocket();
+            mockClient.data.user = testUser;
+
+            mockWebsocketService.leaveUserRoom.mockResolvedValue(undefined);
+
+            await gateway.handleUnsubscribeFromUserNotifications(mockClient);
+
+            expect(mockWebsocketService.leaveUserRoom).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    describe('broadcastUserNotification', () => {
+        it('should delegate to websocket service', () => {
+            gateway.broadcastUserNotification(testUserIds.primary, mockNotification);
+
+            expect(mockWebsocketService.broadcastUserNotification).toHaveBeenCalledWith(
+                testUserIds.primary,
+                mockNotification,
+            );
+        });
+
+        it('should broadcast to multiple users', () => {
+            gateway.broadcastUserNotification(testUserIds.primary, mockNotification);
+            gateway.broadcastUserNotification(testUserIds.secondary, mockNotification);
+
+            expect(mockWebsocketService.broadcastUserNotification).toHaveBeenCalledTimes(2);
+            expect(mockWebsocketService.broadcastUserNotification).toHaveBeenNthCalledWith(
+                1,
+                testUserIds.primary,
+                mockNotification,
+            );
+            expect(mockWebsocketService.broadcastUserNotification).toHaveBeenNthCalledWith(
+                2,
+                testUserIds.secondary,
+                mockNotification,
+            );
+        });
+
+        it('should pass through notification data unchanged', () => {
+            const notification = {
+                ...mockNotification,
+                title: 'Custom Alert',
+                message: 'Something happened',
+            };
+
+            gateway.broadcastUserNotification(testUserIds.primary, notification);
+
+            expect(mockWebsocketService.broadcastUserNotification).toHaveBeenCalledWith(
+                testUserIds.primary,
+                notification,
+            );
+        });
+    });
 });

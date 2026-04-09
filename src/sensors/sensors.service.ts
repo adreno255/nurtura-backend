@@ -247,7 +247,7 @@ export class SensorsService {
 
         // Step 1: Find the rack by MAC address
         const rack = await this.databaseService.rack.findUnique({
-            where: { macAddress },
+            where: { macAddress, isActive: true },
             include: {
                 user: {
                     select: {

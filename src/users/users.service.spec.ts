@@ -864,4 +864,88 @@ describe('UsersService', () => {
             expect(result.userInfo.city).toBe('Manila City');
         });
     });
+
+    describe('getOnboardingState', () => {
+        const userId = 'user-id-123';
+
+        it('should return onboarding state successfully', async () => {
+            mockDatabaseService.user.findUnique.mockResolvedValue({
+                completedPages: ['profile', 'preferences'],
+                hasCompletedOnboarding: false,
+            });
+
+            const result = await service.getOnboardingState(userId);
+
+            expect(result).toEqual({
+                completedPages: ['profile', 'preferences'],
+                hasCompletedOnboarding: false,
+            });
+        });
+
+        it('should query database with correct id and select', async () => {
+            mockDatabaseService.user.findUnique.mockResolvedValue({
+                completedPages: [],
+                hasCompletedOnboarding: false,
+            });
+
+            await service.getOnboardingState(userId);
+
+            expect(mockDatabaseService.user.findUnique).toHaveBeenCalledWith({
+                where: { id: userId },
+                select: { completedPages: true, hasCompletedOnboarding: true },
+            });
+        });
+
+        it('should throw NotFoundException if user not found', async () => {
+            mockDatabaseService.user.findUnique.mockResolvedValue(null);
+
+            await expect(service.getOnboardingState(userId)).rejects.toThrow(NotFoundException);
+            await expect(service.getOnboardingState(userId)).rejects.toThrow('User not found');
+        });
+
+        it('should return hasCompletedOnboarding as true when onboarding is complete', async () => {
+            mockDatabaseService.user.findUnique.mockResolvedValue({
+                completedPages: ['profile', 'preferences', 'summary'],
+                hasCompletedOnboarding: true,
+            });
+
+            const result = await service.getOnboardingState(userId);
+
+            expect(result.hasCompletedOnboarding).toBe(true);
+        });
+
+        it('should return empty completedPages array for a new user', async () => {
+            mockDatabaseService.user.findUnique.mockResolvedValue({
+                completedPages: [],
+                hasCompletedOnboarding: false,
+            });
+
+            const result = await service.getOnboardingState(userId);
+
+            expect(result.completedPages).toEqual([]);
+        });
+
+        it('should throw InternalServerErrorException for database errors', async () => {
+            mockDatabaseService.user.findUnique.mockRejectedValue(new Error('Database error'));
+
+            await expect(service.getOnboardingState(userId)).rejects.toThrow(
+                InternalServerErrorException,
+            );
+            await expect(service.getOnboardingState(userId)).rejects.toThrow(
+                'Failed to fetch onboarding state',
+            );
+        });
+
+        it('should log error for database errors', async () => {
+            mockDatabaseService.user.findUnique.mockRejectedValue(new Error('Database error'));
+
+            await expect(service.getOnboardingState(userId)).rejects.toThrow();
+
+            expect(mockLoggerService.error).toHaveBeenCalledWith(
+                `Error fetching onboarding state for user ${userId}`,
+                'Database error',
+                'UsersService',
+            );
+        });
+    });
 });

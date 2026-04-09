@@ -31,11 +31,18 @@ export class AutomationService {
     ) {}
 
     /**
-     * Evaluates automation rules for a rack based light_on sensor data.
+     * Evaluates automation rules for a rack based on sensor data.
      * Called by SensorsService after saving sensor data.
      *
-     * Rules are now plant-scoped: we resolve the rack's current plant,
+     * Rules are plant-scoped: we resolve the rack's current plant,
      * then fetch all enabled rules associated with that plant.
+     *
+     * Trigger behavior:
+     * - MQTT command is always sent when conditions are met.
+     * - triggerCount, activity log, and notification only fire on the FIRST
+     *   trigger (i.e. when the last recorded action differs — start → new start
+     *   is skipped, stop → start is not).
+     * - A stop command always logs and notifies (since the last action was a start).
      *
      * @param rackId - Rack ID
      * @param sensorData - Latest sensor reading
@@ -44,7 +51,6 @@ export class AutomationService {
         this.logger.log(`Evaluating automation rules for rack: ${rackId}`, 'AutomationService');
 
         try {
-            // Resolve the rack to get its macAddress and currentPlantId
             const rack = await this.databaseService.rack.findUnique({
                 where: { id: rackId },
                 select: {
@@ -71,7 +77,6 @@ export class AutomationService {
                 return;
             }
 
-            // Get all enabled automation rules for the current plant
             const rules = await this.databaseService.automationRule.findMany({
                 where: {
                     plantId: rack.currentPlantId,
@@ -92,23 +97,7 @@ export class AutomationService {
                 'AutomationService',
             );
 
-            // Evaluate each rule
             for (const rule of rules) {
-                // Check cooldown period
-                // if (rule.cooldownMinutes && rule.lastTriggeredAt) {
-                //     const cooldownMs = rule.cooldownMinutes * 60 * 1000;
-                //     const timeSinceLastTrigger = Date.now() - rule.lastTriggeredAt.getTime();
-
-                //     if (timeSinceLastTrigger < cooldownMs) {
-                //         this.logger.debug(
-                //             `Rule "${rule.name}" is in cooldown period (${Math.round((cooldownMs - timeSinceLastTrigger) / 1000)}s remaining)`,
-                //             'AutomationService',
-                //         );
-                //         continue;
-                //     }
-                // }
-
-                // Evaluate conditions
                 const conditions = rule.conditions as RuleConditions;
                 const shouldTrigger = this.evaluateConditions(conditions, sensorData);
 
@@ -118,9 +107,11 @@ export class AutomationService {
                         'AutomationService',
                     );
 
-                    // Execute actions
                     const actions = rule.actions as RuleActions;
-                    await this.executeActions(
+
+                    // executeActions returns true only when at least one action
+                    // was non-duplicate (i.e. first start or a stop after a start)
+                    const isFirstTrigger = await this.executeActions(
                         rack.macAddress,
                         actions,
                         rackId,
@@ -129,14 +120,16 @@ export class AutomationService {
                         rule.name,
                     );
 
-                    // Update rule trigger tracking
-                    await this.databaseService.automationRule.update({
-                        where: { id: rule.id },
-                        data: {
-                            lastTriggeredAt: new Date(),
-                            triggerCount: rule.triggerCount + 1,
-                        },
-                    });
+                    // Only count and timestamp on a genuinely new trigger
+                    if (isFirstTrigger) {
+                        await this.databaseService.automationRule.update({
+                            where: { id: rule.id },
+                            data: {
+                                lastTriggeredAt: new Date(),
+                                triggerCount: rule.triggerCount + 1,
+                            },
+                        });
+                    }
 
                     this.logger.log(
                         `Automation rule "${rule.name}" executed successfully`,
@@ -150,7 +143,6 @@ export class AutomationService {
                 error instanceof Error ? error.message : String(error),
                 'AutomationService',
             );
-            // Don't throw — automation failures shouldn't break sensor data processing
         }
     }
 
@@ -224,6 +216,12 @@ export class AutomationService {
 
     /**
      * Executes automation actions by publishing MQTT commands via EventEmitter.
+     *
+     * Always sends the MQTT command regardless of duplicate state.
+     * Only logs activity and emits a notification on the first occurrence
+     * (i.e. when the last recorded event differs from the current action).
+     *
+     * @returns true if at least one action was non-duplicate (triggers triggerCount update)
      */
     private async executeActions(
         macAddress: string,
@@ -232,8 +230,9 @@ export class AutomationService {
         rack: Partial<Rack>,
         ruleId: string,
         ruleName: string,
-    ): Promise<void> {
+    ): Promise<boolean> {
         const executedActions: string[] = [];
+        let hasNewAction = false;
 
         try {
             if (actions.watering) {
@@ -246,7 +245,6 @@ export class AutomationService {
                         ? ActivityEventType.WATERING_START
                         : ActivityEventType.WATERING_STOP;
 
-                // Check last watering activity — skip if same action was already executed
                 const lastWateringActivity = await this.databaseService.activity.findFirst({
                     where: {
                         rackId,
@@ -259,41 +257,61 @@ export class AutomationService {
 
                 const isWateringDuplicate = lastWateringActivity?.eventType === targetEventType;
 
-                this.eventEmitter.emit('publishCommand', macAddress, 'watering', wateringCommand);
-                executedActions.push(`watering:${actions.watering.action}`);
+                // Guard: don't send a stop if there's no prior start to stop
+                const isOrphanedStop =
+                    actions.watering.action !== 'watering_start' &&
+                    lastWateringActivity?.eventType !== ActivityEventType.WATERING_START;
 
-                if (!isWateringDuplicate) {
-                    await this.logRackActivityHelper.logActivity(
-                        rackId,
-                        targetEventType,
-                        `Watering ${actions.watering.action} triggered by automation rule "${ruleName}"`,
-                        {
-                            rackName: rack.name,
-                            macAddress: rack.macAddress,
-                            source: 'automation',
-                            ruleId,
-                            ruleName,
-                        } as Prisma.InputJsonValue,
-                    );
-
-                    this.eventEmitter.emit('createNotification', {
-                        userId: rack.userId!,
-                        rackId,
-                        type: NotificationType.AUTOMATION,
-                        title: `Watering ${actions.watering.action === 'watering_start' ? 'Started' : 'Stopped'}`,
-                        message: `Rule "${ruleName}" ${actions.watering.action === 'watering_start' ? 'activated the water pump' : 'stopped the water pump'}.`,
-                        metadata: {
-                            screen: '/(tabs)/(activity)/plant-care',
-                            ruleId,
-                            ruleName,
-                            action: actions.watering.action,
-                        },
-                    } satisfies CreateNotificationPayload);
-                } else {
+                if (isOrphanedStop) {
                     this.logger.log(
-                        `Skipping duplicate watering action "${actions.watering.action}" for rack ${rackId}`,
+                        `Skipping watering stop — no prior watering_start recorded for rack ${rackId}`,
                         'AutomationService',
                     );
+                } else {
+                    // Always send the MQTT command
+                    this.eventEmitter.emit(
+                        'publishCommand',
+                        macAddress,
+                        'watering',
+                        wateringCommand,
+                    );
+                    executedActions.push(`watering:${actions.watering.action}`);
+
+                    if (!isWateringDuplicate) {
+                        hasNewAction = true;
+
+                        await this.logRackActivityHelper.logActivity(
+                            rackId,
+                            targetEventType,
+                            `Watering ${actions.watering.action} triggered by automation rule "${ruleName}"`,
+                            {
+                                rackName: rack.name,
+                                macAddress: rack.macAddress,
+                                source: 'automation',
+                                ruleId,
+                                ruleName,
+                            } as Prisma.InputJsonValue,
+                        );
+
+                        this.eventEmitter.emit('createNotification', {
+                            userId: rack.userId!,
+                            rackId,
+                            type: NotificationType.AUTOMATION,
+                            title: `Watering ${actions.watering.action === 'watering_start' ? 'Started' : 'Stopped'}`,
+                            message: `Rule "${ruleName}" ${actions.watering.action === 'watering_start' ? 'activated the water pump' : 'stopped the water pump'}.`,
+                            metadata: {
+                                screen: '/(tabs)/(activity)/plant-care',
+                                ruleId,
+                                ruleName,
+                                action: actions.watering.action,
+                            },
+                        } satisfies CreateNotificationPayload);
+                    } else {
+                        this.logger.log(
+                            `Skipping duplicate watering activity/notification for action "${actions.watering.action}" on rack ${rackId} — MQTT command still sent`,
+                            'AutomationService',
+                        );
+                    }
                 }
             }
 
@@ -307,7 +325,6 @@ export class AutomationService {
                         ? ActivityEventType.LIGHT_ON
                         : ActivityEventType.LIGHT_OFF;
 
-                // Check last grow light activity — skip if same action was already executed
                 const lastLightActivity = await this.databaseService.activity.findFirst({
                     where: {
                         rackId,
@@ -320,41 +337,61 @@ export class AutomationService {
 
                 const isLightDuplicate = lastLightActivity?.eventType === targetEventType;
 
-                this.eventEmitter.emit('publishCommand', macAddress, 'lighting', lightingCommand);
-                executedActions.push(`growLight:${actions.growLight.action}`);
+                // Guard: don't send a stop if there's no prior start to stop
+                const isOrphanedStop =
+                    actions.growLight.action !== 'light_on' &&
+                    lastLightActivity?.eventType !== ActivityEventType.LIGHT_ON;
 
-                if (!isLightDuplicate) {
-                    await this.logRackActivityHelper.logActivity(
-                        rackId,
-                        targetEventType,
-                        `Grow light ${actions.growLight.action} triggered by automation rule "${ruleName}"`,
-                        {
-                            rackName: rack.name,
-                            macAddress: rack.macAddress,
-                            source: 'automation',
-                            ruleId,
-                            ruleName,
-                        } as Prisma.InputJsonValue,
-                    );
-
-                    this.eventEmitter.emit('createNotification', {
-                        userId: rack.userId!,
-                        rackId,
-                        type: NotificationType.AUTOMATION,
-                        title: `Grow Light ${actions.growLight.action === 'light_on' ? 'Turned On' : 'Turned Off'}`,
-                        message: `Rule "${ruleName}" turned the grow light ${actions.growLight.action}.`,
-                        metadata: {
-                            screen: '/(tabs)/(activity)/plant-care',
-                            ruleId,
-                            ruleName,
-                            action: actions.growLight.action,
-                        },
-                    } satisfies CreateNotificationPayload);
-                } else {
+                if (isOrphanedStop) {
                     this.logger.log(
-                        `Skipping duplicate grow light action "${actions.growLight.action}" for rack ${rackId}`,
+                        `Skipping grow light off — no prior light_on recorded for rack ${rackId}`,
                         'AutomationService',
                     );
+                } else {
+                    // Always send the MQTT command
+                    this.eventEmitter.emit(
+                        'publishCommand',
+                        macAddress,
+                        'lighting',
+                        lightingCommand,
+                    );
+                    executedActions.push(`growLight:${actions.growLight.action}`);
+
+                    if (!isLightDuplicate) {
+                        hasNewAction = true;
+
+                        await this.logRackActivityHelper.logActivity(
+                            rackId,
+                            targetEventType,
+                            `Grow light ${actions.growLight.action} triggered by automation rule "${ruleName}"`,
+                            {
+                                rackName: rack.name,
+                                macAddress: rack.macAddress,
+                                source: 'automation',
+                                ruleId,
+                                ruleName,
+                            } as Prisma.InputJsonValue,
+                        );
+
+                        this.eventEmitter.emit('createNotification', {
+                            userId: rack.userId!,
+                            rackId,
+                            type: NotificationType.AUTOMATION,
+                            title: `Grow Light ${actions.growLight.action === 'light_on' ? 'Turned On' : 'Turned Off'}`,
+                            message: `Rule "${ruleName}" turned the grow light ${actions.growLight.action === 'light_on' ? 'on' : 'off'}.`,
+                            metadata: {
+                                screen: '/(tabs)/(activity)/plant-care',
+                                ruleId,
+                                ruleName,
+                                action: actions.growLight.action,
+                            },
+                        } satisfies CreateNotificationPayload);
+                    } else {
+                        this.logger.log(
+                            `Skipping duplicate grow light activity/notification for action "${actions.growLight.action}" on rack ${rackId} — MQTT command still sent`,
+                            'AutomationService',
+                        );
+                    }
                 }
             }
 
@@ -371,6 +408,8 @@ export class AutomationService {
                 `Executed actions for rule "${ruleName}": ${executedActions.join(', ')}`,
                 'AutomationService',
             );
+
+            return hasNewAction;
         } catch (error) {
             this.logger.error(
                 `Failed to execute actions for rule "${ruleName}"`,
@@ -418,7 +457,6 @@ export class AutomationService {
                     description: createRuleDto.description,
                     conditions: createRuleDto.conditions as Prisma.InputJsonValue,
                     actions: createRuleDto.actions as Prisma.InputJsonValue,
-                    cooldownMinutes: createRuleDto.cooldownMinutes,
                     isEnabled: true,
                 },
             });
@@ -436,7 +474,6 @@ export class AutomationService {
                     description: rule.description,
                     conditions: rule.conditions,
                     actions: rule.actions,
-                    cooldownMinutes: rule.cooldownMinutes,
                     isEnabled: rule.isEnabled,
                 },
             };
@@ -565,9 +602,6 @@ export class AutomationService {
                     }),
                     ...(updateData.actions && {
                         actions: updateData.actions as Prisma.InputJsonValue,
-                    }),
-                    ...(updateData.cooldownMinutes !== undefined && {
-                        cooldownMinutes: updateData.cooldownMinutes,
                     }),
                     ...(updateData.isEnabled !== undefined && {
                         isEnabled: updateData.isEnabled,

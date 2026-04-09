@@ -37,6 +37,7 @@ import {
     HarvestLeavesDto,
     HarvestSeedsDto,
 } from './dto';
+import { RackExistsDto } from './dto/rack-exists.dto';
 
 @ApiTags('Racks')
 @ApiBearerAuth('firebase-jwt')
@@ -206,6 +207,136 @@ export class RacksController {
     })
     async findAll(@CurrentUser() user: CurrentUserPayload, @Query() query: PaginationQueryDto) {
         return this.racksService.findAll(user.dbId, query);
+    }
+
+    @Get('exists')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({
+        summary: 'Check if rack exists by MAC address',
+        description:
+            'Checks if a rack with the given MAC address already exists for the authenticated user. Returns true if it exists, false otherwise.',
+    })
+    @ApiResponse({
+        status: HttpStatus.CREATED,
+        description: 'Rack existence check completed successfully',
+        content: {
+            'application/json': {
+                schema: {
+                    type: 'object',
+                    properties: {
+                        exists: {
+                            type: 'boolean',
+                            example: true,
+                        },
+                        rack: {
+                            type: 'object',
+                            example: {
+                                id: 'clx123abc456',
+                                userId: 'clxusr789',
+                                name: 'Living Room Farm',
+                                macAddress: 'AA:BB:CC:DD:EE:FF',
+                                mqttTopic: 'nurtura/rack/aa-bb-cc-dd-ee-ff',
+                                description: 'Rack for growing herbs',
+                                currentPlantId: 'clx000plant123',
+                                quantity: 10,
+                                plantedAt: '2025-01-01T08:00:00.000Z',
+                                lastHarvestAt: '2025-02-01T08:00:00.000Z',
+                                harvestCount: 3,
+                                isActive: true,
+                                status: 'ONLINE',
+                                lastActivityAt: '2025-02-01T10:30:00.000Z',
+                                lastSeenAt: '2025-02-01T10:30:00.000Z',
+                                lastWateredAt: '2025-02-01T09:00:00.000Z',
+                                lastLightOnAt: '2025-02-01T06:00:00.000Z',
+                                createdAt: '2025-01-15T08:00:00.000Z',
+                                updatedAt: '2025-02-01T10:30:00.000Z',
+                            },
+                            nullable: true,
+                        },
+                    },
+                },
+                examples: {
+                    doesExist: {
+                        summary: 'Rack Exists',
+                        value: {
+                            exists: true,
+                            rack: {
+                                id: 'clx123abc456',
+                                userId: 'clxusr789',
+                                name: 'Living Room Farm',
+                                macAddress: 'AA:BB:CC:DD:EE:FF',
+                                mqttTopic: 'nurtura/rack/aa-bb-cc-dd-ee-ff',
+                                description: 'Rack for growing herbs',
+                                currentPlantId: 'clx000plant123',
+                                quantity: 10,
+                                plantedAt: '2025-01-01T08:00:00.000Z',
+                                lastHarvestAt: '2025-02-01T08:00:00.000Z',
+                                harvestCount: 3,
+                                isActive: true,
+                                status: 'ONLINE',
+                                lastActivityAt: '2025-02-01T10:30:00.000Z',
+                                lastSeenAt: '2025-02-01T10:30:00.000Z',
+                                lastWateredAt: '2025-02-01T09:00:00.000Z',
+                                lastLightOnAt: '2025-02-01T06:00:00.000Z',
+                                createdAt: '2025-01-15T08:00:00.000Z',
+                                updatedAt: '2025-02-01T10:30:00.000Z',
+                            },
+                        },
+                    },
+                    doesNotExist: {
+                        summary: 'Rack Does Not Exist',
+                        value: {
+                            exists: false,
+                        },
+                    },
+                },
+            },
+        },
+    })
+    @ApiBadRequestResponse({
+        description: 'Invalid MAC address format',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 400 },
+                timestamp: { type: 'string', example: '2026-01-09T08:00:00.000Z' },
+                path: { type: 'string', example: '/racks/exists' },
+                message: {
+                    type: 'string',
+                    example: 'Invalid MAC address format',
+                },
+            },
+        },
+    })
+    @ApiUnauthorizedResponse({
+        description: 'Missing or invalid authentication token',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 401 },
+                timestamp: { type: 'string', example: '2026-01-09T08:00:00.000Z' },
+                path: { type: 'string', example: '/racks/exists' },
+                message: { type: 'string', example: 'Authentication required' },
+            },
+        },
+    })
+    @ApiInternalServerErrorResponse({
+        description: 'Internal server error',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 500 },
+                timestamp: { type: 'string', example: '2026-01-09T08:00:00.000Z' },
+                path: { type: 'string', example: '/racks/exists' },
+                message: { type: 'string', example: 'Failed to check rack existence' },
+            },
+        },
+    })
+    async rackExists(
+        @CurrentUser() user: CurrentUserPayload,
+        @Body() rackExistsDto: RackExistsDto,
+    ) {
+        return await this.racksService.rackExists(rackExistsDto.macAddress, user.dbId);
     }
 
     @Get('activities')
@@ -1980,6 +2111,43 @@ export class RacksController {
             properties: {
                 message: { type: 'string', example: 'Rack registered successfully' },
                 rackId: { type: 'string', example: 'clx123abc456' },
+            },
+        },
+    })
+    @ApiResponse({
+        status: HttpStatus.CREATED,
+        description: 'Rack registered successfully',
+        content: {
+            'application/json': {
+                schema: {
+                    type: 'object',
+                    properties: {
+                        message: {
+                            type: 'string',
+                            example: 'Rack registered successfully',
+                        },
+                        rackId: {
+                            type: 'string',
+                            example: 'clx123abc456',
+                        },
+                    },
+                },
+                examples: {
+                    newRack: {
+                        summary: 'New Rack Registration',
+                        value: {
+                            message: 'Rack registered successfully',
+                            rackId: 'clx123abc456',
+                        },
+                    },
+                    recoveredRack: {
+                        summary: 'Recovered Rack',
+                        value: {
+                            message: 'Archived rack recovered successfully.',
+                            rackId: 'clx123abc456',
+                        },
+                    },
+                },
             },
         },
     })

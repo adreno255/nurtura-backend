@@ -42,3 +42,8 @@ export interface RackCurrentStateResponse {
         timestamp: Date;
     } | null;
 }
+
+export interface RackExistsResponse {
+    exists: boolean;
+    rack?: Rack;
+}
