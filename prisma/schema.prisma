@@ -81,10 +81,18 @@ enum NotificationStatus {
 enum DeviceStatus {
     ONLINE
     OFFLINE
-    ERROR
-    MAINTENANCE
 
     @@map("device_status")
+}
+
+enum WateringState {
+    RUNNING
+    STOPPED
+}
+
+enum LightState {
+    ON
+    OFF
 }
 
 
@@ -175,6 +183,10 @@ model Rack {
     lastSeenAt     DateTime?    @map("last_seen_at")
     lastWateredAt  DateTime?    @map("last_watered_at")
     lastLightOnAt  DateTime?    @map("last_light_on_at")
+
+     // Actuator states
+    wateringState  WateringState  @default(STOPPED) @map("watering_state")
+    lightState     LightState     @default(OFF)      @map("light_state")
 
     // Timestamps
     createdAt DateTime @default(now()) @map("created_at")

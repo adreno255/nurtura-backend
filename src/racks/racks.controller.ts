@@ -37,7 +37,6 @@ import {
     HarvestLeavesDto,
     HarvestSeedsDto,
 } from './dto';
-import { RackExistsDto } from './dto/rack-exists.dto';
 
 @ApiTags('Racks')
 @ApiBearerAuth('firebase-jwt')
@@ -216,6 +215,13 @@ export class RacksController {
         description:
             'Checks if a rack with the given MAC address already exists for the authenticated user. Returns true if it exists, false otherwise.',
     })
+    @ApiQuery({
+        name: 'macAddress',
+        required: true,
+        type: String,
+        description: 'MAC address to check for existence',
+        example: 'AA:BB:CC:DD:EE:FF',
+    })
     @ApiResponse({
         status: HttpStatus.CREATED,
         description: 'Rack existence check completed successfully',
@@ -293,21 +299,6 @@ export class RacksController {
             },
         },
     })
-    @ApiBadRequestResponse({
-        description: 'Invalid MAC address format',
-        schema: {
-            type: 'object',
-            properties: {
-                statusCode: { type: 'number', example: 400 },
-                timestamp: { type: 'string', example: '2026-01-09T08:00:00.000Z' },
-                path: { type: 'string', example: '/racks/exists' },
-                message: {
-                    type: 'string',
-                    example: 'Invalid MAC address format',
-                },
-            },
-        },
-    })
     @ApiUnauthorizedResponse({
         description: 'Missing or invalid authentication token',
         schema: {
@@ -334,9 +325,9 @@ export class RacksController {
     })
     async rackExists(
         @CurrentUser() user: CurrentUserPayload,
-        @Body() rackExistsDto: RackExistsDto,
+        @Query('macAddress') macAddress: string,
     ) {
-        return await this.racksService.rackExists(rackExistsDto.macAddress, user.dbId);
+        return await this.racksService.rackExists(macAddress, user.dbId);
     }
 
     @Get('activities')

@@ -286,6 +286,7 @@ export class SensorsService {
                     humidity: sensorData.humidity,
                     moisture: sensorData.moisture,
                     lightLevel: sensorData.lightLevel,
+                    waterUsed: sensorData.waterUsed,
                     timestamp: sensorData.timestamp ? new Date(sensorData.timestamp) : new Date(),
                     rawData: sensorData as unknown as Prisma.InputJsonValue,
                 },
@@ -294,7 +295,8 @@ export class SensorsService {
             this.logger.log(
                 `Sensor reading saved for rack ${rack.name} (${rack.id}): ` +
                     `T=${sensorData.temperature}°C, H=${sensorData.humidity}%, ` +
-                    `M=${sensorData.moisture}%, L=${sensorData.lightLevel}`,
+                    `M=${sensorData.moisture}%, L=${sensorData.lightLevel}` +
+                    (sensorData.waterUsed !== undefined ? `, WU=${sensorData.waterUsed}ml` : ''),
                 'SensorsService',
             );
 
