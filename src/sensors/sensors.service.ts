@@ -257,6 +257,12 @@ export class SensorsService {
                         email: true,
                     },
                 },
+                currentPlant: {
+                    select: {
+                        id: true,
+                        name: true,
+                    },
+                },
             },
         });
 

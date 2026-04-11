@@ -653,30 +653,27 @@ async function main() {
             {
                 rackId: rack2.id,
                 eventType: ActivityEventType.PLANT_REMOVED,
-                details: 'Plant removed from rack (replaced during crop rotation)',
+                details: 'Plant removed from rack',
                 metadata: {
                     rackName: rack2.name,
                     macAddress: rack2.macAddress,
                     removedPlantId: oregano.id,
                     removedPlantName: 'Oregano',
-                    replacedByPlantId: basil.id,
-                    replacedByPlantName: 'Basil',
                 },
                 timestamp: rack2ChangedAt,
             },
-            // Crop rotation — basil assigned
+            // Basil planted (after oregano removed)
             {
                 rackId: rack2.id,
-                eventType: ActivityEventType.PLANT_CHANGED,
-                details: `Plant changed from previous to "Basil"`,
+                eventType: ActivityEventType.PLANT_ADDED,
+                details: `Plant "Basil" added to rack`,
                 metadata: {
                     rackName: rack2.name,
                     macAddress: rack2.macAddress,
-                    previousPlantId: oregano.id,
-                    previousPlantName: 'Oregano',
-                    newPlantId: basil.id,
-                    newPlantName: 'Basil',
+                    plantId: basil.id,
+                    plantName: 'Basil',
                     quantity: 8,
+                    plantedAt: rack2ChangedAt.toISOString(),
                 },
                 timestamp: rack2ChangedAt,
             },

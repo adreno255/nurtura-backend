@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { MyLoggerService } from '../my-logger/my-logger.service';
-import { NotificationType, Rack } from '../generated/prisma/client';
+import { NotificationType } from '../generated/prisma/client';
 import { CreateNotificationPayload } from '../notifications/interfaces/notification.interface';
 import { SensorData } from '../automation/interfaces/automation.interface';
 import { AutomationService } from '../automation/automation.service';
 import { DatabaseService } from '../database/database.service';
+import { RackWithUserAndCurrentPlant } from '../racks/interfaces/rack.interface';
 
 @Injectable()
 export class SystemRulesService {
@@ -20,7 +21,7 @@ export class SystemRulesService {
         private readonly logger: MyLoggerService,
     ) {}
 
-    async evaluate(rack: Rack & { userId: string }, sensorData: SensorData): Promise<void> {
+    async evaluate(rack: RackWithUserAndCurrentPlant, sensorData: SensorData): Promise<void> {
         await this.evaluateLightPriority(rack, sensorData);
         this.evaluateHighTemperature(rack, sensorData);
     }
@@ -34,7 +35,7 @@ export class SystemRulesService {
      * Priority 3: time-based schedule → light_on / light_off (baseline)
      */
     private async evaluateLightPriority(
-        rack: Rack & { userId: string },
+        rack: RackWithUserAndCurrentPlant,
         sensorData: SensorData,
     ): Promise<void> {
         // Priority 1: critical moisture override
@@ -88,7 +89,10 @@ export class SystemRulesService {
         await this.automationService.applySystemLightAction(rack, action, 'system:schedule');
     }
 
-    private evaluateHighTemperature(rack: Rack & { userId: string }, sensorData: SensorData): void {
+    private evaluateHighTemperature(
+        rack: RackWithUserAndCurrentPlant,
+        sensorData: SensorData,
+    ): void {
         if (sensorData.temperature <= SystemRulesService.HIGH_TEMP_THRESHOLD) return;
 
         this.logger.warn(
@@ -104,6 +108,8 @@ export class SystemRulesService {
             message: `The temperature reading from your ${rack.name} rack has exceeded the safe threshold. Please check your plants and adjust the environment accordingly.`,
             metadata: {
                 screen: `/(tabs)/(racks)/${rack.id}`,
+                rackName: rack.name,
+                macAddress: rack.macAddress,
                 temperature: sensorData.temperature,
             },
         } satisfies CreateNotificationPayload);

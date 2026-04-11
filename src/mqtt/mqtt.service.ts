@@ -50,6 +50,8 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
                 'MqttService',
             );
 
+            const STATUS_TOPIC = 'nurtura/backend/status';
+
             this.client = mqtt.connect(mqttUrl, {
                 username,
                 password,
@@ -59,12 +61,38 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
                 connectTimeout: 30000,
                 keepalive: 60,
                 clean: true,
+                // LWT: broker publishes this automatically if backend disconnects ungracefully
+                will: {
+                    topic: STATUS_TOPIC,
+                    payload: JSON.stringify({ o: false, tm: new Date().toISOString() }),
+                    qos: 1,
+                    retain: true,
+                },
             });
 
-            // Setup one-time listeners for initial connection
             const onConnect = () => {
                 cleanup();
                 this.logger.bootstrap('Connected to MQTT broker', 'MqttService');
+                // Explicitly notify ESP32s that backend is online
+                this.client!.publish(
+                    STATUS_TOPIC,
+                    JSON.stringify({ o: true, tm: new Date().toISOString() }),
+                    { qos: 1, retain: true },
+                    (err) => {
+                        if (err) {
+                            this.logger.error(
+                                'Failed to publish online status',
+                                err.message,
+                                'MqttService',
+                            );
+                        } else {
+                            this.logger.bootstrap(
+                                `Published online status to ${STATUS_TOPIC}`,
+                                'MqttService',
+                            );
+                        }
+                    },
+                );
                 resolve();
             };
 
@@ -307,6 +335,16 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
         this.logger.log('Closing MQTT connection...', 'MqttService');
 
         if (this.client) {
+            // Gracefully notify ESP32s before disconnecting
+            await new Promise<void>((resolve) => {
+                this.client!.publish(
+                    'nurtura/backend/status',
+                    JSON.stringify({ o: false, tm: new Date().toISOString() }),
+                    { qos: 1, retain: true },
+                    () => resolve(), // resolve regardless of error — we're shutting down
+                );
+            });
+
             await new Promise<void>((resolve) => {
                 this.client!.end(false, {}, () => {
                     this.logger.log('MQTT connection closed gracefully', 'MqttService');

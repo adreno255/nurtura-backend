@@ -1,4 +1,9 @@
-import { type Rack, type DeviceStatus } from '../../generated/prisma/client';
+import {
+    type Rack,
+    type DeviceStatus,
+    type WateringState,
+    type LightState,
+} from '../../generated/prisma/client';
 
 export interface RackCreatedResponse {
     message: string;
@@ -48,8 +53,32 @@ export interface RackExistsResponse {
     rack?: Rack;
 }
 
+export interface AssignPlantToRackCheckResponse {
+    hasWarning: boolean;
+    latestTemperatureReading: number | null;
+    maxTemperatureThreshold: number | null;
+}
+
 export interface AssignPlantToRackResponse {
     message: string;
-    warning: boolean;
-    maxTemperatureThreshold: number | null;
+}
+
+export interface RackActuatorState {
+    watering: WateringState;
+    light: LightState;
+}
+
+export interface RackWithCurrentPlant extends Partial<Rack> {
+    currentPlant?: {
+        id: string;
+        name: string;
+    } | null;
+}
+
+export interface RackWithUserAndCurrentPlant extends Rack {
+    userId: string;
+    currentPlant?: {
+        id: string;
+        name: string;
+    } | null;
 }

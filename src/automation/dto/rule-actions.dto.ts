@@ -66,20 +66,22 @@ export class RuleActionsDto {
 
 export class AutomatedEventDto {
     @ApiProperty({
-        description: 'Event that triggered the automation',
+        description: 'Type of event that triggered the automation',
         example: 'WATERING_START',
     })
     @IsNotEmpty()
     @IsString()
-    event?: string;
+    eventType?: string;
 
     @ApiProperty({
-        description: 'Metadata associated with the automated event',
+        description: 'Activity record containing event details and context',
         example: {
-            rackName: 'Rack 1',
-            ruleId: '123e4567-e89b-12d3-a456-426614174000',
+            id: 'activity-123',
+            rackId: 'clx789xyz123',
+            eventType: 'WATERING_START',
+            timestamp: '2025-02-05T14:45:00.000Z',
         },
     })
     @IsObject()
-    metadata?: object;
+    activity?: object;
 }

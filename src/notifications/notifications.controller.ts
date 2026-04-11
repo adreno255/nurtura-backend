@@ -389,7 +389,7 @@ export class NotificationsController {
     @Public()
     async sendTestNotification() {
         const payload = {
-            userId: 'cmnpvtqe2005srcuuef8xn67p',
+            userId: 'cmnu23f0v000228uuun4dsmy3',
             rackId: 'cmnr7b0ku0000k0uu1dtss97i',
             type: NotificationType.INFO,
             title: 'Test Notification',

@@ -12,7 +12,6 @@ import {
     type Prisma,
     ActivityEventType,
     NotificationType,
-    Rack,
     WateringState,
     LightState,
 } from '../generated/prisma/client';
@@ -28,11 +27,11 @@ import {
     WateringActionDto,
 } from './dto';
 import { CreateNotificationPayload } from '../notifications/interfaces/notification.interface';
-
-interface RackActuatorState {
-    watering: WateringState;
-    light: LightState;
-}
+import {
+    RackActuatorState,
+    RackWithCurrentPlant,
+    RackWithUserAndCurrentPlant,
+} from '../racks/interfaces/rack.interface';
 
 @Injectable()
 export class AutomationService implements OnModuleInit {
@@ -138,6 +137,12 @@ export class AutomationService implements OnModuleInit {
                     macAddress: true,
                     name: true,
                     currentPlantId: true,
+                    currentPlant: {
+                        select: {
+                            id: true,
+                            name: true,
+                        },
+                    },
                 },
             });
 
@@ -287,7 +292,7 @@ export class AutomationService implements OnModuleInit {
         macAddress: string,
         actions: RuleActions,
         rackId: string,
-        rack: Partial<Rack>,
+        rack: RackWithCurrentPlant,
         ruleId: string,
         ruleName: string,
     ): Promise<boolean> {
@@ -337,6 +342,8 @@ export class AutomationService implements OnModuleInit {
                         rackName: rack.name,
                         macAddress: rack.macAddress,
                         source: 'automation',
+                        plantId: rack.currentPlant?.id,
+                        plantName: rack.currentPlant?.name,
                         ruleId,
                         ruleName,
                         ...(!isStart && { waterUsedMl: waterUsed }),
@@ -352,12 +359,12 @@ export class AutomationService implements OnModuleInit {
                     );
 
                     this.eventEmitter.emit('broadcastAutomationEvent', rackId, {
-                        event: isStart ? 'WATERING_START' : 'WATERING_STOP',
-                        metadata: wateringActivity,
+                        eventType: isStart ? 'WATERING_START' : 'WATERING_STOP',
+                        activity: wateringActivity,
                     } satisfies AutomatedEventDto);
 
                     this.eventEmitter.emit('createNotification', {
-                        userId: rack.userId!,
+                        userId: rack.userId ?? '',
                         rackId,
                         type: NotificationType.AUTOMATION,
                         title: isStart ? 'Watering Started' : 'Watering Stopped',
@@ -366,6 +373,8 @@ export class AutomationService implements OnModuleInit {
                             : `Rule "${ruleName}" stopped the water pump.`,
                         metadata: {
                             screen: '/(tabs)/(activity)/plant-care',
+                            plantId: rack.currentPlant?.id,
+                            plantName: rack.currentPlant?.name,
                             ruleId,
                             ruleName,
                             action: actions.watering.action,
@@ -418,6 +427,8 @@ export class AutomationService implements OnModuleInit {
                         rackName: rack.name,
                         macAddress: rack.macAddress,
                         source: 'automation',
+                        plantId: rack.currentPlant?.id,
+                        plantName: rack.currentPlant?.name,
                         ruleId,
                         ruleName,
                         ...(!isOn && { durationSeconds: lightDuration }),
@@ -431,18 +442,20 @@ export class AutomationService implements OnModuleInit {
                     );
 
                     this.eventEmitter.emit('broadcastAutomationEvent', rackId, {
-                        event: isOn ? 'LIGHT_ON' : 'LIGHT_OFF',
-                        metadata: lightActivity,
+                        eventType: isOn ? 'LIGHT_ON' : 'LIGHT_OFF',
+                        activity: lightActivity,
                     } satisfies AutomatedEventDto);
 
                     this.eventEmitter.emit('createNotification', {
-                        userId: rack.userId!,
+                        userId: rack.userId ?? '',
                         rackId,
                         type: NotificationType.AUTOMATION,
                         title: isOn ? 'Grow Light Turned On' : 'Grow Light Turned Off',
                         message: `Rule "${ruleName}" turned the grow light ${isOn ? 'on' : 'off'}.`,
                         metadata: {
                             screen: '/(tabs)/(activity)/plant-care',
+                            plantId: rack.currentPlant?.id,
+                            plantName: rack.currentPlant?.name,
                             ruleId,
                             ruleName,
                             action: actions.growLight.action,
@@ -485,7 +498,7 @@ export class AutomationService implements OnModuleInit {
      * @param source - Identifier for logging (e.g. 'system:schedule', 'system:moisture_override')
      */
     async applySystemLightAction(
-        rack: Rack & { userId: string },
+        rack: RackWithUserAndCurrentPlant,
         action: 'light_on' | 'light_off',
         source: string,
     ): Promise<void> {
@@ -521,6 +534,8 @@ export class AutomationService implements OnModuleInit {
             rackName: rack.name,
             macAddress: rack.macAddress,
             source,
+            plantId: rack.currentPlant?.id,
+            plantName: rack.currentPlant?.name,
             ...(!isOn && { durationSeconds: lightDuration }),
         };
 
@@ -532,8 +547,8 @@ export class AutomationService implements OnModuleInit {
         );
 
         this.eventEmitter.emit('broadcastAutomationEvent', rack.id, {
-            event: isOn ? 'LIGHT_ON' : 'LIGHT_OFF',
-            metadata: lightActivity,
+            eventType: isOn ? 'LIGHT_ON' : 'LIGHT_OFF',
+            activity: lightActivity,
         } satisfies AutomatedEventDto);
 
         this.eventEmitter.emit('createNotification', {
@@ -546,6 +561,8 @@ export class AutomationService implements OnModuleInit {
                 : `Grow light turned off automatically (${source}).`,
             metadata: {
                 screen: '/(tabs)/(activity)/plant-care',
+                plantId: rack.currentPlant?.id,
+                plantName: rack.currentPlant?.name,
                 source,
                 action,
             },

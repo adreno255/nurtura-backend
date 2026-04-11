@@ -1069,6 +1069,8 @@ export class RacksController {
                                         rackName: 'Living Room Farm',
                                         macAddress: 'AA:BB:CC:DD:EE:FF',
                                         source: 'automation',
+                                        plantId: 'clx000plant123',
+                                        plantName: 'Lettuce',
                                         ruleId: 'clxrule123',
                                         ruleName: 'Auto Watering - Lettuce',
                                     },
@@ -1104,6 +1106,8 @@ export class RacksController {
                                         rackName: 'Living Room Farm',
                                         macAddress: 'AA:BB:CC:DD:EE:FF',
                                         source: 'automation',
+                                        plantId: 'clx000plant123',
+                                        plantName: 'Lettuce',
                                         ruleId: 'clxrule123',
                                         ruleName: 'Auto Watering - Lettuce',
                                         waterUsedMl: 250,
@@ -1140,6 +1144,8 @@ export class RacksController {
                                         rackName: 'Living Room Farm',
                                         macAddress: 'AA:BB:CC:DD:EE:FF',
                                         source: 'automation',
+                                        plantId: 'clx000plant123',
+                                        plantName: 'Lettuce',
                                         ruleId: 'clxrule456',
                                         ruleName: 'Morning Light Cycle',
                                     },
@@ -1175,6 +1181,8 @@ export class RacksController {
                                         rackName: 'Living Room Farm',
                                         macAddress: 'AA:BB:CC:DD:EE:FF',
                                         source: 'automation',
+                                        plantId: 'clx000plant123',
+                                        plantName: 'Lettuce',
                                         durationSeconds: 43200,
                                     },
                                     timestamp: '2025-02-05T18:00:00.000Z',
@@ -1398,7 +1406,7 @@ export class RacksController {
     @ApiOperation({
         summary: 'Get planting activity',
         description:
-            'Retrieves planting activities (PLANT_ADDED, PLANT_CHANGED, PLANT_REMOVED) across all racks owned by the authenticated user. Supports date range filtering, pagination, and rack ID filtering.',
+            'Retrieves planting activities (PLANT_ADDED and PLANT_REMOVED) across all racks owned by the authenticated user. Supports date range filtering, pagination, and rack ID filtering.',
     })
     @ApiQuery({
         name: 'startDate',
@@ -1452,7 +1460,7 @@ export class RacksController {
                                     rackId: { type: 'string', example: 'clx123abc456' },
                                     eventType: {
                                         type: 'string',
-                                        enum: ['PLANT_ADDED', 'PLANT_CHANGED', 'PLANT_REMOVED'],
+                                        enum: ['PLANT_ADDED', 'PLANT_REMOVED'],
                                     },
                                     details: {
                                         type: 'string',
@@ -1513,42 +1521,6 @@ export class RacksController {
                                         plantedAt: '2025-01-01T08:00:00.000Z',
                                     },
                                     timestamp: '2025-01-01T08:00:00.000Z',
-                                    rack: {
-                                        id: 'clx123abc456',
-                                        name: 'Living Room Farm',
-                                        macAddress: 'AA:BB:CC:DD:EE:FF',
-                                    },
-                                },
-                            ],
-                            meta: {
-                                currentPage: 1,
-                                itemsPerPage: 10,
-                                totalItems: 1,
-                                totalPages: 1,
-                                hasNextPage: false,
-                                hasPreviousPage: false,
-                            },
-                        },
-                    },
-                    PLANT_CHANGED: {
-                        summary: 'PLANT_CHANGED — crop rotation',
-                        value: {
-                            data: [
-                                {
-                                    id: 'clx999act002',
-                                    rackId: 'clx123abc456',
-                                    eventType: 'PLANT_CHANGED',
-                                    details: 'Plant changed from previous to "Basil"',
-                                    metadata: {
-                                        rackName: 'Living Room Farm',
-                                        macAddress: 'AA:BB:CC:DD:EE:FF',
-                                        previousPlantId: 'clx000plant456',
-                                        previousPlantName: 'Lettuce',
-                                        newPlantId: 'clx000plant123',
-                                        newPlantName: 'Basil',
-                                        quantity: 8,
-                                    },
-                                    timestamp: '2025-02-01T08:00:00.000Z',
                                     rack: {
                                         id: 'clx123abc456',
                                         name: 'Living Room Farm',
@@ -1937,12 +1909,143 @@ export class RacksController {
         return this.racksService.harvestSeedsFromRack(rackId, user.dbId, dto);
     }
 
+    @Post(':rackId/assign/check')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({
+        summary: 'Check plant assignment conditions',
+        description:
+            'Validates all conditions for assigning a plant to a rack and returns a temperature warning if the environment exceeds the plant max threshold. Does not write to the database. Call this before assignToRack and prompt the user to confirm if hasWarning is true.',
+    })
+    @ApiParam({ name: 'rackId', description: 'Rack ID', example: 'clx123abc456' })
+    @ApiResponse({
+        status: HttpStatus.OK,
+        description: 'Check result returned successfully',
+        schema: {
+            type: 'object',
+            properties: {
+                hasWarning: { type: 'boolean', example: true },
+                latestTemperatureReading: { type: 'number', example: 24.5, nullable: true },
+                maxTemperatureThreshold: { type: 'number', example: 18, nullable: true },
+            },
+        },
+    })
+    @ApiBadRequestResponse({
+        description: 'Validation error or plant is inactive',
+        content: {
+            'application/json': {
+                schema: {
+                    type: 'object',
+                    properties: {
+                        statusCode: { type: 'number', example: 400 },
+                        timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
+                        path: { type: 'string', example: '/racks/clx123abc456/assign/check' },
+                        message: {
+                            type: 'string',
+                            example: 'Cannot assign an inactive plant to a rack',
+                        },
+                    },
+                },
+                examples: {
+                    inactivePlant: {
+                        summary: 'Cannot assign inactive plant',
+                        value: {
+                            statusCode: 400,
+                            timestamp: '2026-01-15T08:00:00.000Z',
+                            path: '/racks/clx123abc456/assign/check',
+                            message: 'Cannot assign an inactive plant to a rack',
+                        },
+                    },
+                    plantAlreadyAssigned: {
+                        summary: 'Plant Already Assigned to Rack',
+                        value: {
+                            statusCode: 400,
+                            timestamp: '2026-01-15T08:00:00.000Z',
+                            path: '/racks/clx123abc456/assign/check',
+                            message:
+                                'This rack already has a plant assigned. Please remove the current plant before assigning a new one.',
+                        },
+                    },
+                },
+            },
+        },
+    })
+    @ApiUnauthorizedResponse({
+        description: 'Missing or invalid authentication token',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 401 },
+                timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
+                path: { type: 'string', example: '/racks/clx123abc456/assign/check' },
+                message: { type: 'string', example: 'Authentication required' },
+            },
+        },
+    })
+    @ApiNotFoundResponse({
+        description: 'Plant or rack not found',
+        content: {
+            'application/json': {
+                schema: {
+                    type: 'object',
+                    properties: {
+                        statusCode: { type: 'number', example: 404 },
+                        timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
+                        path: { type: 'string', example: '/racks/clx123abc456/assign/check' },
+                        message: {
+                            type: 'string',
+                            example: 'Rack with ID clx123abc456 not found or access denied',
+                        },
+                    },
+                },
+                examples: {
+                    plantNotFound: {
+                        summary: 'Plant not found',
+                        value: {
+                            statusCode: 404,
+                            timestamp: '2026-01-15T08:00:00.000Z',
+                            path: '/racks/clx123abc456/assign/check',
+                            message: 'Plant with ID clx000plant999 not found',
+                        },
+                    },
+                    rackNotFound: {
+                        summary: 'Rack not found',
+                        value: {
+                            statusCode: 404,
+                            timestamp: '2026-01-15T08:00:00.000Z',
+                            path: '/racks/clx123abc456/assign/check',
+                            message: 'Rack with ID clx123abc456 not found or access denied',
+                        },
+                    },
+                },
+            },
+        },
+    })
+    @ApiInternalServerErrorResponse({
+        description: 'Internal server error',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 500 },
+                timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
+                path: { type: 'string', example: '/racks/clx123abc456/assign/check' },
+                message: { type: 'string', example: 'Failed to check plant assignment' },
+            },
+        },
+    })
+    async checkAssignToRack(
+        @Param('rackId') rackId: string,
+        @Body() dto: AssignPlantToRackDto,
+        @CurrentUser() user: CurrentUserPayload,
+    ) {
+        return this.racksService.checkAssignToRack(rackId, user.dbId, dto);
+    }
+
     @Post(':rackId/assign')
     @HttpCode(HttpStatus.CREATED)
     @ApiOperation({
         summary: 'Assign a plant to a rack',
         description:
-            'Assigns this plant to the specified rack. If the rack already has a different plant, it is recorded as removed (PLANT_REMOVED + PLANT_CHANGED). If the rack is empty, the event is PLANT_ADDED.',
+            'Assigns this plant to the specified rack. If the rack already has a different plant, the user must remove it first. If the rack is empty, the event is PLANT_ADDED.',
     })
     @ApiParam({ name: 'rackId', description: 'Rack ID', example: 'clx123abc456' })
     @ApiResponse({
@@ -1957,13 +2060,41 @@ export class RacksController {
     })
     @ApiBadRequestResponse({
         description: 'Validation error or plant is inactive',
-        schema: {
-            type: 'object',
-            properties: {
-                statusCode: { type: 'number', example: 400 },
-                timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/racks/clx123abc456/assign' },
-                message: { type: 'string', example: 'Cannot assign an inactive plant to a rack' },
+        content: {
+            'application/json': {
+                schema: {
+                    type: 'object',
+                    properties: {
+                        statusCode: { type: 'number', example: 400 },
+                        timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
+                        path: { type: 'string', example: '/racks/clx123abc456/assign' },
+                        message: {
+                            type: 'string',
+                            example: 'Cannot assign an inactive plant to a rack',
+                        },
+                    },
+                },
+                examples: {
+                    inactivePlant: {
+                        summary: 'Cannot assign inactive plant',
+                        value: {
+                            statusCode: 400,
+                            timestamp: '2026-01-15T08:00:00.000Z',
+                            path: '/racks/clx123abc456/assign',
+                            message: 'Cannot assign an inactive plant to a rack',
+                        },
+                    },
+                    plantAlreadyAssigned: {
+                        summary: 'Plant Already Assigned to Rack',
+                        value: {
+                            statusCode: 400,
+                            timestamp: '2026-01-15T08:00:00.000Z',
+                            path: '/racks/clx123abc456/assign',
+                            message:
+                                'This rack already has a plant assigned. Please remove the current plant before assigning a new one.',
+                        },
+                    },
+                },
             },
         },
     })
@@ -1981,15 +2112,39 @@ export class RacksController {
     })
     @ApiNotFoundResponse({
         description: 'Plant or rack not found',
-        schema: {
-            type: 'object',
-            properties: {
-                statusCode: { type: 'number', example: 404 },
-                timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/racks/clx123abc456/assign' },
-                message: {
-                    type: 'string',
-                    example: 'Rack clx123abc456 not found or access denied',
+        content: {
+            'application/json': {
+                schema: {
+                    type: 'object',
+                    properties: {
+                        statusCode: { type: 'number', example: 404 },
+                        timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
+                        path: { type: 'string', example: '/racks/clx123abc456/assign' },
+                        message: {
+                            type: 'string',
+                            example: 'Rack with ID clx123abc456 not found or access denied',
+                        },
+                    },
+                },
+                examples: {
+                    plantNotFound: {
+                        summary: 'Plant not found',
+                        value: {
+                            statusCode: 404,
+                            timestamp: '2026-01-15T08:00:00.000Z',
+                            path: '/racks/clx123abc456/assign',
+                            message: 'Plant with ID clx000plant999 not found',
+                        },
+                    },
+                    rackNotFound: {
+                        summary: 'Rack not found',
+                        value: {
+                            statusCode: 404,
+                            timestamp: '2026-01-15T08:00:00.000Z',
+                            path: '/racks/clx123abc456/assign',
+                            message: 'Rack with ID clx123abc456 not found or access denied',
+                        },
+                    },
                 },
             },
         },

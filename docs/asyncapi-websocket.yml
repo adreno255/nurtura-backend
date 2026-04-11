@@ -558,8 +558,8 @@ components:
             examples:
                 - name: wateringStartTriggered
                   payload:
-                      event: 'WATERING_START'
-                      metadata:
+                      eventType: 'WATERING_START'
+                      activity:
                           id: 'activity-123'
                           rackId: 'clx789xyz123'
                           eventType: 'WATERING_START'
@@ -568,13 +568,15 @@ components:
                               rackName: 'Lettuce Rack'
                               macAddress: 'AA:BB:CC:DD:EE:FF'
                               source: 'automation'
+                              plantId: 'plant-001'
+                              plantName: 'Basil'
                               ruleId: 'rule-123'
                               ruleName: 'Auto-water when dry'
                           timestamp: '2025-02-05T14:45:00.000Z'
                 - name: lightOffTriggered
                   payload:
-                      event: 'LIGHT_OFF'
-                      metadata:
+                      eventType: 'LIGHT_OFF'
+                      activity:
                           id: 'activity-456'
                           rackId: 'cmlat15fi000084uua19zeg8a'
                           eventType: 'LIGHT_OFF'
@@ -583,6 +585,8 @@ components:
                               rackName: 'Basil Rack'
                               macAddress: 'FF:EE:DD:CC:BB:AA'
                               source: 'automation'
+                              plantId: 'plant-002'
+                              plantName: 'Tomato'
                               ruleId: 'rule-456'
                               ruleName: 'Evening light off'
                               durationSeconds: 3600
@@ -834,6 +838,7 @@ components:
                             enum:
                                 - INFO
                                 - ERROR
+                                - AUTOMATION
                             example: 'INFO'
                         status:
                             type: string
@@ -871,12 +876,12 @@ components:
             type: object
             description: Automation rule execution payload
             properties:
-                event:
+                eventType:
                     type: string
-                    description: Event type triggered by the automation rule
+                    description: Type of event triggered by the automation rule
                     enum: ['WATERING_START', 'WATERING_STOP', 'LIGHT_ON', 'LIGHT_OFF']
                     example: 'WATERING_START'
-                metadata:
+                activity:
                     type: object
                     description: Activity record containing event details and context
                     properties:
@@ -913,6 +918,14 @@ components:
                                     type: string
                                     description: Source of the action (automation or system)
                                     example: 'automation'
+                                plantId:
+                                    type: string
+                                    description: Optional - ID of the plant involved in the event
+                                    example: 'plant-001'
+                                plantName:
+                                    type: string
+                                    description: Optional - Name of the plant involved in the event
+                                    example: 'Basil'
                                 ruleId:
                                     type: string
                                     description: ID of the automation rule that triggered the event
@@ -936,8 +949,8 @@ components:
                             example: '2025-02-05T14:45:00.000Z'
             required:
                 - event
-                - metadata
-    #endregion
+                - activity
+    #endregions
 
     #region Security Schemes
     securitySchemes:

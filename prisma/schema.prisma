@@ -44,7 +44,6 @@ enum ActivityEventType {
     // Plant events
     PLANT_ADDED
     PLANT_REMOVED
-    PLANT_CHANGED
     LEAVES_HARVESTED
     PLANT_HARVESTED
     SEEDS_HARVESTED

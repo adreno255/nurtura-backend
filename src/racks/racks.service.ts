@@ -21,6 +21,7 @@ import {
     type RackCurrentStateResponse,
     RackExistsResponse,
     AssignPlantToRackResponse,
+    AssignPlantToRackCheckResponse,
 } from './interfaces/rack.interface';
 import { type PaginatedResponse } from '../common/interfaces/pagination.interface';
 import { type Rack } from '../generated/prisma/client';
@@ -31,6 +32,7 @@ import {
     DeviceStatusDto,
     PlantCareActivityQueryDto,
     PlantCareEventFilter,
+    RecoveryCode,
 } from './dto';
 import { Activity, NotificationType, Prisma } from '../generated/prisma';
 import { LogRackActivityHelper } from '../common/utils/log-rack-activity.helper';
@@ -189,6 +191,9 @@ export class RacksService {
                         },
                     });
 
+                    // Resume sensor data from recovered rack
+                    await this.emitSensorCommand(existingRack.macAddress, 'sensor_start');
+
                     return {
                         message: 'Archived rack recovered succefully.',
                         rackId: existingRack.id,
@@ -222,6 +227,9 @@ export class RacksService {
                 `Rack "${rack.name}" registered`,
                 { rackName: rack.name, macAddress: rack.macAddress, userId },
             );
+
+            // Start sensor data stream from newly registered rack
+            await this.emitSensorCommand(rack.macAddress, 'sensor_start');
 
             return {
                 message: 'Rack registered successfully',
@@ -325,6 +333,9 @@ export class RacksService {
             });
 
             this.logger.log(`Rack soft deleted: ${rackId}`, 'RacksService');
+
+            // Stop sensor data from archived rack to avoid wasting MQTT messages
+            await this.emitSensorCommand(rack.macAddress, 'sensor_stop');
 
             // Log RACK_REMOVED activity
             await this.logRackActivityHelper.logActivity(
@@ -498,26 +509,13 @@ export class RacksService {
         }
     }
 
-    /**
-     * Processes device error messages received from ESP32 devices via MQTT
-     * Called by MqttService when a message arrives on nurtura/rack/{macAddress}/errors
-     *
-     * @param macAddress - Device MAC address (e.g., AA:BB:CC:DD:EE:FF)
-     * @param message - Raw JSON message from MQTT
-     */
     async processDeviceError(macAddress: string, message: string): Promise<void> {
-        this.logger.warn(`Processing device error from: ${macAddress}`, 'RacksService');
+        this.logger.warn(`Processing device error/recovery from: ${macAddress}`, 'RacksService');
 
-        // Step 1: Find the rack by MAC address
         const rack = await this.databaseService.rack.findUnique({
             where: { macAddress },
             include: {
-                user: {
-                    select: {
-                        id: true,
-                        email: true,
-                    },
-                },
+                user: { select: { id: true, email: true } },
             },
         });
 
@@ -531,7 +529,6 @@ export class RacksService {
             );
         }
 
-        // Step 2: Parse and validate the JSON message
         const errorData = await MqttMessageParser.parseAndValidate(
             rack,
             message,
@@ -540,52 +537,105 @@ export class RacksService {
             this.eventEmitter,
         );
 
-        // Step 3: Update rack status to ERROR
+        const isRecovery = Object.values(RecoveryCode).includes(errorData.code as RecoveryCode);
+
         try {
-            if (rack.status !== 'ERROR') {
-                await this.databaseService.rack.update({
-                    where: { id: rack.id },
-                    data: {
-                        status: 'ERROR',
-                        lastSeenAt: new Date(),
-                    },
-                });
-
-                this.logger.warn(
-                    `Rack ${rack.name} (${rack.id}) marked as ERROR due to: ${errorData.code}`,
-                    'RacksService',
-                );
-
-                // Step 4: Broadcast error to connected clients via WebSocket
-                this.eventEmitter.emit('broadcastDeviceStatus', rack.id, rack.status);
-
-                this.logger.warn(
-                    `Device error broadcasted to WebSocket clients for rack: ${rack.id}`,
-                    'RacksService',
-                );
-
-                // Step 5: Emit notification about the device error
-                this.eventEmitter.emit('createNotification', {
-                    userId: rack.userId,
-                    rackId: rack.id,
-                    type: NotificationType.ERROR,
-                    title: `Component Malfunction Detected`,
-                    message: `An error with code "${errorData.code}" occurred with on rack "${rack.name}".`,
-                    metadata: {
-                        screen: `/(tabs)/(racks)/${rack.id}`,
-                        ...errorData,
-                    },
-                } satisfies CreateNotificationPayload);
+            if (isRecovery) {
+                await this.handleDeviceRecovery(rack, errorData);
+            } else {
+                await this.handleDeviceError(rack, errorData);
             }
         } catch (error) {
             this.logger.error(
-                `Failed to process device error for: ${macAddress}`,
+                `Failed to process device error/recovery for: ${macAddress}`,
                 error instanceof Error ? error.message : String(error),
                 'RacksService',
             );
-
             throw new InternalServerErrorException('Failed to process device error');
         }
+    }
+
+    private async handleDeviceError(
+        rack: Rack & { user: { id: string; email: string } },
+        errorData: DeviceErrorDto,
+    ): Promise<void> {
+        // Guard: don't process errors from an OFFLINE rack —
+        // receiving MQTT proves it's reachable, so set it to ERROR directly
+        if (rack.status === DeviceStatus.ERROR) {
+            this.logger.warn(
+                `Rack ${rack.name} (${rack.id}) already in ERROR state — suppressing duplicate error notification`,
+                'RacksService',
+            );
+            return;
+        }
+
+        await this.databaseService.rack.update({
+            where: { id: rack.id },
+            data: {
+                status: DeviceStatus.ERROR,
+                lastSeenAt: new Date(),
+            },
+        });
+
+        this.logger.warn(
+            `Rack ${rack.name} (${rack.id}) marked as ERROR due to: ${errorData.code}`,
+            'RacksService',
+        );
+
+        this.eventEmitter.emit('broadcastDeviceStatus', rack.id, DeviceStatus.ERROR);
+
+        this.eventEmitter.emit('createNotification', {
+            userId: rack.userId,
+            rackId: rack.id,
+            type: NotificationType.ERROR,
+            title: 'Component Malfunction Detected',
+            message: `An error with code "${errorData.code}" occurred on rack "${rack.name}".`,
+            metadata: {
+                screen: `/(tabs)/(racks)/${rack.id}`,
+                ...errorData,
+            },
+        } satisfies CreateNotificationPayload);
+    }
+
+    private async handleDeviceRecovery(
+        rack: Rack & { user: { id: string; email: string } },
+        errorData: DeviceErrorDto,
+    ): Promise<void> {
+        // Guard: only recover from ERROR — ignore if already ONLINE or OFFLINE
+        if (rack.status !== DeviceStatus.ERROR) {
+            this.logger.log(
+                `Recovery code "${errorData.code}" received for rack ${rack.name} (${rack.id}) but status is ${rack.status} — no action needed`,
+                'RacksService',
+            );
+            return;
+        }
+
+        await this.databaseService.rack.update({
+            where: { id: rack.id },
+            data: {
+                status: DeviceStatus.ONLINE,
+                lastSeenAt: new Date(),
+            },
+        });
+
+        this.logger.log(
+            `Rack ${rack.name} (${rack.id}) recovered from ERROR → ONLINE via code: ${errorData.code}`,
+            'RacksService',
+        );
+
+        this.eventEmitter.emit('broadcastDeviceStatus', rack.id, DeviceStatus.ONLINE);
+
+        this.eventEmitter.emit('createNotification', {
+            userId: rack.userId,
+            rackId: rack.id,
+            type: NotificationType.INFO,
+            title: 'Component Recovered',
+            message: `Rack "${rack.name}" has recovered and is back online.`,
+            metadata: {
+                screen: `/(tabs)/(racks)/${rack.id}`,
+                ...errorData,
+            },
+        } satisfies CreateNotificationPayload);
     }
 
     async getLatestSensorReading(rackId: string) {
@@ -931,11 +981,7 @@ export class RacksService {
             const where = {
                 rackId: { in: queryRackIds },
                 eventType: {
-                    in: [
-                        ActivityEventType.PLANT_ADDED,
-                        ActivityEventType.PLANT_CHANGED,
-                        ActivityEventType.PLANT_REMOVED,
-                    ],
+                    in: [ActivityEventType.PLANT_ADDED, ActivityEventType.PLANT_REMOVED],
                 },
                 ...dateFilter,
             };
@@ -1277,12 +1323,74 @@ export class RacksService {
     }
 
     /**
-     * Assign a plant to a rack.
-     *
-     * Activity logic:
-     * - Rack has NO current plant → PLANT_ADDED
-     * - Rack has a DIFFERENT current plant → PLANT_CHANGED (old plant recorded as removed without harvest)
-     *   Also logs PLANT_REMOVED for the outgoing plant.
+     * Pre-assignment check — validates all conditions and returns a temperature
+     * warning if the current rack environment exceeds the plant's max temperature.
+     * Does NOT write anything to the database.
+     * Frontend should call this first and prompt the user to confirm before calling assignToRack.
+     */
+    async checkAssignToRack(
+        rackId: string,
+        userId: string,
+        dto: AssignPlantToRackDto,
+    ): Promise<AssignPlantToRackCheckResponse> {
+        try {
+            const plantId = dto.plantId;
+
+            const [plant, rack] = await Promise.all([
+                this.databaseService.plant.findUnique({ where: { id: plantId } }),
+                this.databaseService.rack.findFirst({ where: { id: rackId, userId } }),
+            ]);
+
+            if (!plant) {
+                throw new NotFoundException(`Plant with ID ${plantId} not found`);
+            }
+
+            if (!plant.isActive) {
+                throw new BadRequestException('Cannot assign an inactive plant to a rack');
+            }
+
+            if (!rack) {
+                throw new NotFoundException(`Rack ${rackId} not found or access denied`);
+            }
+
+            if (rack.currentPlantId !== null) {
+                throw new BadRequestException(
+                    'This rack already has a plant assigned. Please remove the current plant before assigning a new one.',
+                );
+            }
+
+            const latestReading = await this.databaseService.sensorReading.findFirst({
+                where: { rackId },
+                orderBy: { timestamp: 'desc' },
+                select: { temperature: true },
+            });
+
+            const hasWarning =
+                latestReading !== null &&
+                plant.maxTemperature !== null &&
+                latestReading.temperature > plant.maxTemperature;
+
+            return {
+                hasWarning,
+                latestTemperatureReading: latestReading?.temperature ?? null,
+                maxTemperatureThreshold: plant.maxTemperature,
+            };
+        } catch (error) {
+            if (error instanceof NotFoundException || error instanceof BadRequestException)
+                throw error;
+
+            this.logger.error(
+                `Error checking plant assignment for rack ${rackId}`,
+                error instanceof Error ? error.message : String(error),
+                'RacksService',
+            );
+            throw new InternalServerErrorException('Failed to check plant assignment');
+        }
+    }
+
+    /**
+     * Actual assignment — called after user confirms on the frontend.
+     * Skips the temperature check since the user already acknowledged it.
      */
     async assignToRack(
         rackId: string,
@@ -1294,9 +1402,10 @@ export class RacksService {
 
             this.logger.log(`Assigning plant ${plantId} to rack ${rackId}`, 'RacksService');
 
-            const plant = await this.databaseService.plant.findUnique({
-                where: { id: plantId },
-            });
+            const [plant, rack] = await Promise.all([
+                this.databaseService.plant.findUnique({ where: { id: plantId } }),
+                this.databaseService.rack.findFirst({ where: { id: rackId, userId } }),
+            ]);
 
             if (!plant) {
                 throw new NotFoundException(`Plant with ID ${plantId} not found`);
@@ -1306,41 +1415,22 @@ export class RacksService {
                 throw new BadRequestException('Cannot assign an inactive plant to a rack');
             }
 
-            await this.verifyRackOwnership(rackId, userId);
+            if (!rack) {
+                throw new NotFoundException(`Rack ${rackId} not found or access denied`);
+            }
 
-            const rack = (await this.databaseService.rack.findUnique({
-                where: { id: rackId },
-                include: { currentPlant: true },
-            })) as Rack & { currentPlant: { name: string } | null };
-
-            const plantedAt = dto.plantedAt ? new Date(dto.plantedAt) : new Date();
-            const now = new Date();
-            const hadPreviousPlant = rack.currentPlantId !== null;
-            const isChangingPlant = hadPreviousPlant && rack.currentPlantId !== plantId;
-            const isSamePlantReassignment = hadPreviousPlant && rack.currentPlantId === plantId;
-
-            if (isSamePlantReassignment) {
+            if (rack.currentPlantId !== null) {
                 throw new BadRequestException(
-                    'This plant is already assigned to that rack. To update quantity or planted date, please use the appropriate update endpoint.',
+                    'This rack already has a plant assigned. Please remove the current plant before assigning a new one.',
                 );
             }
 
-            await this.databaseService.$transaction(async (tx) => {
-                if (isChangingPlant && rack.plantedAt) {
-                    await tx.rackPlantingHistory.create({
-                        data: {
-                            rackId: rack.id,
-                            plantId: rack.currentPlantId!,
-                            quantity: rack.quantity,
-                            plantedAt: rack.plantedAt,
-                            harvestedAt: null,
-                            harvestCount: 0,
-                        },
-                    });
-                }
+            const plantedAt = dto.plantedAt ? new Date(dto.plantedAt) : new Date();
+            const now = new Date();
 
+            await this.databaseService.$transaction(async (tx) => {
                 await tx.rack.update({
-                    where: { id: rack.id },
+                    where: { id: rackId },
                     data: {
                         currentPlantId: plantId,
                         quantity: dto.quantity,
@@ -1351,7 +1441,7 @@ export class RacksService {
 
                 await tx.rackPlantingHistory.create({
                     data: {
-                        rackId: rack.id,
+                        rackId,
                         plantId,
                         quantity: dto.quantity,
                         plantedAt,
@@ -1361,72 +1451,26 @@ export class RacksService {
                 });
             });
 
-            if (isChangingPlant) {
-                await this.logRackActivityHelper.logActivity(
-                    rack.id,
-                    ActivityEventType.PLANT_REMOVED,
-                    `Plant removed from rack (replaced during crop rotation)`,
-                    {
-                        rackName: rack.name,
-                        macAddress: rack.macAddress,
-                        removedPlantId: rack.currentPlantId,
-                        removedPlantName: rack.currentPlant?.name,
-                        replacedByPlantId: plantId,
-                        replacedByPlantName: plant.name,
-                    },
-                );
-
-                await this.logRackActivityHelper.logActivity(
-                    rack.id,
-                    ActivityEventType.PLANT_CHANGED,
-                    `Plant changed from previous to "${plant.name}"`,
-                    {
-                        rackName: rack.name,
-                        macAddress: rack.macAddress,
-                        previousPlantId: rack.currentPlantId,
-                        previousPlantName: rack.currentPlant?.name,
-                        newPlantId: plantId,
-                        newPlantName: plant.name,
-                        quantity: dto.quantity,
-                    },
-                );
-            } else {
-                await this.logRackActivityHelper.logActivity(
-                    rack.id,
-                    ActivityEventType.PLANT_ADDED,
-                    `Plant "${plant.name}" added to rack`,
-                    {
-                        rackName: rack.name,
-                        macAddress: rack.macAddress,
-                        plantId,
-                        plantName: plant.name,
-                        quantity: dto.quantity,
-                        plantedAt: plantedAt.toISOString(),
-                    },
-                );
-            }
-
-            const latestReading = await this.databaseService.sensorReading.findFirst({
-                where: { rackId },
-                orderBy: { timestamp: 'desc' },
-                select: { temperature: true },
-            });
-
-            const temperatureWarning =
-                latestReading !== null &&
-                plant.maxTemperature !== null &&
-                latestReading.temperature > plant.maxTemperature;
+            await this.logRackActivityHelper.logActivity(
+                rackId,
+                ActivityEventType.PLANT_ADDED,
+                `Plant "${plant.name}" added to rack`,
+                {
+                    rackName: rack.name,
+                    macAddress: rack.macAddress,
+                    plantId,
+                    plantName: plant.name,
+                    quantity: dto.quantity,
+                    plantedAt: plantedAt.toISOString(),
+                },
+            );
 
             this.logger.log(
                 `Plant ${plantId} successfully assigned to rack ${rackId}`,
                 'RacksService',
             );
 
-            return {
-                message: 'Plant assigned to rack successfully',
-                warning: temperatureWarning,
-                maxTemperatureThreshold: plant.maxTemperature,
-            };
+            return { message: 'Plant assigned to rack successfully' };
         } catch (error) {
             if (error instanceof NotFoundException || error instanceof BadRequestException)
                 throw error;
@@ -1582,6 +1626,29 @@ export class RacksService {
                 'RacksService',
             );
             throw new InternalServerErrorException('Failed to update last seen time');
+        }
+    }
+
+    /**
+     * Emit a sensor start/stop command via MQTT for the given rack's MAC address.
+     * Non-critical — logs errors but never throws, so it won't fail the parent operation.
+     */
+    private async emitSensorCommand(
+        macAddress: string,
+        action: 'sensor_start' | 'sensor_stop',
+    ): Promise<void> {
+        try {
+            await this.eventEmitter.emitAsync('publishCommand', macAddress, 'sensors', { action });
+            this.logger.log(
+                `Sensor command "${action}" emitted for device ${macAddress}`,
+                'RacksService',
+            );
+        } catch (error) {
+            this.logger.error(
+                `Failed to emit sensor command "${action}" for device ${macAddress}`,
+                error instanceof Error ? error.message : String(error),
+                'RacksService',
+            );
         }
     }
 }
