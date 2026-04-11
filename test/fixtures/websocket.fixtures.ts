@@ -43,7 +43,6 @@ export const deviceStatuses = {
     online: 'ONLINE',
     offline: 'OFFLINE',
     error: 'ERROR',
-    maintenance: 'MAINTENANCE',
 };
 
 /**

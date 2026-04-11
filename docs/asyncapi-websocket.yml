@@ -556,16 +556,37 @@ components:
             payload:
                 $ref: '#/components/schemas/AutomationEventPayload'
             examples:
-                - name: autoWateringTriggered
+                - name: wateringStartTriggered
                   payload:
-                      rackId: 'clx789xyz123'
-                      event:
+                      event: 'WATERING_START'
+                      metadata:
+                          id: 'activity-123'
                           rackId: 'clx789xyz123'
-                          ruleName: 'Auto-water when dry'
-                          executedActions:
-                              - 'watering: start for 5000ms'
-                              - 'growLight: on'
-                      timestamp: '2025-02-05T14:45:00.000Z'
+                          eventType: 'WATERING_START'
+                          details: 'Watering watering_start triggered by automation rule "Auto-water when dry"'
+                          metadata:
+                              rackName: 'Lettuce Rack'
+                              macAddress: 'AA:BB:CC:DD:EE:FF'
+                              source: 'automation'
+                              ruleId: 'rule-123'
+                              ruleName: 'Auto-water when dry'
+                          timestamp: '2025-02-05T14:45:00.000Z'
+                - name: lightOffTriggered
+                  payload:
+                      event: 'LIGHT_OFF'
+                      metadata:
+                          id: 'activity-456'
+                          rackId: 'cmlat15fi000084uua19zeg8a'
+                          eventType: 'LIGHT_OFF'
+                          details: 'Grow light light_off triggered by automation rule "Evening light off"'
+                          metadata:
+                              rackName: 'Basil Rack'
+                              macAddress: 'FF:EE:DD:CC:BB:AA'
+                              source: 'automation'
+                              ruleId: 'rule-456'
+                              ruleName: 'Evening light off'
+                              durationSeconds: 3600
+                          timestamp: '2025-02-05T18:00:00.000Z'
 
         userNotification:
             name: UserNotification
@@ -784,7 +805,6 @@ components:
                         - ONLINE
                         - OFFLINE
                         - ERROR
-                        - MAINTENANCE
                     example: 'ONLINE'
                 timestamp:
                     type: string
@@ -849,29 +869,74 @@ components:
 
         AutomationEventPayload:
             type: object
+            description: Automation rule execution payload
             properties:
-                rackId:
-                    type: string
-                    example: 'clx789xyz123'
                 event:
+                    type: string
+                    description: Event type triggered by the automation rule
+                    enum: ['WATERING_START', 'WATERING_STOP', 'LIGHT_ON', 'LIGHT_OFF']
+                    example: 'WATERING_START'
+                metadata:
                     type: object
+                    description: Activity record containing event details and context
                     properties:
+                        id:
+                            type: string
+                            description: Unique activity record ID
+                            example: 'activity-123'
                         rackId:
                             type: string
+                            description: Unique identifier of the rack
                             example: 'clx789xyz123'
-                        ruleName:
+                        eventType:
                             type: string
-                            example: 'Auto-water when dry'
-                        executedActions:
-                            type: array
-                            items:
-                                type: string
-                            example:
-                                - 'Start watering for 5000 ms'
-                timestamp:
-                    type: string
-                    format: date-time
-                    example: '2025-02-05T14:41:00.000Z'
+                            description: Type of event recorded
+                            enum: ['WATERING_START', 'WATERING_STOP', 'LIGHT_ON', 'LIGHT_OFF']
+                            example: 'WATERING_START'
+                        details:
+                            type: string
+                            description: Human-readable description of the event
+                            example: 'Watering watering_start triggered by automation rule "Auto-water when dry"'
+                        metadata:
+                            type: object
+                            description: Context metadata for the automation event
+                            properties:
+                                rackName:
+                                    type: string
+                                    description: Name of the rack
+                                    example: 'Lettuce Rack'
+                                macAddress:
+                                    type: string
+                                    description: MAC address of the device
+                                    example: 'AA:BB:CC:DD:EE:FF'
+                                source:
+                                    type: string
+                                    description: Source of the action (automation or system)
+                                    example: 'automation'
+                                ruleId:
+                                    type: string
+                                    description: ID of the automation rule that triggered the event
+                                    example: 'rule-123'
+                                ruleName:
+                                    type: string
+                                    description: Name of the automation rule
+                                    example: 'Auto-water when dry'
+                                waterUsedMl:
+                                    type: number
+                                    description: Optional - water used in mL (for WATERING_STOP events)
+                                    example: 1000
+                                durationSeconds:
+                                    type: number
+                                    description: Optional - duration in seconds (for LIGHT_OFF events)
+                                    example: 3600
+                        timestamp:
+                            type: string
+                            format: date-time
+                            description: ISO 8601 timestamp of the activity
+                            example: '2025-02-05T14:45:00.000Z'
+            required:
+                - event
+                - metadata
     #endregion
 
     #region Security Schemes

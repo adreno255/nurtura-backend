@@ -7,8 +7,6 @@ import {
     IsObject,
     ValidateNested,
     IsString,
-    IsArray,
-    IsDate,
 } from 'class-validator';
 
 export class WateringActionDto {
@@ -31,6 +29,17 @@ export class GrowLightActionDto {
     @IsNotEmpty()
     @IsEnum(['light_on', 'light_off'])
     action!: 'light_on' | 'light_off';
+}
+
+export class SensorActionDto {
+    @ApiProperty({
+        description: 'Sensor action',
+        enum: ['sensor_start', 'sensor_stop'],
+        example: 'sensor_start',
+    })
+    @IsNotEmpty()
+    @IsEnum(['sensor_start', 'sensor_stop'])
+    action!: 'sensor_start' | 'sensor_stop';
 }
 
 export class RuleActionsDto {
@@ -57,35 +66,20 @@ export class RuleActionsDto {
 
 export class AutomatedEventDto {
     @ApiProperty({
-        description: 'Rack ID associated with the event',
-        example: 'clx123abc456',
+        description: 'Event that triggered the automation',
+        example: 'WATERING_START',
     })
     @IsNotEmpty()
     @IsString()
-    rackId!: string;
+    event?: string;
 
     @ApiProperty({
-        description: 'Name of the rule that triggered the event',
-        example: 'Auto-water when dry',
+        description: 'Metadata associated with the automated event',
+        example: {
+            rackName: 'Rack 1',
+            ruleId: '123e4567-e89b-12d3-a456-426614174000',
+        },
     })
-    @IsNotEmpty()
-    @IsString()
-    ruleName!: string;
-
-    @ApiProperty({
-        description: 'Array of actions that were executed as part of the automation',
-        example: ['watering: start for 5000ms', 'growLight: on'],
-    })
-    @IsArray()
-    @IsNotEmpty({ each: true })
-    @IsString({ each: true })
-    executedActions!: string[];
-
-    @ApiProperty({
-        description: 'Event timestamp',
-        example: '2024-06-01T12:00:00Z',
-    })
-    @IsNotEmpty()
-    @IsDate()
-    timestamp!: Date;
+    @IsObject()
+    metadata?: object;
 }

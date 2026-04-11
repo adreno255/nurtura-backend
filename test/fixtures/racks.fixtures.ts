@@ -14,7 +14,7 @@ import {
     type UpdatePlantDto,
 } from '../../src/plants/dto';
 import { testPlantIds } from './plants.fixtures';
-import { type ActivityQueryDto } from '../../src/common/dto/activity-query.dto';
+import { type ActivityQueryDto } from '../../src/racks/dto/activity-query.dto';
 
 /**
  * Base rack used by many sensor tests

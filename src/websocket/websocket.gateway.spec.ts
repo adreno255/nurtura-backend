@@ -638,7 +638,7 @@ describe('WebsocketGateway', () => {
         });
 
         it('should broadcast different statuses', () => {
-            const statuses = ['ONLINE', 'OFFLINE', 'ERROR', 'MAINTENANCE'];
+            const statuses = ['ONLINE', 'OFFLINE', 'ERROR'];
 
             statuses.forEach((status) => {
                 gateway.broadcastDeviceStatus(testRackIds.primary, status);

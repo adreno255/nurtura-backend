@@ -10,7 +10,7 @@ import { RacksService } from './racks.service';
 import { type CreateRackDto } from './dto/create-rack.dto';
 import { type UpdateRackDto } from './dto/update-rack.dto';
 import { type PaginationQueryDto } from '../common/dto/pagination-query.dto';
-import { type ActivityQueryDto } from '../common/dto/activity-query.dto';
+import { type ActivityQueryDto } from './dto/activity-query.dto';
 import { type HarvestSeedsDto, type UnassignFromRackDto } from './dto';
 
 import {
@@ -311,7 +311,7 @@ describe('RacksController', () => {
         });
 
         it('should handle all device status values', async () => {
-            for (const status of ['ONLINE', 'OFFLINE', 'ERROR', 'MAINTENANCE']) {
+            for (const status of ['ONLINE', 'OFFLINE', 'ERROR']) {
                 mockRacksService.getDeviceStatus.mockResolvedValue({
                     message: 'Device status retrieved successfully',
                     status,

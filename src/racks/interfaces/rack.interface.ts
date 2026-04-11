@@ -47,3 +47,9 @@ export interface RackExistsResponse {
     exists: boolean;
     rack?: Rack;
 }
+
+export interface AssignPlantToRackResponse {
+    message: string;
+    warning: boolean;
+    maxTemperatureThreshold: number | null;
+}

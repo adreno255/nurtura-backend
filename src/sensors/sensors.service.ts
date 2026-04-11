@@ -6,12 +6,14 @@ import { SensorDataDto } from './dto/sensor-data.dto';
 import { MqttMessageParser } from '../common/utils/mqtt-parser.helper';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AutomationService } from '../automation/automation.service';
+import { SystemRulesService } from '../system-rules/system-rules.service';
 
 @Injectable()
 export class SensorsService {
     constructor(
         private readonly databaseService: DatabaseService,
         private readonly automationService: AutomationService,
+        private readonly systemRulesService: SystemRulesService,
         private readonly eventEmitter: EventEmitter2,
         private readonly logger: MyLoggerService,
     ) {}
@@ -315,8 +317,9 @@ export class SensorsService {
 
             this.logger.log(`Processing complete for rack: ${rack.id}`, 'SensorsService');
 
-            // Step 6: Pass to AutomationService for rule evaluation
+            // Step 6: Pass to AutomationService and SystemRulesService for rule evaluation
             await this.automationService.evaluateRules(rack.id, sensorData);
+            await this.systemRulesService.evaluate(rack, sensorData);
         } catch (error) {
             this.logger.error(
                 `Failed to process sensor data for device: ${macAddress}`,

@@ -1,7 +1,7 @@
 import { IsOptional, IsDateString, IsArray, IsString } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { PaginationQueryDto } from './pagination-query.dto';
+import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 
 export class ActivityQueryDto extends PaginationQueryDto {
     @ApiPropertyOptional({

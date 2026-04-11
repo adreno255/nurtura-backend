@@ -27,7 +27,7 @@ import { RacksService } from './racks.service';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { CurrentUser } from '../common/decorators';
 import { type CurrentUserPayload } from '../common/interfaces';
-import { ActivityQueryDto } from '../common/dto/activity-query.dto';
+import { ActivityQueryDto } from './dto/activity-query.dto';
 import {
     CreateRackDto,
     UpdateRackDto,
@@ -36,6 +36,7 @@ import {
     UnassignFromRackDto,
     HarvestLeavesDto,
     HarvestSeedsDto,
+    PlantCareActivityQueryDto,
 } from './dto';
 
 @ApiTags('Racks')
@@ -109,7 +110,7 @@ export class RacksController {
                             isActive: { type: 'boolean', example: true },
                             status: {
                                 type: 'string',
-                                enum: ['ONLINE', 'OFFLINE', 'ERROR', 'MAINTENANCE'],
+                                enum: ['ONLINE', 'OFFLINE', 'ERROR'],
                                 example: 'ONLINE',
                             },
                             lastActivityAt: {
@@ -700,7 +701,7 @@ export class RacksController {
                         isActive: { type: 'boolean', example: true },
                         status: {
                             type: 'string',
-                            enum: ['ONLINE', 'OFFLINE', 'ERROR', 'MAINTENANCE'],
+                            enum: ['ONLINE', 'OFFLINE', 'ERROR'],
                             example: 'ONLINE',
                         },
                         lastActivityAt: {
@@ -877,8 +878,7 @@ export class RacksController {
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
         summary: 'Get device status',
-        description:
-            'Retrieves the current status of the rack device (ONLINE/OFFLINE/ERROR/MAINTENANCE)',
+        description: 'Retrieves the current status of the rack device (ONLINE/OFFLINE/ERROR)',
     })
     @ApiParam({
         name: 'rackId',
@@ -945,7 +945,7 @@ export class RacksController {
     @ApiOperation({
         summary: 'Get plant care activity',
         description:
-            'Retrieves watering and grow light activities (WATERING_START, WATERING_STOP, LIGHT_ON, LIGHT_OFF) across all racks owned by the authenticated user. Supports date range filtering, pagination, and rack ID filtering.',
+            'Retrieves watering and grow light activities (WATERING_START, WATERING_STOP, LIGHT_ON, LIGHT_OFF) across all racks owned by the authenticated user. Supports date range filtering, pagination, and rack ID filtering, and event type filtering.',
     })
     @ApiQuery({
         name: 'startDate',
@@ -981,6 +981,14 @@ export class RacksController {
         type: Number,
         description: 'Items per page (max 100)',
         example: 10,
+    })
+    @ApiQuery({
+        name: 'event',
+        required: false,
+        type: String,
+        description:
+            'Filter by event type. Can specify multiple values separated by commas. Valid values: WATERING_START, WATERING_STOP, LIGHT_ON, LIGHT_OFF',
+        example: 'WATERING_START,WATERING_STOP',
     })
     @ApiResponse({
         status: HttpStatus.OK,
@@ -1063,7 +1071,6 @@ export class RacksController {
                                         source: 'automation',
                                         ruleId: 'clxrule123',
                                         ruleName: 'Auto Watering - Lettuce',
-                                        duration: 300000,
                                     },
                                     timestamp: '2025-02-05T14:30:00.000Z',
                                     rack: {
@@ -1099,7 +1106,7 @@ export class RacksController {
                                         source: 'automation',
                                         ruleId: 'clxrule123',
                                         ruleName: 'Auto Watering - Lettuce',
-                                        duration: 300000,
+                                        waterUsedMl: 250,
                                     },
                                     timestamp: '2025-02-05T14:35:00.000Z',
                                     rack: {
@@ -1168,8 +1175,7 @@ export class RacksController {
                                         rackName: 'Living Room Farm',
                                         macAddress: 'AA:BB:CC:DD:EE:FF',
                                         source: 'automation',
-                                        ruleId: 'clxrule456',
-                                        ruleName: 'Morning Light Cycle',
+                                        durationSeconds: 43200,
                                     },
                                     timestamp: '2025-02-05T18:00:00.000Z',
                                     rack: {
@@ -1234,7 +1240,7 @@ export class RacksController {
     })
     async getPlantCareActivities(
         @CurrentUser() user: CurrentUserPayload,
-        @Query() query: ActivityQueryDto,
+        @Query() query: PlantCareActivityQueryDto,
     ) {
         return this.racksService.getPlantCareActivities(user.dbId, query);
     }

@@ -345,11 +345,7 @@ export class WebsocketService {
 
             this.logger.log(`Broadcasting automation event for rack ${rackId}`, 'WebsocketService');
 
-            server.to(room).emit('automationEvent', {
-                rackId,
-                event,
-                timestamp: new Date().toISOString(),
-            });
+            server.to(room).emit('automationEvent', { event });
         } catch (error) {
             this.logger.error(
                 `Failed to broadcast automation event for rack ${rackId}`,

@@ -81,6 +81,7 @@ enum NotificationStatus {
 enum DeviceStatus {
     ONLINE
     OFFLINE
+    ERROR
 
     @@map("device_status")
 }
@@ -142,6 +143,10 @@ model Plant {
     category        PlantCategory? @map("category")
     recommendedSoil SoilType?  @map("recommended_soil")
     description     String?    @db.VarChar(1000)
+
+    // Environmental thresholds
+    maxTemperature Float? @map("ideal_temperature") // Celsius
+    maxLightLevel    Float? @map("max_light_level")   // Lux
 
     // Status
     isActive Boolean @default(true) @map("is_active")

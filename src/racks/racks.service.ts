@@ -20,15 +20,21 @@ import {
     type DeviceStatusResponse,
     type RackCurrentStateResponse,
     RackExistsResponse,
+    AssignPlantToRackResponse,
 } from './interfaces/rack.interface';
 import { type PaginatedResponse } from '../common/interfaces/pagination.interface';
 import { type Rack } from '../generated/prisma/client';
 import { MqttMessageParser } from '../common/utils/mqtt-parser.helper';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { DeviceErrorDto, DeviceStatusDto } from './dto';
+import {
+    DeviceErrorDto,
+    DeviceStatusDto,
+    PlantCareActivityQueryDto,
+    PlantCareEventFilter,
+} from './dto';
 import { Activity, NotificationType, Prisma } from '../generated/prisma';
 import { LogRackActivityHelper } from '../common/utils/log-rack-activity.helper';
-import { ActivityQueryDto } from '../common/dto/activity-query.dto';
+import { ActivityQueryDto } from './dto/activity-query.dto';
 import {
     AssignPlantToRackDto,
     HarvestPlantDto,
@@ -748,10 +754,30 @@ export class RacksService {
      */
     async getPlantCareActivities(
         userId: string,
-        query: ActivityQueryDto,
+        query: PlantCareActivityQueryDto,
     ): Promise<PaginatedResponse<Activity>> {
         try {
             const queryRackIds = await this.resolveAuthorizedRackIds(userId, query.rackId);
+
+            const eventTypeMap = {
+                [PlantCareEventFilter.WATERING]: [
+                    ActivityEventType.WATERING_START,
+                    ActivityEventType.WATERING_STOP,
+                ],
+                [PlantCareEventFilter.LIGHT]: [
+                    ActivityEventType.LIGHT_ON,
+                    ActivityEventType.LIGHT_OFF,
+                ],
+            };
+
+            const eventTypes = query.event
+                ? eventTypeMap[query.event]
+                : [
+                      ActivityEventType.WATERING_START,
+                      ActivityEventType.WATERING_STOP,
+                      ActivityEventType.LIGHT_ON,
+                      ActivityEventType.LIGHT_OFF,
+                  ];
 
             const dateFilter =
                 query.startDate || query.endDate
@@ -765,14 +791,7 @@ export class RacksService {
 
             const where = {
                 rackId: { in: queryRackIds },
-                eventType: {
-                    in: [
-                        ActivityEventType.WATERING_START,
-                        ActivityEventType.WATERING_STOP,
-                        ActivityEventType.LIGHT_ON,
-                        ActivityEventType.LIGHT_OFF,
-                    ],
-                },
+                eventType: { in: eventTypes },
                 ...dateFilter,
             };
 
@@ -1269,7 +1288,7 @@ export class RacksService {
         rackId: string,
         userId: string,
         dto: AssignPlantToRackDto,
-    ): Promise<{ message: string }> {
+    ): Promise<AssignPlantToRackResponse> {
         try {
             const plantId = dto.plantId;
 
@@ -1387,12 +1406,27 @@ export class RacksService {
                 );
             }
 
+            const latestReading = await this.databaseService.sensorReading.findFirst({
+                where: { rackId },
+                orderBy: { timestamp: 'desc' },
+                select: { temperature: true },
+            });
+
+            const temperatureWarning =
+                latestReading !== null &&
+                plant.maxTemperature !== null &&
+                latestReading.temperature > plant.maxTemperature;
+
             this.logger.log(
                 `Plant ${plantId} successfully assigned to rack ${rackId}`,
                 'RacksService',
             );
 
-            return { message: 'Plant assigned to rack successfully' };
+            return {
+                message: 'Plant assigned to rack successfully',
+                warning: temperatureWarning,
+                maxTemperatureThreshold: plant.maxTemperature,
+            };
         } catch (error) {
             if (error instanceof NotFoundException || error instanceof BadRequestException)
                 throw error;

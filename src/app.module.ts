@@ -22,6 +22,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { AutomationModule } from './automation/automation.module';
 import { PlantsModule } from './plants/plants.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { SystemRulesModule } from './system-rules/system-rules.module';
 
 @Module({
     imports: [
@@ -57,6 +58,7 @@ import { NotificationsModule } from './notifications/notifications.module';
         AutomationModule,
         PlantsModule,
         NotificationsModule,
+        SystemRulesModule,
     ],
     controllers: [AppController],
     providers: [

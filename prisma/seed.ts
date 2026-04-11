@@ -109,11 +109,16 @@ async function main() {
     // PLANTS WITH AUTOMATION RULES
     // ============================================
 
+    // --- Lettuce ---
+    // Moisture: 60–80% | Temp: 7–18°C | Humidity: 50–70% | Light: 16,000–32,000 lux
+
     const lettuce = await prisma.plant.create({
         data: {
             name: 'Lettuce',
             category: PlantCategory.LEAFY_GREENS,
             recommendedSoil: SoilType.LOAMY,
+            maxTemperature: 18,
+            maxLightLevel: 32000,
             description: 'Cool-season leafy green, ideal for salads',
             isActive: true,
         },
@@ -137,32 +142,21 @@ async function main() {
                 conditions: { moisture: { greaterThan: 80 } },
                 actions: { watering: { action: 'watering_stop' } },
             },
-            {
-                plantId: lettuce.id,
-                name: 'Lettuce - Temperature Too High',
-                description: 'Alert when temperature exceeds 18°C',
-                isEnabled: true,
-                conditions: { temperature: { greaterThan: 18 } },
-                actions: {},
-            },
-            {
-                plantId: lettuce.id,
-                name: 'Lettuce - Low Light',
-                description: 'Turn on grow lights when light drops below 16,000 lux',
-                isEnabled: true,
-                conditions: { lightLevel: { lessThan: 16000 } },
-                actions: { growLight: { action: 'light_on' } },
-            },
         ],
     });
 
     console.log('✓ Lettuce created with automation rules');
+
+    // --- Malabar Spinach ---
+    // Moisture: 70–90% | Temp: 24–35°C | Humidity: 60–80% | Light: ~100,000 lux
 
     const malabarSpinach = await prisma.plant.create({
         data: {
             name: 'Malabar Spinach',
             category: PlantCategory.TROPICAL_GREENS,
             recommendedSoil: SoilType.SILTY,
+            maxTemperature: 35,
+            maxLightLevel: 100000,
             description: 'Heat-loving tropical vine with edible leaves',
             isActive: true,
         },
@@ -186,32 +180,21 @@ async function main() {
                 conditions: { moisture: { greaterThan: 90 } },
                 actions: { watering: { action: 'watering_stop' } },
             },
-            {
-                plantId: malabarSpinach.id,
-                name: 'Malabar Spinach - Temperature Too Low',
-                description: 'Alert when temperature drops below 24°C',
-                isEnabled: true,
-                conditions: { temperature: { lessThan: 24 } },
-                actions: {},
-            },
-            {
-                plantId: malabarSpinach.id,
-                name: 'Malabar Spinach - Low Light',
-                description: 'Turn on grow lights when light drops below 80,000 lux',
-                isEnabled: true,
-                conditions: { lightLevel: { lessThan: 80000 } },
-                actions: { growLight: { action: 'light_on' } },
-            },
         ],
     });
 
     console.log('✓ Malabar Spinach created with automation rules');
+
+    // --- Basil ---
+    // Moisture: 50–70% | Temp: 10–21°C | Humidity: 40–60% | Light: ~15,000 lux
 
     const basil = await prisma.plant.create({
         data: {
             name: 'Basil',
             category: PlantCategory.HERBS,
             recommendedSoil: SoilType.PEATY,
+            maxTemperature: 21,
+            maxLightLevel: 15000,
             description: 'Aromatic herb, popular in Mediterranean cuisine',
             isActive: true,
         },
@@ -235,24 +218,21 @@ async function main() {
                 conditions: { moisture: { greaterThan: 70 } },
                 actions: { watering: { action: 'watering_stop' } },
             },
-            {
-                plantId: basil.id,
-                name: 'Basil - Low Light',
-                description: 'Turn on grow lights when light drops below 15,000 lux',
-                isEnabled: true,
-                conditions: { lightLevel: { lessThan: 15000 } },
-                actions: { growLight: { action: 'light_on' } },
-            },
         ],
     });
 
     console.log('✓ Basil created with automation rules');
+
+    // --- Oregano ---
+    // Moisture: 30–50% | Temp: 15–26°C | Humidity: 40–50% | Light: 32,000–100,000 lux
 
     const oregano = await prisma.plant.create({
         data: {
             name: 'Oregano',
             category: PlantCategory.HERBS,
             recommendedSoil: SoilType.SANDY,
+            maxTemperature: 26,
+            maxLightLevel: 100000,
             description: 'Drought-tolerant Mediterranean herb',
             isActive: true,
         },
@@ -276,24 +256,21 @@ async function main() {
                 conditions: { moisture: { greaterThan: 50 } },
                 actions: { watering: { action: 'watering_stop' } },
             },
-            {
-                plantId: oregano.id,
-                name: 'Oregano - Low Light',
-                description: 'Turn on grow lights when light drops below 32,000 lux',
-                isEnabled: true,
-                conditions: { lightLevel: { lessThan: 32000 } },
-                actions: { growLight: { action: 'light_on' } },
-            },
         ],
     });
 
     console.log('✓ Oregano created with automation rules');
+
+    // --- Rosemary ---
+    // Moisture: 20–40% | Temp: 24–35°C | Humidity: 30–50% | Light: ~30,000 lux
 
     const rosemary = await prisma.plant.create({
         data: {
             name: 'Rosemary',
             category: PlantCategory.HERBS,
             recommendedSoil: SoilType.SANDY,
+            maxTemperature: 35,
+            maxLightLevel: 30000,
             description: 'Hardy evergreen herb with needle-like leaves',
             isActive: true,
         },
@@ -317,24 +294,21 @@ async function main() {
                 conditions: { moisture: { greaterThan: 40 } },
                 actions: { watering: { action: 'watering_stop' } },
             },
-            {
-                plantId: rosemary.id,
-                name: 'Rosemary - Low Light',
-                description: 'Turn on grow lights when light drops below 30,000 lux',
-                isEnabled: true,
-                conditions: { lightLevel: { lessThan: 30000 } },
-                actions: { growLight: { action: 'light_on' } },
-            },
         ],
     });
 
     console.log('✓ Rosemary created with automation rules');
+
+    // --- Cilantro ---
+    // Moisture: 50–70% | Temp: 15–22°C | Humidity: 30–50% | Light: 32,000–100,000 lux
 
     const cilantro = await prisma.plant.create({
         data: {
             name: 'Cilantro',
             category: PlantCategory.ROOT_AND_STALK,
             recommendedSoil: SoilType.LOAMY,
+            maxTemperature: 22,
+            maxLightLevel: 100000,
             description: 'Fast-growing herb with distinctive flavor',
             isActive: true,
         },
@@ -358,24 +332,21 @@ async function main() {
                 conditions: { moisture: { greaterThan: 70 } },
                 actions: { watering: { action: 'watering_stop' } },
             },
-            {
-                plantId: cilantro.id,
-                name: 'Cilantro - Low Light',
-                description: 'Turn on grow lights when light drops below 32,000 lux',
-                isEnabled: true,
-                conditions: { lightLevel: { lessThan: 32000 } },
-                actions: { growLight: { action: 'light_on' } },
-            },
         ],
     });
 
     console.log('✓ Cilantro created with automation rules');
+
+    // --- Celery ---
+    // Moisture: 70–90% | Temp: 13–30°C | Humidity: 60–80% | Light: ~80,000 lux
 
     const celery = await prisma.plant.create({
         data: {
             name: 'Celery',
             category: PlantCategory.ROOT_AND_STALK,
             recommendedSoil: SoilType.LOAMY,
+            maxTemperature: 30,
+            maxLightLevel: 80000,
             description: 'Moisture-loving vegetable with crunchy stalks',
             isActive: true,
         },
@@ -399,24 +370,21 @@ async function main() {
                 conditions: { moisture: { greaterThan: 90 } },
                 actions: { watering: { action: 'watering_stop' } },
             },
-            {
-                plantId: celery.id,
-                name: 'Celery - Low Light',
-                description: 'Turn on grow lights when light drops below 80,000 lux',
-                isEnabled: true,
-                conditions: { lightLevel: { lessThan: 80000 } },
-                actions: { growLight: { action: 'light_on' } },
-            },
         ],
     });
 
     console.log('✓ Celery created with automation rules');
+
+    // --- Parsley ---
+    // Moisture: 50–70% | Temp: 10–21°C | Humidity: 50–70% | Light: ~100,000 lux
 
     const parsley = await prisma.plant.create({
         data: {
             name: 'Parsley',
             category: PlantCategory.ROOT_AND_STALK,
             recommendedSoil: SoilType.LOAMY,
+            maxTemperature: 21,
+            maxLightLevel: 100000,
             description: 'Biennial herb, popular garnish and ingredient',
             isActive: true,
         },
@@ -439,14 +407,6 @@ async function main() {
                 isEnabled: true,
                 conditions: { moisture: { greaterThan: 70 } },
                 actions: { watering: { action: 'watering_stop' } },
-            },
-            {
-                plantId: parsley.id,
-                name: 'Parsley - Low Light',
-                description: 'Turn on grow lights when light drops below 80,000 lux',
-                isEnabled: true,
-                conditions: { lightLevel: { lessThan: 80000 } },
-                actions: { growLight: { action: 'light_on' } },
             },
         ],
     });
@@ -573,13 +533,13 @@ async function main() {
             {
                 rackId: rack.id,
                 eventType: ActivityEventType.LIGHT_OFF,
-                details: 'Grow light off triggered by automation rule "Lettuce - Low Light"',
+                details: 'Grow light off triggered by automation rule "Lettuce - High Light"',
                 metadata: {
                     rackName: rack.name,
                     macAddress: rack.macAddress,
                     source: 'automation',
-                    ruleId: 'rule-lettuce-low-light',
-                    ruleName: 'Lettuce - Low Light',
+                    ruleId: 'rule-lettuce-high-light',
+                    ruleName: 'Lettuce - High Light',
                 },
                 timestamp: new Date('2026-01-20T18:00:00.000Z'),
             },
@@ -815,16 +775,16 @@ async function main() {
             },
             {
                 rackId: rack2.id,
-                temperature: 22.1,
-                humidity: 55.0,
-                moisture: 52.3,
+                temperature: 16.5,
+                humidity: 48.0,
+                moisture: 55.3,
                 lightLevel: 14000,
             },
             {
                 rackId: rack2.id,
-                temperature: 23.4,
-                humidity: 57.0,
-                moisture: 48.0,
+                temperature: 17.8,
+                humidity: 52.0,
+                moisture: 58.0,
                 lightLevel: 13000,
             },
         ],
@@ -867,14 +827,14 @@ async function main() {
             {
                 rackId: rack2.id,
                 hour: new Date('2026-02-10T09:00:00.000Z'),
-                avgTemperature: 22.8,
-                avgHumidity: 56.0,
-                avgMoisture: 50.2,
+                avgTemperature: 17.2,
+                avgHumidity: 50.0,
+                avgMoisture: 56.7,
                 avgLightLevel: 13500,
-                minTemperature: 22.1,
-                maxTemperature: 23.4,
-                minMoisture: 48.0,
-                maxMoisture: 52.3,
+                minTemperature: 16.5,
+                maxTemperature: 17.8,
+                minMoisture: 55.3,
+                maxMoisture: 58.0,
                 readingCount: 2,
             },
         ],
