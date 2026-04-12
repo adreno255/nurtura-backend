@@ -480,11 +480,6 @@ export class RacksService {
                     statusData as unknown as Prisma.InputJsonValue,
                 );
 
-                this.logger.log(
-                    `Activity logged for rack ${rack.id}: ${oldStatus} → ${newStatus}`,
-                    'RacksService',
-                );
-
                 this.eventEmitter.emit('createNotification', {
                     userId: rack.userId,
                     rackId: rack.id,
