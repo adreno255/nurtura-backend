@@ -1,3 +1,26 @@
+## [5.0.0](https://github.com/adreno255/nurtura-backend/compare/v4.1.0...v5.0.0) (2026-04-12)
+
+### ⚠ BREAKING CHANGES
+
+* add cron job for data aggregation and cleanup
+* change to new automation rules with addition of system rules
+
+### Features
+
+* add cron job for data aggregation and cleanup ([95f840b](https://github.com/adreno255/nurtura-backend/commit/95f840b083d1b1ce9d958ac5b175fa0cb5cbab11))
+* add Expo Push API and WebSocket for notifications ([6a5d04d](https://github.com/adreno255/nurtura-backend/commit/6a5d04dc7777c66f55fdf92a38ec0abab151ac5b))
+* add LWT and device error MQTT message handling ([651a87e](https://github.com/adreno255/nurtura-backend/commit/651a87e26c5ade286a05e9e27b3edd67ed3471e6))
+* add notification module ([b442df9](https://github.com/adreno255/nurtura-backend/commit/b442df938b5401344e69b011f7ade9aaef9026bc))
+
+### Bug Fixes
+
+* bug in count and planted-quantity endpoints ([bb8f83b](https://github.com/adreno255/nurtura-backend/commit/bb8f83b20c3fb64dfa63a21b3b3cca0b39159ec8))
+
+### Code Refactoring
+
+* change to new automation rules with addition of system rules ([a3307ca](https://github.com/adreno255/nurtura-backend/commit/a3307ca5e9146a4ef976ca19ee6150897f9231c1))
+* remove duration in watering command and polish MQTT payload formats ([606a302](https://github.com/adreno255/nurtura-backend/commit/606a3026fe9ac3239724acf0a17fa611add485fc))
+
 ## [4.1.0](https://github.com/adreno255/nurtura-backend/compare/v4.0.0...v4.1.0) (2026-04-03)
 
 ### Features
