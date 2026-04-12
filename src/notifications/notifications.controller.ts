@@ -1,14 +1,4 @@
-import {
-    Controller,
-    Get,
-    Patch,
-    Delete,
-    Param,
-    Query,
-    HttpCode,
-    HttpStatus,
-    Post,
-} from '@nestjs/common';
+import { Controller, Get, Patch, Delete, Param, Query, HttpCode, HttpStatus } from '@nestjs/common';
 import {
     ApiTags,
     ApiOperation,
@@ -21,11 +11,9 @@ import {
     ApiInternalServerErrorResponse,
 } from '@nestjs/swagger';
 import { NotificationsService } from './notifications.service';
-import { CurrentUser, Public } from '../common/decorators';
+import { CurrentUser } from '../common/decorators';
 import { type CurrentUserPayload } from '../common/interfaces';
 import { type PaginationQueryDto } from '../common/dto/pagination-query.dto';
-import type { CreateNotificationPayload } from './interfaces/notification.interface';
-import { NotificationType } from '../generated/prisma';
 
 @ApiTags('Notifications')
 @ApiBearerAuth('firebase-jwt')
@@ -383,25 +371,5 @@ export class NotificationsController {
         @CurrentUser() user: CurrentUserPayload,
     ) {
         return this.notificationsService.remove(notificationId, user.dbId);
-    }
-
-    @Post('send-test')
-    @Public()
-    async sendTestNotification() {
-        const payload = {
-            userId: 'cmnu23f0v000228uuun4dsmy3',
-            rackId: 'cmnr7b0ku0000k0uu1dtss97i',
-            type: NotificationType.INFO,
-            title: 'Test Notification',
-            message: 'This is a test notification from the API',
-            metadata: {
-                screen: '/(tabs)/(account)/user-info',
-                firebaseUid: '99us9vHHLDbxXbkWCjrJOaKgaLd2',
-                email: 'nimo.neoisaiahbscs2023@gmail.com',
-            },
-        } as CreateNotificationPayload;
-
-        await this.notificationsService.handleCreateNotification(payload);
-        return { message: 'Test notification sent' };
     }
 }
