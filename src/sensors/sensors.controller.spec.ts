@@ -95,6 +95,102 @@ describe('SensorsController', () => {
         });
     });
 
+    describe('aggregateForCleanup', () => {
+        const mockSummary = {
+            from: new Date('2026-04-09T00:00:00.000Z'),
+            to: new Date('2026-04-12T00:00:00.000Z'),
+            processedReadings: 120,
+            aggregatedRows: 24,
+            days: 3,
+        };
+
+        it('should trigger aggregation with default days', async () => {
+            mockSensorsService.aggregateReadingsForCleanup.mockResolvedValue(mockSummary);
+
+            await controller.aggregateForCleanup(3);
+
+            expect(mockSensorsService.aggregateReadingsForCleanup).toHaveBeenCalledWith(3);
+        });
+
+        it('should trigger aggregation with custom days', async () => {
+            mockSensorsService.aggregateReadingsForCleanup.mockResolvedValue({
+                ...mockSummary,
+                days: 5,
+            });
+
+            await controller.aggregateForCleanup(5);
+
+            expect(mockSensorsService.aggregateReadingsForCleanup).toHaveBeenCalledWith(5);
+        });
+
+        it('should return formatted response', async () => {
+            mockSensorsService.aggregateReadingsForCleanup.mockResolvedValue(mockSummary);
+
+            const result = await controller.aggregateForCleanup(3);
+
+            expect(result).toEqual({
+                message: 'Sensor aggregation completed',
+                ...mockSummary,
+            });
+        });
+
+        it('should propagate service errors', async () => {
+            const serviceError = new Error('Aggregation failed');
+            mockSensorsService.aggregateReadingsForCleanup.mockRejectedValue(serviceError);
+
+            await expect(controller.aggregateForCleanup(3)).rejects.toThrow('Aggregation failed');
+        });
+    });
+
+    describe('cleanupAfterAggregation', () => {
+        const mockCleanupSummary = {
+            days: 30,
+            cleanupBefore: new Date('2026-03-13T00:00:00.000Z'),
+            candidateReadings: 500,
+            deletedReadings: 480,
+            skippedReadings: 20,
+            candidateBuckets: 40,
+            matchedAggregatedBuckets: 38,
+        };
+
+        it('should trigger cleanup with default days', async () => {
+            mockSensorsService.cleanupAggregatedRawReadings.mockResolvedValue(mockCleanupSummary);
+
+            await controller.cleanupAfterAggregation(30);
+
+            expect(mockSensorsService.cleanupAggregatedRawReadings).toHaveBeenCalledWith(30);
+        });
+
+        it('should trigger cleanup with custom days', async () => {
+            mockSensorsService.cleanupAggregatedRawReadings.mockResolvedValue({
+                ...mockCleanupSummary,
+                days: 45,
+            });
+
+            await controller.cleanupAfterAggregation(45);
+
+            expect(mockSensorsService.cleanupAggregatedRawReadings).toHaveBeenCalledWith(45);
+        });
+
+        it('should return formatted response', async () => {
+            mockSensorsService.cleanupAggregatedRawReadings.mockResolvedValue(mockCleanupSummary);
+
+            const result = await controller.cleanupAfterAggregation(30);
+
+            expect(result).toEqual({
+                message: 'Raw sensor cleanup completed',
+                ...mockCleanupSummary,
+            });
+        });
+
+        it('should propagate service errors', async () => {
+            const serviceError = new Error('Cleanup failed');
+            mockSensorsService.cleanupAggregatedRawReadings.mockRejectedValue(serviceError);
+
+            await expect(controller.cleanupAfterAggregation(30)).rejects.toThrow('Cleanup failed');
+        });
+    });
+
     describe('getReadings', () => {
         it('should retrieve readings without date filters', async () => {
             mockSensorsService.getReadings.mockResolvedValue(mockReadings);
@@ -507,6 +603,22 @@ describe('SensorsController', () => {
     describe('integration with services', () => {
         it('should delegate all logic to services', async () => {
             mockSensorsService.getLatestReading.mockResolvedValue(mockSensorReading);
+            mockSensorsService.aggregateReadingsForCleanup.mockResolvedValue({
+                from: new Date('2026-04-09T00:00:00.000Z'),
+                to: new Date('2026-04-12T00:00:00.000Z'),
+                processedReadings: 120,
+                aggregatedRows: 24,
+                days: 3,
+            });
+            mockSensorsService.cleanupAggregatedRawReadings.mockResolvedValue({
+                days: 30,
+                cleanupBefore: new Date('2026-03-13T00:00:00.000Z'),
+                candidateReadings: 500,
+                deletedReadings: 480,
+                skippedReadings: 20,
+                candidateBuckets: 40,
+                matchedAggregatedBuckets: 38,
+            });
             mockSensorsService.getReadings.mockResolvedValue(mockReadings);
             mockRacksService.verifyRackOwnership.mockResolvedValue(undefined);
             mockSensorsService.getAggregatedData.mockResolvedValue(mockAggregatedData);
@@ -514,12 +626,16 @@ describe('SensorsController', () => {
             mockSensorsService.getStatistics.mockResolvedValue(mockStatistics);
 
             await controller.getLatestReading(testRackId);
+            await controller.aggregateForCleanup(3);
+            await controller.cleanupAfterAggregation(30);
             await controller.getReadings(testRackId);
             await controller.getAggregated(testRackId, 24, testUser);
             await controller.getHistory(testRackId, 24, testUser);
             await controller.getStatistics(testRackId, 24, testUser);
 
             expect(mockSensorsService.getLatestReading).toHaveBeenCalled();
+            expect(mockSensorsService.aggregateReadingsForCleanup).toHaveBeenCalled();
+            expect(mockSensorsService.cleanupAggregatedRawReadings).toHaveBeenCalled();
             expect(mockSensorsService.getReadings).toHaveBeenCalled();
             expect(mockSensorsService.getAggregatedData).toHaveBeenCalled();
             expect(mockSensorsService.getHistory).toHaveBeenCalled();
@@ -567,6 +683,13 @@ describe('SensorsController', () => {
             mockSensorsService.getReadings.mockRejectedValue(serviceError);
 
             await expect(controller.getReadings(testRackId)).rejects.toThrow('Service error');
+        });
+
+        it('should not catch service errors in cleanupAfterAggregation', async () => {
+            const serviceError = new Error('Cleanup error');
+            mockSensorsService.cleanupAggregatedRawReadings.mockRejectedValue(serviceError);
+
+            await expect(controller.cleanupAfterAggregation(30)).rejects.toThrow('Cleanup error');
         });
 
         it('should not catch ownership errors in getAggregated', async () => {

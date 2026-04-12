@@ -67,6 +67,7 @@ export const createMockDatabaseService = () => ({
         create: jest.fn(),
         update: jest.fn(),
         delete: jest.fn(),
+        deleteMany: jest.fn(),
         count: jest.fn(),
         aggregate: jest.fn(),
     },
