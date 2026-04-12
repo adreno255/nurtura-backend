@@ -50,10 +50,10 @@ info:
 #region Servers
 servers:
     production:
-        host: nurturaloam.tech
+        host: api.nurturaloam.tech
         protocol: wss
         description: Production WebSocket server (TLS)
-        pathname: /sensors
+        pathname: /updates
         security:
             - $ref: '#/components/securitySchemes/firebaseAuth'
         tags:
@@ -64,7 +64,7 @@ servers:
         host: localhost:3000
         protocol: ws
         description: Development WebSocket server (no TLS)
-        pathname: /sensors
+        pathname: /updates
         security:
             - $ref: '#/components/securitySchemes/firebaseAuth'
         tags:
@@ -81,7 +81,7 @@ defaultContentType: application/json
 #region Channels
 channels:
     root:
-        address: /sensors
+        address: /updates
         title: Root Channel
         description: |
             Main WebSocket connection endpoint
@@ -90,7 +90,7 @@ channels:
                 - Authorization: Bearer \<Firebase ID Token\>
 
             - Socket.IO clients may also send the token via handshake auth:
-                - io.connect('/sensors', {
+                - io.connect('/updates', {
                     auth: { token: '\<Firebase ID Token\>' }
                 })
         bindings:
@@ -130,6 +130,16 @@ channels:
             payload:
                 $ref: '#/components/messages/getStatusMessage'
 
+    subscribeToUserNotifications:
+        address: subscribeToUserNotifications
+        title: Subscribe to User Notifications
+        description: Subscribe to user-specific notifications and alerts
+
+    unsubscribeFromUserNotifications:
+        address: unsubscribeFromUserNotifications
+        title: Unsubscribe from User Notifications
+        description: Unsubscribe from user-specific notifications and alerts
+
     sensorUpdate:
         address: sensorData
         title: Sensor Data Update
@@ -154,6 +164,11 @@ channels:
         address: automationEvent
         title: Automation Event
         description: Automation rule triggered events
+
+    userNotificationUpdate:
+        address: userNotification
+        title: User Notification Update
+        description: User-specific notifications and alerts
 #endregion
 
 #region Operations
@@ -214,6 +229,29 @@ operations:
             messages:
                 - $ref: '#/components/messages/statusAck'
 
+    subscribeToUserNotifications:
+        action: send
+        channel:
+            $ref: '#/channels/subscribeToUserNotifications'
+        summary: Subscribe to user notifications
+        description: |
+            Client subscribes to receive user-specific notifications and alerts.
+            Server confirms subscription and starts sending relevant notifications.
+        reply:
+            messages:
+                - $ref: '#/components/messages/subscribedUserNotificationsAck'
+    unsubscribeFromUserNotifications:
+        action: send
+        channel:
+            $ref: '#/channels/unsubscribeFromUserNotifications'
+        summary: Unsubscribe from user notifications
+        description: |
+            Client unsubscribes from user-specific notifications and alerts.
+            Server confirms unsubscription and stops sending relevant notifications.
+        reply:
+            messages:
+                - $ref: '#/components/messages/unsubscribedUserNotificationsAck'
+
     broadcastSensorData:
         action: receive
         channel:
@@ -261,6 +299,18 @@ operations:
         reply:
             messages:
                 - $ref: '#/components/messages/automationEvent'
+
+    broadcastUserNotifications:
+        action: receive
+        channel:
+            $ref: '#/channels/userNotificationUpdate'
+        summary: Receive user-specific notifications
+        description: |
+            Server sends user-specific notifications such as alerts, reminders, and system messages.
+            Clients subscribe to this channel to receive personalized updates.
+        reply:
+            messages:
+                - $ref: '#/components/messages/userNotification'
     #endregion
 
 components:
@@ -399,6 +449,32 @@ components:
                           - 'clx456def789'
                       totalConnections: 5
 
+        subscribedUserNotificationsAck:
+            name: SubscribedUserNotifications
+            title: Subscribed to User Notifications
+            summary: Sent when subscription to user notifications is successful
+            contentType: application/json
+            payload:
+                $ref: '#/components/schemas/SubscribeToUserNotificationsAckPayload'
+            examples:
+                - name: subscribedUserNotifications
+                  payload:
+                      message: 'Subscribed to user notifications'
+                      userId: 'clx123abc456'
+
+        unsubscribedUserNotificationsAck:
+            name: UnsubscribedUserNotifications
+            title: Unsubscribed from User Notifications
+            summary: Sent when unsubscription from user notifications is successful
+            contentType: application/json
+            payload:
+                $ref: '#/components/schemas/UnsubscribeFromUserNotificationsAckPayload'
+            examples:
+                - name: unsubscribedUserNotifications
+                  payload:
+                      message: 'Unsubscribed from user notifications'
+                      userId: 'clx123abc456'
+
         sensorData:
             name: SensorUpdate
             title: Sensor Data Update
@@ -480,16 +556,64 @@ components:
             payload:
                 $ref: '#/components/schemas/AutomationEventPayload'
             examples:
-                - name: autoWateringTriggered
+                - name: wateringStartTriggered
                   payload:
-                      rackId: 'clx789xyz123'
-                      event:
+                      eventType: 'WATERING_START'
+                      activity:
+                          id: 'activity-123'
                           rackId: 'clx789xyz123'
-                          ruleName: 'Auto-water when dry'
-                          executedActions:
-                              - 'watering: start for 5000ms'
-                              - 'growLight: on'
-                      timestamp: '2025-02-05T14:45:00.000Z'
+                          eventType: 'WATERING_START'
+                          details: 'Watering watering_start triggered by automation rule "Auto-water when dry"'
+                          metadata:
+                              rackName: 'Lettuce Rack'
+                              macAddress: 'AA:BB:CC:DD:EE:FF'
+                              source: 'automation'
+                              plantId: 'plant-001'
+                              plantName: 'Basil'
+                              ruleId: 'rule-123'
+                              ruleName: 'Auto-water when dry'
+                          timestamp: '2025-02-05T14:45:00.000Z'
+                - name: lightOffTriggered
+                  payload:
+                      eventType: 'LIGHT_OFF'
+                      activity:
+                          id: 'activity-456'
+                          rackId: 'cmlat15fi000084uua19zeg8a'
+                          eventType: 'LIGHT_OFF'
+                          details: 'Grow light light_off triggered by automation rule "Evening light off"'
+                          metadata:
+                              rackName: 'Basil Rack'
+                              macAddress: 'FF:EE:DD:CC:BB:AA'
+                              source: 'automation'
+                              plantId: 'plant-002'
+                              plantName: 'Tomato'
+                              ruleId: 'rule-456'
+                              ruleName: 'Evening light off'
+                              durationSeconds: 3600
+                          timestamp: '2025-02-05T18:00:00.000Z'
+
+        userNotification:
+            name: UserNotification
+            title: User-Specific Notification
+            summary: User-specific alert or notification
+            contentType: application/json
+            payload:
+                $ref: '#/components/schemas/NotificationPayload'
+            examples:
+                - name: userReminder
+                  payload:
+                      notification:
+                          id: 'clx998reminder'
+                          userId: 'clx123abc456'
+                          rackId: 'clx789xyz123'
+                          type: 'INFO'
+                          status: 'UNREAD'
+                          title: 'Rack Connected'
+                          message: 'Your rack clx789xyz123 is now connected and streaming data.'
+                          metadata:
+                              screen: 'dashboard'
+                          createdAt: '2025-02-05T14:50:00.000Z'
+                          updatedAt: '2025-02-05T14:50:00.000Z'
     #endregion
 
     #region Schemas
@@ -613,6 +737,26 @@ components:
                     type: integer
                     example: 5
 
+        SubscribeToUserNotificationsAckPayload:
+            type: object
+            properties:
+                message:
+                    type: string
+                    example: 'Subscribed to user notifications'
+                userId:
+                    type: string
+                    example: 'clx123abc456'
+
+        UnsubscribeFromUserNotificationsAckPayload:
+            type: object
+            properties:
+                message:
+                    type: string
+                    example: 'Unsubscribed from user notifications'
+                userId:
+                    type: string
+                    example: 'clx123abc456'
+
         SensorUpdatePayload:
             type: object
             properties:
@@ -665,7 +809,6 @@ components:
                         - ONLINE
                         - OFFLINE
                         - ERROR
-                        - MAINTENANCE
                     example: 'ONLINE'
                 timestamp:
                     type: string
@@ -693,18 +836,15 @@ components:
                         type:
                             type: string
                             enum:
-                                - SYSTEM
-                                - ALERT
-                                - WARNING
                                 - INFO
-                                - SUCCESS
-                            example: 'ALERT'
+                                - ERROR
+                                - AUTOMATION
+                            example: 'INFO'
                         status:
                             type: string
                             enum:
                                 - UNREAD
                                 - READ
-                                - ARCHIVED
                             example: 'UNREAD'
                         title:
                             type: string
@@ -734,30 +874,83 @@ components:
 
         AutomationEventPayload:
             type: object
+            description: Automation rule execution payload
             properties:
-                rackId:
+                eventType:
                     type: string
-                    example: 'clx789xyz123'
-                event:
+                    description: Type of event triggered by the automation rule
+                    enum: ['WATERING_START', 'WATERING_STOP', 'LIGHT_ON', 'LIGHT_OFF']
+                    example: 'WATERING_START'
+                activity:
                     type: object
+                    description: Activity record containing event details and context
                     properties:
+                        id:
+                            type: string
+                            description: Unique activity record ID
+                            example: 'activity-123'
                         rackId:
                             type: string
+                            description: Unique identifier of the rack
                             example: 'clx789xyz123'
-                        ruleName:
+                        eventType:
                             type: string
-                            example: 'Auto-water when dry'
-                        executedActions:
-                            type: array
-                            items:
-                                type: string
-                            example:
-                                - 'Start watering for 5000 ms'
-                timestamp:
-                    type: string
-                    format: date-time
-                    example: '2025-02-05T14:41:00.000Z'
-    #endregion
+                            description: Type of event recorded
+                            enum: ['WATERING_START', 'WATERING_STOP', 'LIGHT_ON', 'LIGHT_OFF']
+                            example: 'WATERING_START'
+                        details:
+                            type: string
+                            description: Human-readable description of the event
+                            example: 'Watering watering_start triggered by automation rule "Auto-water when dry"'
+                        metadata:
+                            type: object
+                            description: Context metadata for the automation event
+                            properties:
+                                rackName:
+                                    type: string
+                                    description: Name of the rack
+                                    example: 'Lettuce Rack'
+                                macAddress:
+                                    type: string
+                                    description: MAC address of the device
+                                    example: 'AA:BB:CC:DD:EE:FF'
+                                source:
+                                    type: string
+                                    description: Source of the action (automation or system)
+                                    example: 'automation'
+                                plantId:
+                                    type: string
+                                    description: Optional - ID of the plant involved in the event
+                                    example: 'plant-001'
+                                plantName:
+                                    type: string
+                                    description: Optional - Name of the plant involved in the event
+                                    example: 'Basil'
+                                ruleId:
+                                    type: string
+                                    description: ID of the automation rule that triggered the event
+                                    example: 'rule-123'
+                                ruleName:
+                                    type: string
+                                    description: Name of the automation rule
+                                    example: 'Auto-water when dry'
+                                waterUsedMl:
+                                    type: number
+                                    description: Optional - water used in mL (for WATERING_STOP events)
+                                    example: 1000
+                                durationSeconds:
+                                    type: number
+                                    description: Optional - duration in seconds (for LIGHT_OFF events)
+                                    example: 3600
+                        timestamp:
+                            type: string
+                            format: date-time
+                            description: ISO 8601 timestamp of the activity
+                            example: '2025-02-05T14:45:00.000Z'
+            required:
+                - event
+                - activity
+    #endregions
 
     #region Security Schemes
     securitySchemes:

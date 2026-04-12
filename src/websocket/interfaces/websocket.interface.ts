@@ -29,3 +29,8 @@ export interface InitialDataResponse {
     rackId: string;
     data: SensorReading | null;
 }
+
+export interface UserNotificationBroadcast {
+    notification: Notification;
+    timestamp: string;
+}

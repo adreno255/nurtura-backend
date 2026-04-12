@@ -27,7 +27,7 @@ import { RacksService } from './racks.service';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { CurrentUser } from '../common/decorators';
 import { type CurrentUserPayload } from '../common/interfaces';
-import { ActivityQueryDto } from '../common/dto/activity-query.dto';
+import { ActivityQueryDto } from './dto/activity-query.dto';
 import {
     CreateRackDto,
     UpdateRackDto,
@@ -36,6 +36,7 @@ import {
     UnassignFromRackDto,
     HarvestLeavesDto,
     HarvestSeedsDto,
+    PlantCareActivityQueryDto,
 } from './dto';
 
 @ApiTags('Racks')
@@ -109,7 +110,7 @@ export class RacksController {
                             isActive: { type: 'boolean', example: true },
                             status: {
                                 type: 'string',
-                                enum: ['ONLINE', 'OFFLINE', 'ERROR', 'MAINTENANCE'],
+                                enum: ['ONLINE', 'OFFLINE', 'ERROR'],
                                 example: 'ONLINE',
                             },
                             lastActivityAt: {
@@ -206,6 +207,128 @@ export class RacksController {
     })
     async findAll(@CurrentUser() user: CurrentUserPayload, @Query() query: PaginationQueryDto) {
         return this.racksService.findAll(user.dbId, query);
+    }
+
+    @Get('exists')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({
+        summary: 'Check if rack exists by MAC address',
+        description:
+            'Checks if a rack with the given MAC address already exists for the authenticated user. Returns true if it exists, false otherwise.',
+    })
+    @ApiQuery({
+        name: 'macAddress',
+        required: true,
+        type: String,
+        description: 'MAC address to check for existence',
+        example: 'AA:BB:CC:DD:EE:FF',
+    })
+    @ApiResponse({
+        status: HttpStatus.CREATED,
+        description: 'Rack existence check completed successfully',
+        content: {
+            'application/json': {
+                schema: {
+                    type: 'object',
+                    properties: {
+                        exists: {
+                            type: 'boolean',
+                            example: true,
+                        },
+                        rack: {
+                            type: 'object',
+                            example: {
+                                id: 'clx123abc456',
+                                userId: 'clxusr789',
+                                name: 'Living Room Farm',
+                                macAddress: 'AA:BB:CC:DD:EE:FF',
+                                mqttTopic: 'nurtura/rack/aa-bb-cc-dd-ee-ff',
+                                description: 'Rack for growing herbs',
+                                currentPlantId: 'clx000plant123',
+                                quantity: 10,
+                                plantedAt: '2025-01-01T08:00:00.000Z',
+                                lastHarvestAt: '2025-02-01T08:00:00.000Z',
+                                harvestCount: 3,
+                                isActive: true,
+                                status: 'ONLINE',
+                                lastActivityAt: '2025-02-01T10:30:00.000Z',
+                                lastSeenAt: '2025-02-01T10:30:00.000Z',
+                                lastWateredAt: '2025-02-01T09:00:00.000Z',
+                                lastLightOnAt: '2025-02-01T06:00:00.000Z',
+                                createdAt: '2025-01-15T08:00:00.000Z',
+                                updatedAt: '2025-02-01T10:30:00.000Z',
+                            },
+                            nullable: true,
+                        },
+                    },
+                },
+                examples: {
+                    doesExist: {
+                        summary: 'Rack Exists',
+                        value: {
+                            exists: true,
+                            rack: {
+                                id: 'clx123abc456',
+                                userId: 'clxusr789',
+                                name: 'Living Room Farm',
+                                macAddress: 'AA:BB:CC:DD:EE:FF',
+                                mqttTopic: 'nurtura/rack/aa-bb-cc-dd-ee-ff',
+                                description: 'Rack for growing herbs',
+                                currentPlantId: 'clx000plant123',
+                                quantity: 10,
+                                plantedAt: '2025-01-01T08:00:00.000Z',
+                                lastHarvestAt: '2025-02-01T08:00:00.000Z',
+                                harvestCount: 3,
+                                isActive: true,
+                                status: 'ONLINE',
+                                lastActivityAt: '2025-02-01T10:30:00.000Z',
+                                lastSeenAt: '2025-02-01T10:30:00.000Z',
+                                lastWateredAt: '2025-02-01T09:00:00.000Z',
+                                lastLightOnAt: '2025-02-01T06:00:00.000Z',
+                                createdAt: '2025-01-15T08:00:00.000Z',
+                                updatedAt: '2025-02-01T10:30:00.000Z',
+                            },
+                        },
+                    },
+                    doesNotExist: {
+                        summary: 'Rack Does Not Exist',
+                        value: {
+                            exists: false,
+                        },
+                    },
+                },
+            },
+        },
+    })
+    @ApiUnauthorizedResponse({
+        description: 'Missing or invalid authentication token',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 401 },
+                timestamp: { type: 'string', example: '2026-01-09T08:00:00.000Z' },
+                path: { type: 'string', example: '/racks/exists' },
+                message: { type: 'string', example: 'Authentication required' },
+            },
+        },
+    })
+    @ApiInternalServerErrorResponse({
+        description: 'Internal server error',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 500 },
+                timestamp: { type: 'string', example: '2026-01-09T08:00:00.000Z' },
+                path: { type: 'string', example: '/racks/exists' },
+                message: { type: 'string', example: 'Failed to check rack existence' },
+            },
+        },
+    })
+    async rackExists(
+        @CurrentUser() user: CurrentUserPayload,
+        @Query('macAddress') macAddress: string,
+    ) {
+        return await this.racksService.rackExists(macAddress, user.dbId);
     }
 
     @Get('activities')
@@ -432,6 +555,97 @@ export class RacksController {
         return this.racksService.getRackActivities(user.dbId, query);
     }
 
+    @Get('count')
+    @HttpCode(HttpStatus.OK)
+    @ApiBearerAuth('firebase-jwt')
+    @ApiOperation({
+        summary: 'Get rack count',
+        description: 'Returns the total number of active racks owned by the authenticated user',
+    })
+    @ApiResponse({
+        status: HttpStatus.OK,
+        description: 'Rack count retrieved successfully',
+        schema: {
+            type: 'object',
+            properties: {
+                count: { type: 'number', example: 3 },
+            },
+        },
+    })
+    @ApiUnauthorizedResponse({
+        description: 'Missing or invalid authentication token',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 401 },
+                timestamp: { type: 'string', example: '2026-01-09T08:00:00.000Z' },
+                path: { type: 'string', example: '/api/racks/count' },
+                message: { type: 'string', example: 'Authentication required' },
+            },
+        },
+    })
+    @ApiInternalServerErrorResponse({
+        description: 'Internal server error',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 500 },
+                timestamp: { type: 'string', example: '2026-01-09T08:00:00.000Z' },
+                path: { type: 'string', example: '/api/racks/count' },
+                message: { type: 'string', example: 'Failed to fetch rack count' },
+            },
+        },
+    })
+    async getRackCount(@CurrentUser() user: CurrentUserPayload) {
+        return this.racksService.getRackCount(user.dbId);
+    }
+
+    @Get('planted-quantity')
+    @HttpCode(HttpStatus.OK)
+    @ApiBearerAuth('firebase-jwt')
+    @ApiOperation({
+        summary: 'Get total planted quantity',
+        description:
+            'Returns the sum of plant quantities across all active racks owned by the authenticated user that currently have a plant assigned',
+    })
+    @ApiResponse({
+        status: HttpStatus.OK,
+        description: 'Total planted quantity retrieved successfully',
+        schema: {
+            type: 'object',
+            properties: {
+                totalQuantity: { type: 'number', example: 28 },
+            },
+        },
+    })
+    @ApiUnauthorizedResponse({
+        description: 'Missing or invalid authentication token',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 401 },
+                timestamp: { type: 'string', example: '2026-01-09T08:00:00.000Z' },
+                path: { type: 'string', example: '/api/racks/planted-quantity' },
+                message: { type: 'string', example: 'Authentication required' },
+            },
+        },
+    })
+    @ApiInternalServerErrorResponse({
+        description: 'Internal server error',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 500 },
+                timestamp: { type: 'string', example: '2026-01-09T08:00:00.000Z' },
+                path: { type: 'string', example: '/api/racks/planted-quantity' },
+                message: { type: 'string', example: 'Failed to fetch planted quantity' },
+            },
+        },
+    })
+    async getPlantedQuantity(@CurrentUser() user: CurrentUserPayload) {
+        return this.racksService.getPlantedQuantity(user.dbId);
+    }
+
     @Get(':rackId')
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
@@ -487,7 +701,7 @@ export class RacksController {
                         isActive: { type: 'boolean', example: true },
                         status: {
                             type: 'string',
-                            enum: ['ONLINE', 'OFFLINE', 'ERROR', 'MAINTENANCE'],
+                            enum: ['ONLINE', 'OFFLINE', 'ERROR'],
                             example: 'ONLINE',
                         },
                         lastActivityAt: {
@@ -664,8 +878,7 @@ export class RacksController {
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
         summary: 'Get device status',
-        description:
-            'Retrieves the current status of the rack device (ONLINE/OFFLINE/ERROR/MAINTENANCE)',
+        description: 'Retrieves the current status of the rack device (ONLINE/OFFLINE/ERROR)',
     })
     @ApiParam({
         name: 'rackId',
@@ -732,7 +945,7 @@ export class RacksController {
     @ApiOperation({
         summary: 'Get plant care activity',
         description:
-            'Retrieves watering and grow light activities (WATERING_ON, WATERING_OFF, LIGHT_ON, LIGHT_OFF) across all racks owned by the authenticated user. Supports date range filtering, pagination, and rack ID filtering.',
+            'Retrieves watering and grow light activities (WATERING_START, WATERING_STOP, LIGHT_ON, LIGHT_OFF) across all racks owned by the authenticated user. Supports date range filtering, pagination, and rack ID filtering, and event type filtering.',
     })
     @ApiQuery({
         name: 'startDate',
@@ -769,6 +982,14 @@ export class RacksController {
         description: 'Items per page (max 100)',
         example: 10,
     })
+    @ApiQuery({
+        name: 'event',
+        required: false,
+        type: String,
+        description:
+            'Filter by event type. Can specify multiple values separated by commas. Valid values: WATERING_START, WATERING_STOP, LIGHT_ON, LIGHT_OFF',
+        example: 'WATERING_START,WATERING_STOP',
+    })
     @ApiResponse({
         status: HttpStatus.OK,
         description: 'Plant care activities retrieved successfully',
@@ -787,8 +1008,8 @@ export class RacksController {
                                     eventType: {
                                         type: 'string',
                                         enum: [
-                                            'WATERING_ON',
-                                            'WATERING_OFF',
+                                            'WATERING_START',
+                                            'WATERING_STOP',
                                             'LIGHT_ON',
                                             'LIGHT_OFF',
                                         ],
@@ -834,23 +1055,24 @@ export class RacksController {
                     },
                 },
                 examples: {
-                    WATERING_ON: {
-                        summary: 'WATERING_ON — watering started',
+                    WATERING_START: {
+                        summary: 'WATERING_START — watering started',
                         value: {
                             data: [
                                 {
                                     id: 'clx789def012',
                                     rackId: 'clx123abc456',
-                                    eventType: 'WATERING_ON',
+                                    eventType: 'WATERING_START',
                                     details:
                                         'Watering start triggered by automation rule "Auto Watering - Lettuce"',
                                     metadata: {
                                         rackName: 'Living Room Farm',
                                         macAddress: 'AA:BB:CC:DD:EE:FF',
                                         source: 'automation',
+                                        plantId: 'clx000plant123',
+                                        plantName: 'Lettuce',
                                         ruleId: 'clxrule123',
                                         ruleName: 'Auto Watering - Lettuce',
-                                        duration: 300000,
                                     },
                                     timestamp: '2025-02-05T14:30:00.000Z',
                                     rack: {
@@ -870,23 +1092,25 @@ export class RacksController {
                             },
                         },
                     },
-                    WATERING_OFF: {
-                        summary: 'WATERING_OFF — watering stopped',
+                    WATERING_STOP: {
+                        summary: 'WATERING_STOP — watering stopped',
                         value: {
                             data: [
                                 {
                                     id: 'clx789def013',
                                     rackId: 'clx123abc456',
-                                    eventType: 'WATERING_OFF',
+                                    eventType: 'WATERING_STOP',
                                     details:
                                         'Watering stop triggered by automation rule "Auto Watering - Lettuce"',
                                     metadata: {
                                         rackName: 'Living Room Farm',
                                         macAddress: 'AA:BB:CC:DD:EE:FF',
                                         source: 'automation',
+                                        plantId: 'clx000plant123',
+                                        plantName: 'Lettuce',
                                         ruleId: 'clxrule123',
                                         ruleName: 'Auto Watering - Lettuce',
-                                        duration: 300000,
+                                        waterUsedMl: 250,
                                     },
                                     timestamp: '2025-02-05T14:35:00.000Z',
                                     rack: {
@@ -920,6 +1144,8 @@ export class RacksController {
                                         rackName: 'Living Room Farm',
                                         macAddress: 'AA:BB:CC:DD:EE:FF',
                                         source: 'automation',
+                                        plantId: 'clx000plant123',
+                                        plantName: 'Lettuce',
                                         ruleId: 'clxrule456',
                                         ruleName: 'Morning Light Cycle',
                                     },
@@ -955,8 +1181,9 @@ export class RacksController {
                                         rackName: 'Living Room Farm',
                                         macAddress: 'AA:BB:CC:DD:EE:FF',
                                         source: 'automation',
-                                        ruleId: 'clxrule456',
-                                        ruleName: 'Morning Light Cycle',
+                                        plantId: 'clx000plant123',
+                                        plantName: 'Lettuce',
+                                        durationSeconds: 43200,
                                     },
                                     timestamp: '2025-02-05T18:00:00.000Z',
                                     rack: {
@@ -1021,7 +1248,7 @@ export class RacksController {
     })
     async getPlantCareActivities(
         @CurrentUser() user: CurrentUserPayload,
-        @Query() query: ActivityQueryDto,
+        @Query() query: PlantCareActivityQueryDto,
     ) {
         return this.racksService.getPlantCareActivities(user.dbId, query);
     }
@@ -1031,7 +1258,7 @@ export class RacksController {
     @ApiOperation({
         summary: 'Get harvest activity',
         description:
-            'Retrieves harvest activities (PLANT_HARVESTED) across all racks owned by the authenticated user. Supports date range filtering, pagination, and rack ID filtering. Also returns `totalHarvestCount` — the sum of harvested quantities within the date range.',
+            'Retrieves harvest activities (LEAVES_HARVESTED, PLANT_HARVESTED, and SEEDS_HARVESTED) across all racks owned by the authenticated user. Supports date range filtering, pagination, and rack ID filtering. Also returns `totalHarvestCount` — the sum of harvest events within the date range.',
     })
     @ApiQuery({
         name: 'startDate',
@@ -1179,7 +1406,7 @@ export class RacksController {
     @ApiOperation({
         summary: 'Get planting activity',
         description:
-            'Retrieves planting activities (PLANT_ADDED, PLANT_CHANGED, PLANT_REMOVED) across all racks owned by the authenticated user. Supports date range filtering, pagination, and rack ID filtering.',
+            'Retrieves planting activities (PLANT_ADDED and PLANT_REMOVED) across all racks owned by the authenticated user. Supports date range filtering, pagination, and rack ID filtering.',
     })
     @ApiQuery({
         name: 'startDate',
@@ -1233,7 +1460,7 @@ export class RacksController {
                                     rackId: { type: 'string', example: 'clx123abc456' },
                                     eventType: {
                                         type: 'string',
-                                        enum: ['PLANT_ADDED', 'PLANT_CHANGED', 'PLANT_REMOVED'],
+                                        enum: ['PLANT_ADDED', 'PLANT_REMOVED'],
                                     },
                                     details: {
                                         type: 'string',
@@ -1294,42 +1521,6 @@ export class RacksController {
                                         plantedAt: '2025-01-01T08:00:00.000Z',
                                     },
                                     timestamp: '2025-01-01T08:00:00.000Z',
-                                    rack: {
-                                        id: 'clx123abc456',
-                                        name: 'Living Room Farm',
-                                        macAddress: 'AA:BB:CC:DD:EE:FF',
-                                    },
-                                },
-                            ],
-                            meta: {
-                                currentPage: 1,
-                                itemsPerPage: 10,
-                                totalItems: 1,
-                                totalPages: 1,
-                                hasNextPage: false,
-                                hasPreviousPage: false,
-                            },
-                        },
-                    },
-                    PLANT_CHANGED: {
-                        summary: 'PLANT_CHANGED — crop rotation',
-                        value: {
-                            data: [
-                                {
-                                    id: 'clx999act002',
-                                    rackId: 'clx123abc456',
-                                    eventType: 'PLANT_CHANGED',
-                                    details: 'Plant changed from previous to "Basil"',
-                                    metadata: {
-                                        rackName: 'Living Room Farm',
-                                        macAddress: 'AA:BB:CC:DD:EE:FF',
-                                        previousPlantId: 'clx000plant456',
-                                        previousPlantName: 'Lettuce',
-                                        newPlantId: 'clx000plant123',
-                                        newPlantName: 'Basil',
-                                        quantity: 8,
-                                    },
-                                    timestamp: '2025-02-01T08:00:00.000Z',
                                     rack: {
                                         id: 'clx123abc456',
                                         name: 'Living Room Farm',
@@ -1718,12 +1909,143 @@ export class RacksController {
         return this.racksService.harvestSeedsFromRack(rackId, user.dbId, dto);
     }
 
+    @Post(':rackId/assign/check')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({
+        summary: 'Check plant assignment conditions',
+        description:
+            'Validates all conditions for assigning a plant to a rack and returns a temperature warning if the environment exceeds the plant max threshold. Does not write to the database. Call this before assignToRack and prompt the user to confirm if hasWarning is true.',
+    })
+    @ApiParam({ name: 'rackId', description: 'Rack ID', example: 'clx123abc456' })
+    @ApiResponse({
+        status: HttpStatus.OK,
+        description: 'Check result returned successfully',
+        schema: {
+            type: 'object',
+            properties: {
+                hasWarning: { type: 'boolean', example: true },
+                latestTemperatureReading: { type: 'number', example: 24.5, nullable: true },
+                maxTemperatureThreshold: { type: 'number', example: 18, nullable: true },
+            },
+        },
+    })
+    @ApiBadRequestResponse({
+        description: 'Validation error or plant is inactive',
+        content: {
+            'application/json': {
+                schema: {
+                    type: 'object',
+                    properties: {
+                        statusCode: { type: 'number', example: 400 },
+                        timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
+                        path: { type: 'string', example: '/racks/clx123abc456/assign/check' },
+                        message: {
+                            type: 'string',
+                            example: 'Cannot assign an inactive plant to a rack',
+                        },
+                    },
+                },
+                examples: {
+                    inactivePlant: {
+                        summary: 'Cannot assign inactive plant',
+                        value: {
+                            statusCode: 400,
+                            timestamp: '2026-01-15T08:00:00.000Z',
+                            path: '/racks/clx123abc456/assign/check',
+                            message: 'Cannot assign an inactive plant to a rack',
+                        },
+                    },
+                    plantAlreadyAssigned: {
+                        summary: 'Plant Already Assigned to Rack',
+                        value: {
+                            statusCode: 400,
+                            timestamp: '2026-01-15T08:00:00.000Z',
+                            path: '/racks/clx123abc456/assign/check',
+                            message:
+                                'This rack already has a plant assigned. Please remove the current plant before assigning a new one.',
+                        },
+                    },
+                },
+            },
+        },
+    })
+    @ApiUnauthorizedResponse({
+        description: 'Missing or invalid authentication token',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 401 },
+                timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
+                path: { type: 'string', example: '/racks/clx123abc456/assign/check' },
+                message: { type: 'string', example: 'Authentication required' },
+            },
+        },
+    })
+    @ApiNotFoundResponse({
+        description: 'Plant or rack not found',
+        content: {
+            'application/json': {
+                schema: {
+                    type: 'object',
+                    properties: {
+                        statusCode: { type: 'number', example: 404 },
+                        timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
+                        path: { type: 'string', example: '/racks/clx123abc456/assign/check' },
+                        message: {
+                            type: 'string',
+                            example: 'Rack with ID clx123abc456 not found or access denied',
+                        },
+                    },
+                },
+                examples: {
+                    plantNotFound: {
+                        summary: 'Plant not found',
+                        value: {
+                            statusCode: 404,
+                            timestamp: '2026-01-15T08:00:00.000Z',
+                            path: '/racks/clx123abc456/assign/check',
+                            message: 'Plant with ID clx000plant999 not found',
+                        },
+                    },
+                    rackNotFound: {
+                        summary: 'Rack not found',
+                        value: {
+                            statusCode: 404,
+                            timestamp: '2026-01-15T08:00:00.000Z',
+                            path: '/racks/clx123abc456/assign/check',
+                            message: 'Rack with ID clx123abc456 not found or access denied',
+                        },
+                    },
+                },
+            },
+        },
+    })
+    @ApiInternalServerErrorResponse({
+        description: 'Internal server error',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 500 },
+                timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
+                path: { type: 'string', example: '/racks/clx123abc456/assign/check' },
+                message: { type: 'string', example: 'Failed to check plant assignment' },
+            },
+        },
+    })
+    async checkAssignToRack(
+        @Param('rackId') rackId: string,
+        @Body() dto: AssignPlantToRackDto,
+        @CurrentUser() user: CurrentUserPayload,
+    ) {
+        return this.racksService.checkAssignToRack(rackId, user.dbId, dto);
+    }
+
     @Post(':rackId/assign')
     @HttpCode(HttpStatus.CREATED)
     @ApiOperation({
         summary: 'Assign a plant to a rack',
         description:
-            'Assigns this plant to the specified rack. If the rack already has a different plant, it is recorded as removed (PLANT_REMOVED + PLANT_CHANGED). If the rack is empty, the event is PLANT_ADDED.',
+            'Assigns this plant to the specified rack. If the rack already has a different plant, the user must remove it first. If the rack is empty, the event is PLANT_ADDED.',
     })
     @ApiParam({ name: 'rackId', description: 'Rack ID', example: 'clx123abc456' })
     @ApiResponse({
@@ -1738,13 +2060,41 @@ export class RacksController {
     })
     @ApiBadRequestResponse({
         description: 'Validation error or plant is inactive',
-        schema: {
-            type: 'object',
-            properties: {
-                statusCode: { type: 'number', example: 400 },
-                timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/racks/clx123abc456/assign' },
-                message: { type: 'string', example: 'Cannot assign an inactive plant to a rack' },
+        content: {
+            'application/json': {
+                schema: {
+                    type: 'object',
+                    properties: {
+                        statusCode: { type: 'number', example: 400 },
+                        timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
+                        path: { type: 'string', example: '/racks/clx123abc456/assign' },
+                        message: {
+                            type: 'string',
+                            example: 'Cannot assign an inactive plant to a rack',
+                        },
+                    },
+                },
+                examples: {
+                    inactivePlant: {
+                        summary: 'Cannot assign inactive plant',
+                        value: {
+                            statusCode: 400,
+                            timestamp: '2026-01-15T08:00:00.000Z',
+                            path: '/racks/clx123abc456/assign',
+                            message: 'Cannot assign an inactive plant to a rack',
+                        },
+                    },
+                    plantAlreadyAssigned: {
+                        summary: 'Plant Already Assigned to Rack',
+                        value: {
+                            statusCode: 400,
+                            timestamp: '2026-01-15T08:00:00.000Z',
+                            path: '/racks/clx123abc456/assign',
+                            message:
+                                'This rack already has a plant assigned. Please remove the current plant before assigning a new one.',
+                        },
+                    },
+                },
             },
         },
     })
@@ -1762,15 +2112,39 @@ export class RacksController {
     })
     @ApiNotFoundResponse({
         description: 'Plant or rack not found',
-        schema: {
-            type: 'object',
-            properties: {
-                statusCode: { type: 'number', example: 404 },
-                timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
-                path: { type: 'string', example: '/racks/clx123abc456/assign' },
-                message: {
-                    type: 'string',
-                    example: 'Rack clx123abc456 not found or access denied',
+        content: {
+            'application/json': {
+                schema: {
+                    type: 'object',
+                    properties: {
+                        statusCode: { type: 'number', example: 404 },
+                        timestamp: { type: 'string', example: '2026-01-15T08:00:00.000Z' },
+                        path: { type: 'string', example: '/racks/clx123abc456/assign' },
+                        message: {
+                            type: 'string',
+                            example: 'Rack with ID clx123abc456 not found or access denied',
+                        },
+                    },
+                },
+                examples: {
+                    plantNotFound: {
+                        summary: 'Plant not found',
+                        value: {
+                            statusCode: 404,
+                            timestamp: '2026-01-15T08:00:00.000Z',
+                            path: '/racks/clx123abc456/assign',
+                            message: 'Plant with ID clx000plant999 not found',
+                        },
+                    },
+                    rackNotFound: {
+                        summary: 'Rack not found',
+                        value: {
+                            statusCode: 404,
+                            timestamp: '2026-01-15T08:00:00.000Z',
+                            path: '/racks/clx123abc456/assign',
+                            message: 'Rack with ID clx123abc456 not found or access denied',
+                        },
+                    },
                 },
             },
         },
@@ -1889,6 +2263,43 @@ export class RacksController {
             properties: {
                 message: { type: 'string', example: 'Rack registered successfully' },
                 rackId: { type: 'string', example: 'clx123abc456' },
+            },
+        },
+    })
+    @ApiResponse({
+        status: HttpStatus.CREATED,
+        description: 'Rack registered successfully',
+        content: {
+            'application/json': {
+                schema: {
+                    type: 'object',
+                    properties: {
+                        message: {
+                            type: 'string',
+                            example: 'Rack registered successfully',
+                        },
+                        rackId: {
+                            type: 'string',
+                            example: 'clx123abc456',
+                        },
+                    },
+                },
+                examples: {
+                    newRack: {
+                        summary: 'New Rack Registration',
+                        value: {
+                            message: 'Rack registered successfully',
+                            rackId: 'clx123abc456',
+                        },
+                    },
+                    recoveredRack: {
+                        summary: 'Recovered Rack',
+                        value: {
+                            message: 'Archived rack recovered successfully.',
+                            rackId: 'clx123abc456',
+                        },
+                    },
+                },
             },
         },
     })
@@ -2345,7 +2756,7 @@ export class RacksController {
                         type: 'object',
                         properties: {
                             id: { type: 'string', example: 'clx789def012' },
-                            eventType: { type: 'string', example: 'WATERING_ON' },
+                            eventType: { type: 'string', example: 'WATERING_START' },
                             details: {
                                 type: 'string',
                                 example: 'Manual watering triggered (5000ms)',

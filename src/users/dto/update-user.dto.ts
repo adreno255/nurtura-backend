@@ -78,4 +78,26 @@ export class UpdateUserDto {
     @IsString()
     @IsOptional()
     city?: string;
+
+    @ApiPropertyOptional({
+        example: 'ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]',
+        description: 'Expo push notification token',
+    })
+    @IsString()
+    @IsOptional()
+    expoPushToken?: string;
+
+    @ApiPropertyOptional({
+        example: ['welcome', 'profile-setup'],
+        description: 'List of completed onboarding pages',
+    })
+    @IsOptional()
+    completedPages?: string[];
+
+    @ApiPropertyOptional({
+        example: true,
+        description: 'Whether the user has completed onboarding',
+    })
+    @IsOptional()
+    hasCompletedOnboarding?: boolean;
 }

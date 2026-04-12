@@ -94,6 +94,52 @@ export class UsersController {
         return this.usersService.checkEmailAvailability(dto);
     }
 
+    @Get('onboarding-state')
+    @ApiBearerAuth('firebase-jwt')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({
+        summary: 'Get user onboarding state',
+        description: 'Retrieves the onboarding state of the user',
+    })
+    @ApiResponse({
+        status: HttpStatus.OK,
+        description: 'Onboarding state retrieved successfully',
+        schema: {
+            type: 'object',
+            properties: {
+                completedPages: { type: 'array', items: { type: 'string', example: 'profile' } },
+                hasCompletedOnboarding: { type: 'boolean', example: false },
+            },
+        },
+    })
+    @ApiUnauthorizedResponse({
+        description: 'Missing or invalid authentication token',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 401 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/users/onboarding-state' },
+                message: { type: 'string', example: 'Authentication required' },
+            },
+        },
+    })
+    @ApiInternalServerErrorResponse({
+        description: 'Internal server error',
+        schema: {
+            type: 'object',
+            properties: {
+                statusCode: { type: 'number', example: 500 },
+                timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                path: { type: 'string', example: '/users/onboarding-state' },
+                message: { type: 'string', example: 'Failed to check onboarding state' },
+            },
+        },
+    })
+    async getOnboardingState(@CurrentUser() user: CurrentUserPayload) {
+        return this.usersService.getOnboardingState(user.dbId);
+    }
+
     @Get()
     @ApiBearerAuth('firebase-jwt')
     @HttpCode(HttpStatus.OK)
@@ -253,7 +299,7 @@ export class UsersController {
     @ApiOperation({
         summary: 'Update user',
         description:
-            'Updates user information (email, first name, middle name, last name, suffix, and/or address)',
+            'Updates user information (email, first name, middle name, last name, suffix, address, expo push token, completed onboarding pages, and onboarding completion status)',
     })
     @ApiResponse({
         status: HttpStatus.OK,
@@ -280,6 +326,19 @@ export class UsersController {
                         street: { type: 'string', example: 'Sampaguita St' },
                         barangay: { type: 'string', example: 'Brgy Commonwealth' },
                         city: { type: 'string', example: 'Quezon City' },
+                        expoPushToken: {
+                            type: 'string',
+                            example: 'ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]',
+                            nullable: true,
+                        },
+                        completedPages: {
+                            type: 'array',
+                            items: { type: 'string' },
+                            example: ['welcome', 'profile-setup'],
+                        },
+                        hasCompletedOnboarding: { type: 'boolean', example: true },
+                        createdAt: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
+                        updatedAt: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
                     },
                 },
             },

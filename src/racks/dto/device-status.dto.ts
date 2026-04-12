@@ -1,5 +1,5 @@
 import { Expose } from 'class-transformer';
-import { IsBoolean, IsNumber, IsOptional, IsString, IsIP, Max, Min } from 'class-validator';
+import { IsBoolean, IsNumber, IsOptional, IsString, IsIP, Min } from 'class-validator';
 
 /**
  * DTO for device status updates
@@ -12,8 +12,8 @@ export class DeviceStatusDto {
 
     @Expose({ name: 'tm' })
     @IsOptional()
-    @IsNumber()
-    timestamp?: number;
+    @IsString()
+    timestamp?: string;
 
     @Expose({ name: 'v' })
     @IsOptional()
@@ -30,22 +30,9 @@ export class DeviceStatusDto {
     @IsString()
     macAddress?: string;
 
-    @Expose({ name: 's' })
-    @IsOptional()
-    @IsNumber()
-    @Min(-110)
-    @Max(0) // Typical WiFi dBm range
-    signalStrength?: number;
-
     @Expose({ name: 'u' })
     @IsOptional()
     @IsNumber()
     @Min(0)
     uptime?: number;
-
-    @Expose({ name: 'fm' })
-    @IsOptional()
-    @IsNumber()
-    @Min(0)
-    freeMemory?: number;
 }

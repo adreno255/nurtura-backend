@@ -345,14 +345,50 @@ export class WebsocketService {
 
             this.logger.log(`Broadcasting automation event for rack ${rackId}`, 'WebsocketService');
 
-            server.to(room).emit('automationEvent', {
-                rackId,
-                event,
-                timestamp: new Date().toISOString(),
-            });
+            server.to(room).emit('automationEvent', { event });
         } catch (error) {
             this.logger.error(
                 `Failed to broadcast automation event for rack ${rackId}`,
+                error instanceof Error ? error.message : String(error),
+                'WebsocketService',
+            );
+        }
+    }
+
+    // ==================== User Notification Rooms ====================
+
+    async joinUserRoom(socket: AuthenticatedSocket): Promise<void> {
+        const userId = socket.data.user.dbId;
+        await socket.join(`user-${userId}`);
+        this.logger.log(
+            `Client ${socket.id} joined user notification room: user-${userId}`,
+            'WebsocketService',
+        );
+    }
+
+    async leaveUserRoom(socket: AuthenticatedSocket): Promise<void> {
+        const userId = socket.data.user.dbId;
+        await socket.leave(`user-${userId}`);
+        this.logger.log(
+            `Client ${socket.id} left user notification room: user-${userId}`,
+            'WebsocketService',
+        );
+    }
+
+    broadcastUserNotification(userId: string, notification: Notification): void {
+        try {
+            const server = this.ensureServerInitialized();
+            const room = `user-${userId}`;
+
+            this.logger.log(
+                `Broadcasting new notification to user room: ${room}`,
+                'WebsocketService',
+            );
+
+            server.to(room).emit('userNotification', { notification });
+        } catch (error) {
+            this.logger.error(
+                `Failed to broadcast notification to user ${userId}`,
                 error instanceof Error ? error.message : String(error),
                 'WebsocketService',
             );

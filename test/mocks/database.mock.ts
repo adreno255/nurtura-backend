@@ -20,6 +20,7 @@ export const createMockDatabaseService = () => ({
         update: jest.fn(),
         delete: jest.fn(),
         count: jest.fn(),
+        aggregate: jest.fn(),
     },
     plant: {
         findUnique: jest.fn(),
@@ -41,6 +42,7 @@ export const createMockDatabaseService = () => ({
         count: jest.fn(),
     },
     activity: {
+        findFirst: jest.fn(),
         findUnique: jest.fn(),
         findMany: jest.fn(),
         create: jest.fn(),
@@ -51,6 +53,7 @@ export const createMockDatabaseService = () => ({
     notification: {
         findUnique: jest.fn(),
         findMany: jest.fn(),
+        findFirst: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
         updateMany: jest.fn(),
@@ -65,6 +68,7 @@ export const createMockDatabaseService = () => ({
         update: jest.fn(),
         delete: jest.fn(),
         count: jest.fn(),
+        aggregate: jest.fn(),
     },
     aggregatedSensorReading: {
         findUnique: jest.fn(),

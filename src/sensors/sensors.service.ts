@@ -6,12 +6,14 @@ import { SensorDataDto } from './dto/sensor-data.dto';
 import { MqttMessageParser } from '../common/utils/mqtt-parser.helper';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AutomationService } from '../automation/automation.service';
+import { SystemRulesService } from '../system-rules/system-rules.service';
 
 @Injectable()
 export class SensorsService {
     constructor(
         private readonly databaseService: DatabaseService,
         private readonly automationService: AutomationService,
+        private readonly systemRulesService: SystemRulesService,
         private readonly eventEmitter: EventEmitter2,
         private readonly logger: MyLoggerService,
     ) {}
@@ -245,21 +247,20 @@ export class SensorsService {
     async processSensorData(macAddress: string, message: string): Promise<void> {
         this.logger.log(`Processing sensor data from device: ${macAddress}`, 'SensorsService');
 
-        // Step 1: Parse and validate the JSON message
-        const sensorData = await MqttMessageParser.parseAndValidate(
-            message,
-            SensorDataDto,
-            macAddress,
-        );
-
-        // Step 2: Find the rack by MAC address
+        // Step 1: Find the rack by MAC address
         const rack = await this.databaseService.rack.findUnique({
-            where: { macAddress },
+            where: { macAddress, isActive: true },
             include: {
                 user: {
                     select: {
                         id: true,
                         email: true,
+                    },
+                },
+                currentPlant: {
+                    select: {
+                        id: true,
+                        name: true,
                     },
                 },
             },
@@ -275,6 +276,15 @@ export class SensorsService {
             );
         }
 
+        // Step 2: Parse and validate the JSON message
+        const sensorData = await MqttMessageParser.parseAndValidate(
+            rack,
+            message,
+            SensorDataDto,
+            macAddress,
+            this.eventEmitter,
+        );
+
         // Step 3: Save sensor reading to database
         try {
             const sensorReading = await this.databaseService.sensorReading.create({
@@ -284,6 +294,7 @@ export class SensorsService {
                     humidity: sensorData.humidity,
                     moisture: sensorData.moisture,
                     lightLevel: sensorData.lightLevel,
+                    waterUsed: sensorData.waterUsed,
                     timestamp: sensorData.timestamp ? new Date(sensorData.timestamp) : new Date(),
                     rawData: sensorData as unknown as Prisma.InputJsonValue,
                 },
@@ -292,7 +303,8 @@ export class SensorsService {
             this.logger.log(
                 `Sensor reading saved for rack ${rack.name} (${rack.id}): ` +
                     `T=${sensorData.temperature}°C, H=${sensorData.humidity}%, ` +
-                    `M=${sensorData.moisture}%, L=${sensorData.lightLevel}`,
+                    `M=${sensorData.moisture}%, L=${sensorData.lightLevel}` +
+                    (sensorData.waterUsed !== undefined ? `, WU=${sensorData.waterUsed}ml` : ''),
                 'SensorsService',
             );
 
@@ -311,8 +323,9 @@ export class SensorsService {
 
             this.logger.log(`Processing complete for rack: ${rack.id}`, 'SensorsService');
 
-            // Step 6: Pass to AutomationService for rule evaluation
+            // Step 6: Pass to AutomationService and SystemRulesService for rule evaluation
             await this.automationService.evaluateRules(rack.id, sensorData);
+            await this.systemRulesService.evaluate(rack, sensorData);
         } catch (error) {
             this.logger.error(
                 `Failed to process sensor data for device: ${macAddress}`,

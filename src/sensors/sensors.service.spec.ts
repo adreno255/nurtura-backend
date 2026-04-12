@@ -12,6 +12,7 @@ import {
     createMockDatabaseService,
     createMockEventEmitter,
     createMockLogger,
+    createMockSystemRulesService,
 } from '../../test/mocks';
 
 import {
@@ -25,6 +26,8 @@ import {
     testRackIds,
     testMacAddresses,
 } from '../../test/fixtures';
+import { SensorDataDto } from './dto/sensor-data.dto';
+import { SystemRulesService } from '../system-rules/system-rules.service';
 
 // Mock MqttMessageParser
 jest.mock('../common/utils/mqtt-parser.helper', () => ({
@@ -40,6 +43,7 @@ describe('SensorsService', () => {
     const mockLogger = createMockLogger();
     const mockAutomationService = createMockAutomationService();
     const mockEventEmitter = createMockEventEmitter();
+    const mockSystemRulesService = createMockSystemRulesService();
 
     const testRackId = testRackIds.primary;
     const testMacAddress = testMacAddresses.valid;
@@ -61,6 +65,10 @@ describe('SensorsService', () => {
                 {
                     provide: EventEmitter2,
                     useValue: mockEventEmitter,
+                },
+                {
+                    provide: SystemRulesService,
+                    useValue: mockSystemRulesService,
                 },
                 {
                     provide: MyLoggerService,
@@ -150,8 +158,6 @@ describe('SensorsService', () => {
     });
 
     describe('getReadings', () => {
-        // using shared fixtures imported above
-
         it('should retrieve readings with default limit', async () => {
             mockDatabaseService.sensorReading.findMany.mockResolvedValue(mockReadings);
 
@@ -290,8 +296,6 @@ describe('SensorsService', () => {
     });
 
     describe('getAggregatedData', () => {
-        // using shared fixtures imported above
-
         it('should retrieve aggregated data with default hours', async () => {
             mockDatabaseService.aggregatedSensorReading.findMany.mockResolvedValue(
                 mockAggregatedData,
@@ -318,8 +322,6 @@ describe('SensorsService', () => {
 
             await service.getAggregatedData(testRackId, 48);
 
-            // 1. Capture the last call's first argument
-            // 2. Cast it to a specific structure instead of 'any' or 'Record'
             const lastCall = mockDatabaseService.aggregatedSensorReading.findMany.mock.lastCall as [
                 {
                     where: { hour: { gte: Date } };
@@ -328,7 +330,6 @@ describe('SensorsService', () => {
 
             const callArg = lastCall[0];
 
-            // 3. Now this is 100% type-safe and linter-friendly
             const expectedDate = new Date(Date.now() - 48 * 60 * 60 * 1000);
 
             expect(callArg.where.hour.gte).toBeInstanceOf(Date);
@@ -370,8 +371,6 @@ describe('SensorsService', () => {
     });
 
     describe('getHistory', () => {
-        // using shared fixtures imported above
-
         it('should retrieve history with default hours', async () => {
             mockDatabaseService.sensorReading.findMany.mockResolvedValue(mockHistory);
 
@@ -397,7 +396,6 @@ describe('SensorsService', () => {
 
             const expectedDate = new Date(Date.now() - hours * 60 * 60 * 1000);
 
-            // Cast the arguments of the last call to the expected shape
             const [callArg] = mockDatabaseService.sensorReading.findMany.mock.lastCall as [
                 {
                     where: { timestamp: { gte: Date } };
@@ -440,7 +438,6 @@ describe('SensorsService', () => {
     });
 
     describe('getStatistics', () => {
-        // statistics-specific readings imported from fixtures
         const mockReadings = mockStatisticsReadings;
 
         it('should calculate statistics from history', async () => {
@@ -539,12 +536,16 @@ describe('SensorsService', () => {
             mockDatabaseService.sensorReading.create.mockResolvedValue(mockSensorReading);
             mockDatabaseService.rack.update.mockResolvedValue(mockRack);
 
+            const parseSpy = jest.spyOn(MqttMessageParser, 'parseAndValidate');
+
             await service.processSensorData(testMacAddress, rawMessage);
 
-            expect(jest.spyOn(MqttMessageParser, 'parseAndValidate')).toHaveBeenCalledWith(
+            expect(parseSpy).toHaveBeenCalledWith(
+                mockRack,
                 rawMessage,
-                expect.anything(),
+                SensorDataDto,
                 testMacAddress,
+                expect.anything(),
             );
         });
 
@@ -556,12 +557,18 @@ describe('SensorsService', () => {
             await service.processSensorData(testMacAddress, rawMessage);
 
             expect(mockDatabaseService.rack.findUnique).toHaveBeenCalledWith({
-                where: { macAddress: testMacAddress },
+                where: { macAddress: testMacAddress, isActive: true },
                 include: {
                     user: {
                         select: {
                             id: true,
                             email: true,
+                        },
+                    },
+                    currentPlant: {
+                        select: {
+                            id: true,
+                            name: true,
                         },
                     },
                 },
@@ -604,7 +611,8 @@ describe('SensorsService', () => {
                     humidity: mockSensorData.humidity,
                     moisture: mockSensorData.moisture,
                     lightLevel: mockSensorData.lightLevel,
-                    timestamp: expect.any(Date) as Date,
+                    timestamp: expect.any(Date) as string,
+                    waterUsed: mockSensorData.waterUsed,
                     rawData: mockSensorData,
                 },
             });
@@ -667,6 +675,16 @@ describe('SensorsService', () => {
             );
         });
 
+        it('should evaluate system rules', async () => {
+            mockDatabaseService.rack.findUnique.mockResolvedValue(mockRack);
+            mockDatabaseService.sensorReading.create.mockResolvedValue(mockSensorReading);
+            mockDatabaseService.rack.update.mockResolvedValue(mockRack);
+
+            await service.processSensorData(testMacAddress, rawMessage);
+
+            expect(mockSystemRulesService.evaluate).toHaveBeenCalledWith(mockRack, mockSensorData);
+        });
+
         it('should log processing complete', async () => {
             mockDatabaseService.rack.findUnique.mockResolvedValue(mockRack);
             mockDatabaseService.sensorReading.create.mockResolvedValue(mockSensorReading);
@@ -716,7 +734,6 @@ describe('SensorsService', () => {
 
             await service.processSensorData(testMacAddress, rawMessage);
 
-            // Cast to capture the 'data' property shape
             const [createCall] = mockDatabaseService.sensorReading.create.mock.lastCall as [
                 {
                     data: { timestamp: Date };

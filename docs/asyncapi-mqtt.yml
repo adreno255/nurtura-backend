@@ -107,7 +107,23 @@ channels:
     deviceErrors:
         address: 'Topic: nurtura/rack/{macAddress}/errors'
         title: Device Errors Channel
-        description: Device error and warning messages
+        description: |
+            Device error and warning messages from ESP32 hardware components.
+
+            **Error Categories:**
+            - **Sensor Errors**: I2C communication failures, timeouts, out-of-range readings
+            - **Pump Errors**: Motor failures, no water supply, pressure issues
+            - **Light Errors**: Circuit failures, power delivery issues
+
+            **Severity Levels:**
+            - **CRITICAL**: Immediate user notification and automation pause required
+            - **HIGH**: Device function impaired, user notification recommended
+            - **MEDIUM**: Performance degraded, monitoring required
+            - **LOW**: Informational, no immediate action needed
+
+            **Recovery Codes**: Devices report recovery when errors are resolved (e.g., SENSOR_RECOVERED).
+
+            Error messages include timestamp, hardware type, attempt counts, and diagnostic data for troubleshooting.
         messages:
             errorReport:
                 $ref: '#/components/messages/DeviceErrorMessage'
@@ -148,6 +164,33 @@ channels:
             mqtt:
                 qos: 1
                 retain: false
+
+    sensorCommands:
+        address: 'Topic: nurtura/rack/{macAddress}/commands/sensors'
+        title: Sensor Commands Channel
+        description: Commands to control sensor data streaming
+        messages:
+            sensorCommand:
+                $ref: '#/components/messages/SensorCommandMessage'
+        parameters:
+            macAddress:
+                $ref: '#/components/parameters/MacAddress'
+        bindings:
+            mqtt:
+                qos: 1
+                retain: false
+
+    backendStatus:
+        address: 'Topic: nurtura/backend/status'
+        title: Backend Status Channel
+        description: Backend service status and connectivity (connection/disconnection notifications using MQTT Last Will and Testament)
+        messages:
+            backendStatus:
+                $ref: '#/components/messages/BackendStatusMessage'
+        bindings:
+            mqtt:
+                qos: 1
+                retain: true
 #endregion
 
 #region Operations
@@ -185,8 +228,24 @@ operations:
             $ref: '#/channels/deviceErrors'
         summary: Receive device error reports
         description: |
-            Backend subscribes to error messages for monitoring and alerting.
-            Critical errors trigger immediate notifications to users.
+            Backend subscribes to error messages for real-time hardware monitoring and diagnostics.
+
+            **Processing Rules:**
+            - CRITICAL errors: Trigger immediate user notification, pause automation, and log alerts
+            - HIGH errors: Log with monitoring flag, schedule troubleshooting workflow
+            - MEDIUM/LOW errors: Store in error history, alert user if threshold exceeded
+            - RECOVERY codes: Mark corresponding error as resolved, resume automation if applicable
+
+            **Error Tracking:**
+            - Correlate errors with timestamp, hardware type, and device MAC
+            - Track attempt counts for intermittent failures (e.g., flaky I2C communication)
+            - Store last successful read timestamp to calculate downtime
+            - Preserve diagnostic data for troubleshooting and firmware improvements
+
+            **Automation Impact:**
+            - Critical sensor/pump errors auto-pause or disable related automations
+            - Recovery messages re-enable automations after confirmation
+            - Users can manually override automation state via API
         traits:
             - $ref: '#/components/operationTraits/mqtt'
         messages:
@@ -217,6 +276,35 @@ operations:
             - $ref: '#/components/operationTraits/mqtt'
         messages:
             - $ref: '#/channels/lightingCommands/messages/lightingCommand'
+
+    sendSensorCommand:
+        action: send
+        channel:
+            $ref: '#/channels/sensorCommands'
+        summary: Send sensor data streaming control commands to device
+        description: |
+            Backend publishes commands to start or stop sensor data streaming.
+            Triggered when racks are registered/activated or deleted/archived.
+            Prevents wasted MQTT messages from inactive devices.
+        traits:
+            - $ref: '#/components/operationTraits/mqtt'
+        messages:
+            - $ref: '#/channels/sensorCommands/messages/sensorCommand'
+
+    publishBackendStatus:
+        action: send
+        channel:
+            $ref: '#/channels/backendStatus'
+        summary: Publish backend service status
+        description: |
+            Backend publishes its online/offline status.
+            Devices use this to know if the backend is available.
+            Automatically published on connection, graceful shutdown, and as MQTT Last Will (LWT).
+            LWT ensures devices receive offline notification even on unexpected backend crashes.
+        traits:
+            - $ref: '#/components/operationTraits/mqtt'
+        messages:
+            - $ref: '#/channels/backendStatus/messages/backendStatus'
 #endregion
 
 components:
@@ -266,18 +354,16 @@ components:
                   summary: Device online with metrics
                   payload:
                       o: true
-                      tm: 1707112200000
+                      tm: '2025-02-05T14:30:00.000Z'
                       v: '1.0.3'
                       ip: '192.168.1.100'
                       mac: 'AA:BB:CC:DD:EE:FF'
-                      s: -65
                       u: 3600000
-                      fm: 45000
 
         DeviceErrorMessage:
             name: DeviceError
             title: Device Error
-            summary: Error or warning from device
+            summary: Error or recovery report from device
             contentType: application/json
             tags:
                 - name: ESP32
@@ -286,17 +372,46 @@ components:
                 $ref: '#/components/schemas/DeviceErrorPayload'
             examples:
                 - name: sensorFailure
-                  summary: Sensor communication failure
+                  summary: Critical sensor communication failure
                   payload:
                       c: 'SENSOR_FAILURE'
                       m: 'BME280 sensor not responding'
                       s: 'CRITICAL'
-                      tm: 1707112300000
-                      st: 'TEMPERATURE'
+                      tm: '2025-02-05T14:31:30.000Z'
+                      ht: 'TEMPERATURE'
                       d:
-                          ac: '3'
+                          ac: 3
                           lsr: 1707111600000
                           ed: 'I2C communication timeout after 100ms'
+                - name: pumpWarning
+                  summary: Pump warning - low pressure
+                  payload:
+                      c: 'PUMP_TIMEOUT'
+                      m: 'Water pump responds slowly to start command'
+                      s: 'MEDIUM'
+                      tm: '2025-02-05T14:32:15.000Z'
+                      ht: 'WATER_PUMP'
+                      d:
+                          ac: 1
+                          lsr: 1707112335000
+                - name: sensorRecovered
+                  summary: Sensor recovered after failure
+                  payload:
+                      c: 'SENSOR_RECOVERED'
+                      m: 'Temperature sensor responding normally'
+                      s: 'LOW'
+                      tm: '2025-02-05T14:33:45.000Z'
+                      ht: 'TEMPERATURE'
+                - name: lightFailure
+                  summary: Grow light circuit failure
+                  payload:
+                      c: 'LIGHT_FAILURE'
+                      m: 'Grow light PWM control circuit failure detected'
+                      s: 'HIGH'
+                      tm: '2025-02-05T14:34:00.000Z'
+                      ht: 'GROW_LIGHT'
+                      d:
+                          ed: 'GPIO pin 32 not responding to PWM signals'
 
         WateringCommandMessage:
             name: WateringCommand
@@ -310,14 +425,13 @@ components:
                 $ref: '#/components/schemas/WateringCommandPayload'
             examples:
                 - name: startWatering
-                  summary: Start watering for 5 seconds
+                  summary: Start watering
                   payload:
-                      action: 'start'
-                      duration: 5000
+                      action: 'watering_start'
                 - name: stopWatering
                   summary: Stop watering immediately
                   payload:
-                      action: 'stop'
+                      action: 'watering_stop'
 
         LightingCommandMessage:
             name: LightingCommand
@@ -333,11 +447,57 @@ components:
                 - name: turnOn
                   summary: Turn lights on
                   payload:
-                      action: 'on'
+                      action: 'light_on'
                 - name: turnOff
                   summary: Turn lights off
                   payload:
-                      action: 'off'
+                      action: 'light_off'
+
+        SensorCommandMessage:
+            name: SensorCommand
+            title: Sensor Command
+            summary: Command to control sensor data streaming
+            contentType: application/json
+            tags:
+                - name: Backend
+                  description: Published by backend server
+                - name: Sensors
+                  description: Sensor data control
+            payload:
+                $ref: '#/components/schemas/SensorCommandPayload'
+            examples:
+                - name: startSensor
+                  summary: Start sensor data streaming
+                  payload:
+                      action: 'sensor_start'
+                - name: stopSensor
+                  summary: Stop sensor data streaming
+                  payload:
+                      action: 'sensor_stop'
+
+        BackendStatusMessage:
+            name: BackendStatus
+            title: Backend Status
+            summary: Backend service status update
+            contentType: application/json
+            tags:
+                - name: Backend
+                  description: Published by backend server
+                - name: Status
+                  description: Service connectivity status
+            payload:
+                $ref: '#/components/schemas/BackendStatusPayload'
+            examples:
+                - name: onlineStatus
+                  summary: Backend service online
+                  payload:
+                      o: true
+                      tm: '2025-02-05T14:30:00.000Z'
+                - name: offlineStatus
+                  summary: Backend service offline (LWT)
+                  payload:
+                      o: false
+                      tm: '2025-02-05T14:35:00.000Z'
     #endregion
 
     #region Schemas
@@ -394,9 +554,10 @@ components:
                     description: Whether the device is online
                     example: true
                 tm:
-                    type: number
-                    description: Timestamp of the status update (milliseconds since epoch)
-                    example: 1707112200000
+                    type: string
+                    format: date-time
+                    description: Timestamp of the status update (ISO 8601)
+                    example: '2025-02-05T14:30:00.000Z'
                 v:
                     type: string
                     description: Current firmware version of the device
@@ -409,21 +570,11 @@ components:
                     type: string
                     description: MAC address of the device
                     example: 'AA:BB:CC:DD:EE:FF'
-                s:
-                    type: integer
-                    description: WiFi signal strength (RSSI)
-                    maximum: 0
-                    example: -65
                 u:
                     type: integer
                     description: Uptime in milliseconds
                     minimum: 0
                     example: 3600000
-                fm:
-                    type: integer
-                    description: Free heap memory in bytes
-                    minimum: 0
-                    example: 45000
 
         DeviceErrorPayload:
             type: object
@@ -434,11 +585,30 @@ components:
             properties:
                 c:
                     type: string
-                    description: Error code
+                    enum:
+                        - SENSOR_FAILURE
+                        - SENSOR_TIMEOUT
+                        - SENSOR_NOT_FOUND
+                        - SENSOR_OUT_OF_RANGE
+                        - PUMP_FAILURE
+                        - PUMP_TIMEOUT
+                        - PUMP_NO_WATER
+                        - PUMP_FALSE_START
+                        - LIGHT_FAILURE
+                        - UNKNOWN_ERROR
+                        - SENSOR_RECOVERED
+                        - PUMP_RECOVERED
+                        - LIGHT_RECOVERED
+                        - UNKNOWN_RECOVERY
+                    description: |
+                        Error or recovery code. Error codes indicate device malfunction; 
+                        recovery codes indicate error resolution.
                     example: 'SENSOR_FAILURE'
                 m:
                     type: string
-                    description: Error message
+                    description: Human-readable error message describing the issue or recovery
+                    minLength: 1
+                    maxLength: 255
                     example: 'BME280 sensor not responding'
                 s:
                     type: string
@@ -447,38 +617,53 @@ components:
                         - MEDIUM
                         - HIGH
                         - CRITICAL
-                    description: Severity level
+                    description: |
+                        Severity level indicating impact to device functionality.
+                        - CRITICAL: Device function completely impaired, immediate action required
+                        - HIGH: Device function partially impaired, monitoring required
+                        - MEDIUM: Performance degraded but functional, investigation recommended
+                        - LOW: Informational or recovered state, no immediate action needed
                     example: 'CRITICAL'
                 tm:
-                    type: number
-                    description: Timestamp of the error occurrence (milliseconds since epoch)
-                    example: 1707112300000
-                st:
+                    type: string
+                    format: date-time
+                    description: ISO 8601 timestamp when error occurred or was resolved (UTC)
+                    example: '2025-02-05T14:31:30.000Z'
+                ht:
                     type: string
                     enum:
                         - TEMPERATURE
                         - HUMIDITY
                         - MOISTURE
                         - LIGHT
-                    description: Type of sensor involved in the error
+                        - GROW_LIGHT
+                        - WATER_PUMP
+                    description: |
+                        Hardware component type involved in the error.
+                        Optional but recommended for better error categorization and diagnostics.
                     example: 'TEMPERATURE'
                 d:
                     type: object
-                    description: Additional error details
+                    description: Additional diagnostic details about the error
                     additionalProperties: false
                     properties:
                         ac:
                             type: integer
-                            description: Number of retry attempts
+                            description: Number of retry attempts before reporting error
                             minimum: 0
                             example: 3
                         lsr:
                             type: number
-                            description: Timestamp of last successful sensor read (milliseconds since epoch)
+                            description: |
+                                Timestamp of last successful operation (milliseconds since epoch).
+                                Helps calculate downtime duration.
                             example: 1707111600000
                         ed:
                             type: string
-                            description: Raw error data or stack trace
+                            description: |
+                                Raw error data, diagnostic information, or stack trace for troubleshooting.
+                                Useful for debugging intermittent issues and firmware improvements.
+                            maxLength: 512
                             example: 'I2C communication timeout after 100ms'
 
         WateringCommandPayload:
@@ -489,16 +674,10 @@ components:
                 action:
                     type: string
                     enum:
-                        - start
-                        - stop
+                        - watering_start
+                        - watering_stop
                     description: Action to perform
-                    example: 'start'
-                duration:
-                    type: integer
-                    description: Duration in milliseconds (required for "start")
-                    minimum: 1000
-                    maximum: 60000
-                    example: 5000
+                    example: 'watering_start'
 
         LightingCommandPayload:
             type: object
@@ -508,10 +687,39 @@ components:
                 action:
                     type: string
                     enum:
-                        - 'on'
-                        - 'off'
+                        - 'light_on'
+                        - 'light_off'
                     description: Action to perform
-                    example: 'on'
+                    example: 'light_on'
+
+        SensorCommandPayload:
+            type: object
+            required:
+                - action
+            properties:
+                action:
+                    type: string
+                    enum:
+                        - sensor_start
+                        - sensor_stop
+                    description: Sensor data streaming action
+                    example: 'sensor_start'
+
+        BackendStatusPayload:
+            type: object
+            required:
+                - o
+                - tm
+            properties:
+                o:
+                    type: boolean
+                    description: Whether the backend is online
+                    example: true
+                tm:
+                    type: string
+                    format: date-time
+                    description: Timestamp of the status update (ISO 8601)
+                    example: '2025-02-05T14:30:00.000Z'
     #endregion
 
     #region Parameters

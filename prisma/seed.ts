@@ -109,11 +109,16 @@ async function main() {
     // PLANTS WITH AUTOMATION RULES
     // ============================================
 
+    // --- Lettuce ---
+    // Moisture: 60–80% | Temp: 7–18°C | Humidity: 50–70% | Light: 16,000–32,000 lux
+
     const lettuce = await prisma.plant.create({
         data: {
             name: 'Lettuce',
             category: PlantCategory.LEAFY_GREENS,
             recommendedSoil: SoilType.LOAMY,
+            maxTemperature: 18,
+            maxLightLevel: 32000,
             description: 'Cool-season leafy green, ideal for salads',
             isActive: true,
         },
@@ -127,8 +132,7 @@ async function main() {
                 description: 'Start watering when moisture drops below 60%',
                 isEnabled: true,
                 conditions: { moisture: { lessThan: 60 } },
-                actions: { watering: { action: 'start', duration: 5000 } },
-                cooldownMinutes: 60,
+                actions: { watering: { action: 'watering_start' } },
             },
             {
                 plantId: lettuce.id,
@@ -136,37 +140,23 @@ async function main() {
                 description: 'Stop watering when moisture exceeds 80%',
                 isEnabled: true,
                 conditions: { moisture: { greaterThan: 80 } },
-                actions: { watering: { action: 'stop' } },
-                cooldownMinutes: 30,
-            },
-            {
-                plantId: lettuce.id,
-                name: 'Lettuce - Temperature Too High',
-                description: 'Alert when temperature exceeds 18°C',
-                isEnabled: true,
-                conditions: { temperature: { greaterThan: 18 } },
-                actions: {},
-                cooldownMinutes: 120,
-            },
-            {
-                plantId: lettuce.id,
-                name: 'Lettuce - Low Light',
-                description: 'Turn on grow lights when light drops below 16,000 lux',
-                isEnabled: true,
-                conditions: { lightLevel: { lessThan: 16000 } },
-                actions: { growLight: { action: 'on' } },
-                cooldownMinutes: 30,
+                actions: { watering: { action: 'watering_stop' } },
             },
         ],
     });
 
     console.log('✓ Lettuce created with automation rules');
 
+    // --- Malabar Spinach ---
+    // Moisture: 70–90% | Temp: 24–35°C | Humidity: 60–80% | Light: ~100,000 lux
+
     const malabarSpinach = await prisma.plant.create({
         data: {
             name: 'Malabar Spinach',
             category: PlantCategory.TROPICAL_GREENS,
             recommendedSoil: SoilType.SILTY,
+            maxTemperature: 35,
+            maxLightLevel: 100000,
             description: 'Heat-loving tropical vine with edible leaves',
             isActive: true,
         },
@@ -180,8 +170,7 @@ async function main() {
                 description: 'Start watering when moisture drops below 70%',
                 isEnabled: true,
                 conditions: { moisture: { lessThan: 70 } },
-                actions: { watering: { action: 'start', duration: 7000 } },
-                cooldownMinutes: 60,
+                actions: { watering: { action: 'watering_start' } },
             },
             {
                 plantId: malabarSpinach.id,
@@ -189,37 +178,23 @@ async function main() {
                 description: 'Stop watering when moisture exceeds 90%',
                 isEnabled: true,
                 conditions: { moisture: { greaterThan: 90 } },
-                actions: { watering: { action: 'stop' } },
-                cooldownMinutes: 30,
-            },
-            {
-                plantId: malabarSpinach.id,
-                name: 'Malabar Spinach - Temperature Too Low',
-                description: 'Alert when temperature drops below 24°C',
-                isEnabled: true,
-                conditions: { temperature: { lessThan: 24 } },
-                actions: {},
-                cooldownMinutes: 120,
-            },
-            {
-                plantId: malabarSpinach.id,
-                name: 'Malabar Spinach - Low Light',
-                description: 'Turn on grow lights when light drops below 80,000 lux',
-                isEnabled: true,
-                conditions: { lightLevel: { lessThan: 80000 } },
-                actions: { growLight: { action: 'on' } },
-                cooldownMinutes: 30,
+                actions: { watering: { action: 'watering_stop' } },
             },
         ],
     });
 
     console.log('✓ Malabar Spinach created with automation rules');
 
+    // --- Basil ---
+    // Moisture: 50–70% | Temp: 10–21°C | Humidity: 40–60% | Light: ~15,000 lux
+
     const basil = await prisma.plant.create({
         data: {
             name: 'Basil',
             category: PlantCategory.HERBS,
             recommendedSoil: SoilType.PEATY,
+            maxTemperature: 21,
+            maxLightLevel: 15000,
             description: 'Aromatic herb, popular in Mediterranean cuisine',
             isActive: true,
         },
@@ -233,8 +208,7 @@ async function main() {
                 description: 'Start watering when moisture drops below 50%',
                 isEnabled: true,
                 conditions: { moisture: { lessThan: 50 } },
-                actions: { watering: { action: 'start', duration: 4000 } },
-                cooldownMinutes: 60,
+                actions: { watering: { action: 'watering_start' } },
             },
             {
                 plantId: basil.id,
@@ -242,28 +216,23 @@ async function main() {
                 description: 'Stop watering when moisture exceeds 70%',
                 isEnabled: true,
                 conditions: { moisture: { greaterThan: 70 } },
-                actions: { watering: { action: 'stop' } },
-                cooldownMinutes: 30,
-            },
-            {
-                plantId: basil.id,
-                name: 'Basil - Low Light',
-                description: 'Turn on grow lights when light drops below 15,000 lux',
-                isEnabled: true,
-                conditions: { lightLevel: { lessThan: 15000 } },
-                actions: { growLight: { action: 'on' } },
-                cooldownMinutes: 30,
+                actions: { watering: { action: 'watering_stop' } },
             },
         ],
     });
 
     console.log('✓ Basil created with automation rules');
 
+    // --- Oregano ---
+    // Moisture: 30–50% | Temp: 15–26°C | Humidity: 40–50% | Light: 32,000–100,000 lux
+
     const oregano = await prisma.plant.create({
         data: {
             name: 'Oregano',
             category: PlantCategory.HERBS,
             recommendedSoil: SoilType.SANDY,
+            maxTemperature: 26,
+            maxLightLevel: 100000,
             description: 'Drought-tolerant Mediterranean herb',
             isActive: true,
         },
@@ -277,8 +246,7 @@ async function main() {
                 description: 'Start watering when moisture drops below 30%',
                 isEnabled: true,
                 conditions: { moisture: { lessThan: 30 } },
-                actions: { watering: { action: 'start', duration: 3000 } },
-                cooldownMinutes: 120,
+                actions: { watering: { action: 'watering_start' } },
             },
             {
                 plantId: oregano.id,
@@ -286,28 +254,23 @@ async function main() {
                 description: 'Stop watering when moisture exceeds 50%',
                 isEnabled: true,
                 conditions: { moisture: { greaterThan: 50 } },
-                actions: { watering: { action: 'stop' } },
-                cooldownMinutes: 30,
-            },
-            {
-                plantId: oregano.id,
-                name: 'Oregano - Low Light',
-                description: 'Turn on grow lights when light drops below 32,000 lux',
-                isEnabled: true,
-                conditions: { lightLevel: { lessThan: 32000 } },
-                actions: { growLight: { action: 'on' } },
-                cooldownMinutes: 30,
+                actions: { watering: { action: 'watering_stop' } },
             },
         ],
     });
 
     console.log('✓ Oregano created with automation rules');
 
+    // --- Rosemary ---
+    // Moisture: 20–40% | Temp: 24–35°C | Humidity: 30–50% | Light: ~30,000 lux
+
     const rosemary = await prisma.plant.create({
         data: {
             name: 'Rosemary',
             category: PlantCategory.HERBS,
             recommendedSoil: SoilType.SANDY,
+            maxTemperature: 35,
+            maxLightLevel: 30000,
             description: 'Hardy evergreen herb with needle-like leaves',
             isActive: true,
         },
@@ -321,8 +284,7 @@ async function main() {
                 description: 'Start watering when moisture drops below 20%',
                 isEnabled: true,
                 conditions: { moisture: { lessThan: 20 } },
-                actions: { watering: { action: 'start', duration: 3000 } },
-                cooldownMinutes: 180,
+                actions: { watering: { action: 'watering_start' } },
             },
             {
                 plantId: rosemary.id,
@@ -330,28 +292,23 @@ async function main() {
                 description: 'Stop watering when moisture exceeds 40%',
                 isEnabled: true,
                 conditions: { moisture: { greaterThan: 40 } },
-                actions: { watering: { action: 'stop' } },
-                cooldownMinutes: 30,
-            },
-            {
-                plantId: rosemary.id,
-                name: 'Rosemary - Low Light',
-                description: 'Turn on grow lights when light drops below 30,000 lux',
-                isEnabled: true,
-                conditions: { lightLevel: { lessThan: 30000 } },
-                actions: { growLight: { action: 'on' } },
-                cooldownMinutes: 30,
+                actions: { watering: { action: 'watering_stop' } },
             },
         ],
     });
 
     console.log('✓ Rosemary created with automation rules');
 
+    // --- Cilantro ---
+    // Moisture: 50–70% | Temp: 15–22°C | Humidity: 30–50% | Light: 32,000–100,000 lux
+
     const cilantro = await prisma.plant.create({
         data: {
             name: 'Cilantro',
             category: PlantCategory.ROOT_AND_STALK,
             recommendedSoil: SoilType.LOAMY,
+            maxTemperature: 22,
+            maxLightLevel: 100000,
             description: 'Fast-growing herb with distinctive flavor',
             isActive: true,
         },
@@ -365,8 +322,7 @@ async function main() {
                 description: 'Start watering when moisture drops below 50%',
                 isEnabled: true,
                 conditions: { moisture: { lessThan: 50 } },
-                actions: { watering: { action: 'start', duration: 4000 } },
-                cooldownMinutes: 60,
+                actions: { watering: { action: 'watering_start' } },
             },
             {
                 plantId: cilantro.id,
@@ -374,28 +330,23 @@ async function main() {
                 description: 'Stop watering when moisture exceeds 70%',
                 isEnabled: true,
                 conditions: { moisture: { greaterThan: 70 } },
-                actions: { watering: { action: 'stop' } },
-                cooldownMinutes: 30,
-            },
-            {
-                plantId: cilantro.id,
-                name: 'Cilantro - Low Light',
-                description: 'Turn on grow lights when light drops below 32,000 lux',
-                isEnabled: true,
-                conditions: { lightLevel: { lessThan: 32000 } },
-                actions: { growLight: { action: 'on' } },
-                cooldownMinutes: 30,
+                actions: { watering: { action: 'watering_stop' } },
             },
         ],
     });
 
     console.log('✓ Cilantro created with automation rules');
 
+    // --- Celery ---
+    // Moisture: 70–90% | Temp: 13–30°C | Humidity: 60–80% | Light: ~80,000 lux
+
     const celery = await prisma.plant.create({
         data: {
             name: 'Celery',
             category: PlantCategory.ROOT_AND_STALK,
             recommendedSoil: SoilType.LOAMY,
+            maxTemperature: 30,
+            maxLightLevel: 80000,
             description: 'Moisture-loving vegetable with crunchy stalks',
             isActive: true,
         },
@@ -409,8 +360,7 @@ async function main() {
                 description: 'Start watering when moisture drops below 70%',
                 isEnabled: true,
                 conditions: { moisture: { lessThan: 70 } },
-                actions: { watering: { action: 'start', duration: 6000 } },
-                cooldownMinutes: 60,
+                actions: { watering: { action: 'watering_start' } },
             },
             {
                 plantId: celery.id,
@@ -418,28 +368,23 @@ async function main() {
                 description: 'Stop watering when moisture exceeds 90%',
                 isEnabled: true,
                 conditions: { moisture: { greaterThan: 90 } },
-                actions: { watering: { action: 'stop' } },
-                cooldownMinutes: 30,
-            },
-            {
-                plantId: celery.id,
-                name: 'Celery - Low Light',
-                description: 'Turn on grow lights when light drops below 80,000 lux',
-                isEnabled: true,
-                conditions: { lightLevel: { lessThan: 80000 } },
-                actions: { growLight: { action: 'on' } },
-                cooldownMinutes: 30,
+                actions: { watering: { action: 'watering_stop' } },
             },
         ],
     });
 
     console.log('✓ Celery created with automation rules');
 
+    // --- Parsley ---
+    // Moisture: 50–70% | Temp: 10–21°C | Humidity: 50–70% | Light: ~100,000 lux
+
     const parsley = await prisma.plant.create({
         data: {
             name: 'Parsley',
             category: PlantCategory.ROOT_AND_STALK,
             recommendedSoil: SoilType.LOAMY,
+            maxTemperature: 21,
+            maxLightLevel: 100000,
             description: 'Biennial herb, popular garnish and ingredient',
             isActive: true,
         },
@@ -453,8 +398,7 @@ async function main() {
                 description: 'Start watering when moisture drops below 50%',
                 isEnabled: true,
                 conditions: { moisture: { lessThan: 50 } },
-                actions: { watering: { action: 'start', duration: 5000 } },
-                cooldownMinutes: 60,
+                actions: { watering: { action: 'watering_start' } },
             },
             {
                 plantId: parsley.id,
@@ -462,17 +406,7 @@ async function main() {
                 description: 'Stop watering when moisture exceeds 70%',
                 isEnabled: true,
                 conditions: { moisture: { greaterThan: 70 } },
-                actions: { watering: { action: 'stop' } },
-                cooldownMinutes: 30,
-            },
-            {
-                plantId: parsley.id,
-                name: 'Parsley - Low Light',
-                description: 'Turn on grow lights when light drops below 80,000 lux',
-                isEnabled: true,
-                conditions: { lightLevel: { lessThan: 80000 } },
-                actions: { growLight: { action: 'on' } },
-                cooldownMinutes: 30,
+                actions: { watering: { action: 'watering_stop' } },
             },
         ],
     });
@@ -554,7 +488,7 @@ async function main() {
             // Watering on — automation
             {
                 rackId: rack.id,
-                eventType: ActivityEventType.WATERING_ON,
+                eventType: ActivityEventType.WATERING_START,
                 details:
                     'Watering start triggered by automation rule "Lettuce - Low Moisture Alert"',
                 metadata: {
@@ -563,14 +497,13 @@ async function main() {
                     source: 'automation',
                     ruleId: 'rule-lettuce-low-moisture',
                     ruleName: 'Lettuce - Low Moisture Alert',
-                    duration: 5000,
                 },
                 timestamp: new Date('2026-01-15T10:00:00.000Z'),
             },
             // Watering off — automation
             {
                 rackId: rack.id,
-                eventType: ActivityEventType.WATERING_OFF,
+                eventType: ActivityEventType.WATERING_STOP,
                 details:
                     'Watering stop triggered by automation rule "Lettuce - High Moisture Stop"',
                 metadata: {
@@ -579,7 +512,6 @@ async function main() {
                     source: 'automation',
                     ruleId: 'rule-lettuce-high-moisture',
                     ruleName: 'Lettuce - High Moisture Stop',
-                    duration: 5000,
                 },
                 timestamp: new Date('2026-01-15T10:05:00.000Z'),
             },
@@ -601,13 +533,13 @@ async function main() {
             {
                 rackId: rack.id,
                 eventType: ActivityEventType.LIGHT_OFF,
-                details: 'Grow light off triggered by automation rule "Lettuce - Low Light"',
+                details: 'Grow light off triggered by automation rule "Lettuce - High Light"',
                 metadata: {
                     rackName: rack.name,
                     macAddress: rack.macAddress,
                     source: 'automation',
-                    ruleId: 'rule-lettuce-low-light',
-                    ruleName: 'Lettuce - Low Light',
+                    ruleId: 'rule-lettuce-high-light',
+                    ruleName: 'Lettuce - High Light',
                 },
                 timestamp: new Date('2026-01-20T18:00:00.000Z'),
             },
@@ -721,37 +653,34 @@ async function main() {
             {
                 rackId: rack2.id,
                 eventType: ActivityEventType.PLANT_REMOVED,
-                details: 'Plant removed from rack (replaced during crop rotation)',
+                details: 'Plant removed from rack',
                 metadata: {
                     rackName: rack2.name,
                     macAddress: rack2.macAddress,
                     removedPlantId: oregano.id,
                     removedPlantName: 'Oregano',
-                    replacedByPlantId: basil.id,
-                    replacedByPlantName: 'Basil',
                 },
                 timestamp: rack2ChangedAt,
             },
-            // Crop rotation — basil assigned
+            // Basil planted (after oregano removed)
             {
                 rackId: rack2.id,
-                eventType: ActivityEventType.PLANT_CHANGED,
-                details: `Plant changed from previous to "Basil"`,
+                eventType: ActivityEventType.PLANT_ADDED,
+                details: `Plant "Basil" added to rack`,
                 metadata: {
                     rackName: rack2.name,
                     macAddress: rack2.macAddress,
-                    previousPlantId: oregano.id,
-                    previousPlantName: 'Oregano',
-                    newPlantId: basil.id,
-                    newPlantName: 'Basil',
+                    plantId: basil.id,
+                    plantName: 'Basil',
                     quantity: 8,
+                    plantedAt: rack2ChangedAt.toISOString(),
                 },
                 timestamp: rack2ChangedAt,
             },
             // Watering on
             {
                 rackId: rack2.id,
-                eventType: ActivityEventType.WATERING_ON,
+                eventType: ActivityEventType.WATERING_START,
                 details: 'Watering start triggered by automation rule "Basil - Low Moisture"',
                 metadata: {
                     rackName: rack2.name,
@@ -759,14 +688,13 @@ async function main() {
                     source: 'automation',
                     ruleId: 'rule-basil-low-moisture',
                     ruleName: 'Basil - Low Moisture',
-                    duration: 4000,
                 },
                 timestamp: new Date('2026-02-10T09:00:00.000Z'),
             },
             // Watering off
             {
                 rackId: rack2.id,
-                eventType: ActivityEventType.WATERING_OFF,
+                eventType: ActivityEventType.WATERING_STOP,
                 details: 'Watering stop triggered by automation rule "Basil - High Moisture Stop"',
                 metadata: {
                     rackName: rack2.name,
@@ -774,7 +702,6 @@ async function main() {
                     source: 'automation',
                     ruleId: 'rule-basil-high-moisture',
                     ruleName: 'Basil - High Moisture Stop',
-                    duration: 4000,
                 },
                 timestamp: new Date('2026-02-10T09:04:00.000Z'),
             },
@@ -845,16 +772,16 @@ async function main() {
             },
             {
                 rackId: rack2.id,
-                temperature: 22.1,
-                humidity: 55.0,
-                moisture: 52.3,
+                temperature: 16.5,
+                humidity: 48.0,
+                moisture: 55.3,
                 lightLevel: 14000,
             },
             {
                 rackId: rack2.id,
-                temperature: 23.4,
-                humidity: 57.0,
-                moisture: 48.0,
+                temperature: 17.8,
+                humidity: 52.0,
+                moisture: 58.0,
                 lightLevel: 13000,
             },
         ],
@@ -897,14 +824,14 @@ async function main() {
             {
                 rackId: rack2.id,
                 hour: new Date('2026-02-10T09:00:00.000Z'),
-                avgTemperature: 22.8,
-                avgHumidity: 56.0,
-                avgMoisture: 50.2,
+                avgTemperature: 17.2,
+                avgHumidity: 50.0,
+                avgMoisture: 56.7,
                 avgLightLevel: 13500,
-                minTemperature: 22.1,
-                maxTemperature: 23.4,
-                minMoisture: 48.0,
-                maxMoisture: 52.3,
+                minTemperature: 16.5,
+                maxTemperature: 17.8,
+                minMoisture: 55.3,
+                maxMoisture: 58.0,
                 readingCount: 2,
             },
         ],
@@ -921,66 +848,31 @@ async function main() {
         data: [
             {
                 userId: user.id,
-                rackId: rack.id,
-                type: NotificationType.SUCCESS,
+                rackId: rack3.id,
+                type: NotificationType.ERROR,
                 status: NotificationStatus.UNREAD,
-                title: 'Lettuce Planted',
-                message: 'Successfully planted 10 Lettuce plants in My First Rack',
-                metadata: { plantId: lettuce.id, plantName: 'Lettuce', quantity: 10 },
-            },
-            {
-                userId: user.id,
-                rackId: rack.id,
-                type: NotificationType.INFO,
-                status: NotificationStatus.READ,
-                title: 'Watering Triggered',
-                message: 'Watering automation triggered — Moisture was below 60%',
-                metadata: { ruleName: 'Lettuce - Low Moisture Alert' },
-            },
-            {
-                userId: user.id,
-                rackId: rack.id,
-                type: NotificationType.ALERT,
-                status: NotificationStatus.UNREAD,
-                title: 'Light Level Low',
-                message: 'Grow lights turned on automatically — Light was below 16,000 lux',
-                metadata: { ruleName: 'Lettuce - Low Light' },
-            },
-            {
-                userId: user.id,
-                rackId: rack.id,
-                type: NotificationType.SUCCESS,
-                status: NotificationStatus.READ,
-                title: 'Harvest Recorded',
-                message: 'Lettuce successfully harvested from My First Rack',
+                title: 'Rack Disconnected',
+                message: 'Balcony Rack has been disconnected.',
                 metadata: {
-                    plantId: lettuce.id,
-                    plantName: 'Lettuce',
-                    harvestCount: 1,
-                    quantity: 10,
-                },
-            },
-            {
-                userId: user.id,
-                rackId: rack2.id,
-                type: NotificationType.INFO,
-                status: NotificationStatus.UNREAD,
-                title: 'Plant Changed',
-                message: 'Kitchen Herb Rack switched from Oregano to Basil',
-                metadata: {
-                    previousPlantId: oregano.id,
-                    newPlantId: basil.id,
-                    newPlantName: 'Basil',
+                    screen: `/(tabs)/(racks)/${rack3.id}`,
+                    rackId: rack3.id,
+                    rackName: rack3.name,
+                    macAddress: rack3.macAddress,
                 },
             },
             {
                 userId: user.id,
                 rackId: rack3.id,
-                type: NotificationType.INFO,
-                status: NotificationStatus.UNREAD,
-                title: 'Rack Registered',
-                message: 'Balcony Rack has been registered and is ready for planting',
-                metadata: { rackId: rack3.id, rackName: rack3.name, macAddress: rack3.macAddress },
+                type: NotificationType.ERROR,
+                status: NotificationStatus.READ,
+                title: 'Sensor Failure',
+                message: 'Sensor failure detected in Balcony Rack.',
+                metadata: {
+                    screen: `/(tabs)/(racks)/${rack3.id}`,
+                    rackId: rack3.id,
+                    rackName: rack3.name,
+                    macAddress: rack3.macAddress,
+                },
             },
         ],
     });

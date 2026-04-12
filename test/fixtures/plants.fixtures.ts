@@ -28,6 +28,8 @@ export const mockPlant = {
     name: 'Lettuce',
     category: PlantCategory.LEAFY_GREENS,
     recommendedSoil: SoilType.LOAMY,
+    maxTemperature: 25,
+    maxLightLevel: 20000,
     description: 'A crispy leafy green perfect for salads.',
     isActive: true,
     createdAt: new Date('2026-01-15T08:00:00.000Z'),

@@ -1,14 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import {
-    IsOptional,
-    IsString,
-    IsObject,
-    ValidateNested,
-    IsNumber,
-    Min,
-    IsBoolean,
-} from 'class-validator';
+import { IsOptional, IsString, IsObject, ValidateNested, IsBoolean } from 'class-validator';
 import { RuleActionsDto } from './rule-actions.dto';
 import { RuleConditionsDto } from './rule-conditions.dto';
 
@@ -50,16 +42,6 @@ export class UpdateAutomationRuleDto {
     @ValidateNested()
     @Type(() => RuleActionsDto)
     actions?: RuleActionsDto;
-
-    @ApiPropertyOptional({
-        description: 'Cooldown period in minutes',
-        example: 30,
-        minimum: 0,
-    })
-    @IsOptional()
-    @IsNumber()
-    @Min(0)
-    cooldownMinutes?: number;
 
     @ApiPropertyOptional({
         description: 'Enable or disable the rule',

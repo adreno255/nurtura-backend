@@ -7,11 +7,13 @@
 import {
     type CreateAutomationRuleDto,
     type UpdateAutomationRuleDto,
+    type WateringActionDto,
+    type GrowLightActionDto,
+    type SensorActionDto,
+    type RuleActionsDto,
+    type AutomatedEventDto,
 } from '../../src/automation/dto';
-import {
-    type RuleConditions,
-    type RuleActions,
-} from '../../src/automation/interfaces/automation.interface';
+import { type RuleConditions } from '../../src/automation/interfaces/automation.interface';
 
 /**
  * Common test IDs
@@ -91,41 +93,62 @@ export const rangeCondition: RuleConditions = {
 };
 
 /**
- * Rule actions
+ * Individual action DTOs
  */
-export const wateringStartAction: RuleActions = {
-    watering: {
-        action: 'start',
-        duration: 5000,
-    },
+export const wateringStartActionDto: WateringActionDto = {
+    action: 'watering_start',
 };
 
-export const wateringStopAction: RuleActions = {
-    watering: {
-        action: 'stop',
-    },
+export const wateringStopActionDto: WateringActionDto = {
+    action: 'watering_stop',
 };
 
-export const growLightOnAction: RuleActions = {
-    growLight: {
-        action: 'on',
-    },
+export const growLightOnActionDto: GrowLightActionDto = {
+    action: 'light_on',
 };
 
-export const growLightOffAction: RuleActions = {
-    growLight: {
-        action: 'off',
-    },
+export const growLightOffActionDto: GrowLightActionDto = {
+    action: 'light_off',
 };
 
-export const multipleActions: RuleActions = {
-    watering: {
-        action: 'start',
-        duration: 5000,
-    },
-    growLight: {
-        action: 'on',
-    },
+export const sensorStartActionDto: SensorActionDto = {
+    action: 'sensor_start',
+};
+
+export const sensorStopActionDto: SensorActionDto = {
+    action: 'sensor_stop',
+};
+
+/**
+ * Rule actions (composite DTOs)
+ */
+export const wateringStartAction: RuleActionsDto = {
+    watering: wateringStartActionDto,
+};
+
+export const wateringStopAction: RuleActionsDto = {
+    watering: wateringStopActionDto,
+};
+
+export const growLightOnAction: RuleActionsDto = {
+    growLight: growLightOnActionDto,
+};
+
+export const growLightOffAction: RuleActionsDto = {
+    growLight: growLightOffActionDto,
+};
+
+export const sensorStartAction: RuleActionsDto = {
+    // Only sensor action, no other actions
+};
+
+export const sensorStopAction: RuleActionsDto = {
+    // Only sensor action, no other actions
+};
+
+export const multipleActions: RuleActionsDto = {
+    watering: wateringStartActionDto,
+    growLight: growLightOnActionDto,
 };
 
 /**
@@ -138,7 +161,6 @@ export const mockAutomationRule = {
     description: 'Automatically waters plants when soil moisture drops below 30%',
     conditions: moistureLessThanCondition,
     actions: wateringStartAction,
-    cooldownMinutes: 30,
     isEnabled: true,
     lastTriggeredAt: null,
     triggerCount: 0,
@@ -149,14 +171,12 @@ export const mockAutomationRule = {
 export const mockAutomationRuleWithCooldown = {
     ...mockAutomationRule,
     lastTriggeredAt: new Date(Date.now() - 10 * 60 * 1000), // 10 minutes ago
-    cooldownMinutes: 30,
     triggerCount: 1,
 };
 
 export const mockAutomationRuleExpiredCooldown = {
     ...mockAutomationRule,
     lastTriggeredAt: new Date(Date.now() - 35 * 60 * 1000), // 35 minutes ago
-    cooldownMinutes: 30,
     triggerCount: 1,
 };
 
@@ -193,7 +213,6 @@ export const validCreateAutomationRuleDto: CreateAutomationRuleDto = {
     description: 'Automatically waters plants when soil moisture drops below 30%',
     conditions: moistureLessThanCondition,
     actions: wateringStartAction,
-    cooldownMinutes: 30,
 };
 
 export const minimalCreateAutomationRuleDto: CreateAutomationRuleDto = {
@@ -209,7 +228,6 @@ export const lightingCreateRuleDto: CreateAutomationRuleDto = {
     description: 'Turns on lights when dark',
     conditions: lightLevelLessThanCondition,
     actions: growLightOnAction,
-    cooldownMinutes: 60,
 };
 
 export const multiConditionRuleDto: CreateAutomationRuleDto = {
@@ -218,7 +236,6 @@ export const multiConditionRuleDto: CreateAutomationRuleDto = {
     description: 'Multiple conditions and actions',
     conditions: multipleConditions,
     actions: multipleActions,
-    cooldownMinutes: 15,
 };
 
 export const validUpdateAutomationRuleDto: UpdateAutomationRuleDto = {
@@ -233,10 +250,6 @@ export const updateConditionsDto: UpdateAutomationRuleDto = {
 
 export const updateActionsDto: UpdateAutomationRuleDto = {
     actions: growLightOffAction,
-};
-
-export const updateCooldownDto: UpdateAutomationRuleDto = {
-    cooldownMinutes: 60,
 };
 
 export const disableRuleDto: UpdateAutomationRuleDto = {
@@ -305,7 +318,7 @@ export const invalidWateringActionDto: CreateAutomationRuleDto = {
     name: 'Invalid watering action',
     conditions: moistureLessThanCondition,
     actions: {
-        watering: { action: 'invalid' as unknown as 'start' | 'stop' },
+        watering: { action: 'invalid' as unknown as 'watering_start' | 'watering_stop' },
     },
 };
 
@@ -315,8 +328,7 @@ export const invalidWateringDurationDto: CreateAutomationRuleDto = {
     conditions: moistureLessThanCondition,
     actions: {
         watering: {
-            action: 'start',
-            duration: 100000, // Invalid: > 60000
+            action: 'watering_start',
         },
     },
 };
@@ -326,7 +338,7 @@ export const invalidGrowLightActionDto: CreateAutomationRuleDto = {
     name: 'Invalid grow light action',
     conditions: lightLevelLessThanCondition,
     actions: {
-        growLight: { action: 'toggle' as unknown as 'on' | 'off' },
+        growLight: { action: 'toggle' as unknown as 'light_on' | 'light_off' },
     },
 };
 
@@ -365,25 +377,57 @@ export const mockDisabledRules = [mockDisabledAutomationRule];
 /**
  * Automation event data
  */
-export const mockAutomationEvent = {
-    rackId: testAutomationIds.rackId,
-    ruleName: mockAutomationRule.name,
-    executedActions: ['watering:start for 5000ms'],
-    timestamp: new Date('2025-02-01T10:00:00.000Z'),
+export const mockAutomationEvent: AutomatedEventDto = {
+    eventType: 'WATERING_START',
+    activity: {
+        id: 'activity-120',
+        rackId: testAutomationIds.rackId,
+        eventType: 'WATERING_START',
+        timestamp: '2025-02-01T10:00:00.000Z',
+    },
 };
 
-export const mockLightingAutomationEvent = {
-    rackId: testAutomationIds.rackId,
-    ruleName: mockLightingAutomationRule.name,
-    executedActions: ['growLight:on'],
-    timestamp: new Date('2025-02-01T10:00:00.000Z'),
+export const mockLightingAutomationEvent: AutomatedEventDto = {
+    eventType: 'LIGHT_ON',
+    activity: {
+        id: 'activity-121',
+        rackId: testAutomationIds.rackId,
+        eventType: 'LIGHT_ON',
+        timestamp: '2025-02-01T10:00:00.000Z',
+    },
 };
 
-export const mockMultipleActionsEvent = {
-    rackId: testAutomationIds.rackId,
-    ruleName: 'Multi-action rule',
-    executedActions: ['watering:start for 5000ms', 'growLight:on'],
-    timestamp: new Date('2025-02-01T10:00:00.000Z'),
+export const mockMultipleActionsEvent: AutomatedEventDto = {
+    eventType: 'WATERING_START',
+    activity: {
+        id: 'activity-122',
+        rackId: testAutomationIds.rackId,
+        eventType: 'WATERING_START',
+        timestamp: '2025-02-01T10:00:00.000Z',
+    },
+};
+
+/**
+ * Automated event DTOs
+ */
+export const mockWateringAutomatedEventDto: AutomatedEventDto = {
+    eventType: 'WATERING_START',
+    activity: {
+        id: 'activity-123',
+        rackId: testAutomationIds.rackId,
+        eventType: 'WATERING_START',
+        timestamp: '2025-02-05T14:45:00.000Z',
+    },
+};
+
+export const mockLightingAutomatedEventDto: AutomatedEventDto = {
+    eventType: 'LIGHT_ON',
+    activity: {
+        id: 'activity-124',
+        rackId: testAutomationIds.rackId,
+        eventType: 'LIGHT_ON',
+        timestamp: '2025-02-05T14:46:00.000Z',
+    },
 };
 
 /**

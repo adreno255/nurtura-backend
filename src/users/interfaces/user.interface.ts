@@ -7,6 +7,9 @@ export interface User {
     lastName: string;
     suffix: string | null;
     address: string;
+    expoPushToken: string | null;
+    completedPages: string[];
+    hasCompletedOnboarding: boolean;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -24,6 +27,9 @@ export interface UserInfo {
     street: string;
     barangay: string;
     city: string;
+    expoPushToken: string | null;
+    completedPages: string[];
+    hasCompletedOnboarding: boolean;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -46,4 +52,9 @@ export interface UserUpdatedResponse {
 export interface UserInfoResponse {
     message: string;
     userInfo: UserInfo;
+}
+
+export interface UserOnboardingStatusResponse {
+    completedPages: string[];
+    hasCompletedOnboarding: boolean;
 }

@@ -96,7 +96,6 @@ describe('WebsocketService', () => {
         it('should allow server to be accessed after setting', () => {
             service.setServer(mockNamespace);
 
-            // Should not throw when broadcasting
             expect(() => service.broadcastSensorData('rack-123', mockSensorReading)).not.toThrow();
         });
     });
@@ -468,6 +467,7 @@ describe('WebsocketService', () => {
             it('should join client to rack room', async () => {
                 await service.joinRoom(mockSocket, 'rack-123');
 
+                // jest.spyOn(mockSocket, 'join') is already a jest.fn() from createMockAuthenticatedSocket
                 expect(jest.spyOn(mockSocket, 'join')).toHaveBeenCalledWith('rack-rack-123');
             });
 
@@ -482,13 +482,10 @@ describe('WebsocketService', () => {
         });
 
         describe('leaveRoom', () => {
-            beforeEach(async () => {
-                await service.joinRoom(mockSocket, 'rack-123');
-            });
-
             it('should remove client from rack room', async () => {
                 await service.leaveRoom(mockSocket, 'rack-123');
 
+                // jest.spyOn(mockSocket, 'leave') is already a jest.fn() from createMockAuthenticatedSocket
                 expect(jest.spyOn(mockSocket, 'leave')).toHaveBeenCalledWith('rack-rack-123');
             });
 
@@ -656,10 +653,6 @@ describe('WebsocketService', () => {
         });
 
         describe('unsubscribeFromRack', () => {
-            beforeEach(async () => {
-                await service.joinRoom(mockSocket, 'rack-123');
-            });
-
             it('should leave rack room', async () => {
                 await service.unsubscribeFromRack(mockSocket, 'rack-123');
 
@@ -730,7 +723,7 @@ describe('WebsocketService', () => {
             });
 
             it('should handle broadcast error gracefully', () => {
-                mockNamespace.to.mockImplementationOnce(() => {
+                jest.spyOn(mockNamespace, 'to').mockImplementationOnce(() => {
                     throw new Error('Broadcast failed');
                 });
 
@@ -786,7 +779,7 @@ describe('WebsocketService', () => {
             });
 
             it('should handle broadcast error gracefully', () => {
-                mockNamespace.to.mockImplementationOnce(() => {
+                jest.spyOn(mockNamespace, 'to').mockImplementationOnce(() => {
                     throw new Error('Broadcast failed');
                 });
 
@@ -818,7 +811,7 @@ describe('WebsocketService', () => {
             });
 
             it('should handle broadcast error gracefully', () => {
-                mockNamespace.to.mockImplementationOnce(() => {
+                jest.spyOn(mockNamespace, 'to').mockImplementationOnce(() => {
                     throw new Error('Broadcast failed');
                 });
 
@@ -835,10 +828,9 @@ describe('WebsocketService', () => {
                 service.broadcastAutomationEvent('rack-123', mockAutomationEvent);
 
                 expect(jest.spyOn(mockNamespace, 'to')).toHaveBeenCalledWith('rack-rack-123');
+                // Service emits { event } only — no rackId or timestamp in this payload
                 expect(jest.spyOn(mockNamespace, 'emit')).toHaveBeenCalledWith('automationEvent', {
-                    rackId: 'rack-123',
                     event: mockAutomationEvent,
-                    timestamp: expect.any(String) as string,
                 });
             });
 
@@ -852,7 +844,7 @@ describe('WebsocketService', () => {
             });
 
             it('should handle broadcast error gracefully', () => {
-                mockNamespace.to.mockImplementationOnce(() => {
+                jest.spyOn(mockNamespace, 'to').mockImplementationOnce(() => {
                     throw new Error('Broadcast failed');
                 });
 
@@ -936,6 +928,151 @@ describe('WebsocketService', () => {
             service.addClient(mockSocket);
 
             expect(service.getTotalConnections()).toBe(1);
+        });
+    });
+
+    describe('user notification rooms', () => {
+        beforeEach(() => {
+            service.setServer(mockNamespace);
+            mockSocket.data.user = {
+                dbId: 'user-123',
+                firebaseUid: 'firebase-uid-123',
+                email: 'user@example.com',
+            };
+        });
+
+        describe('joinUserRoom', () => {
+            it('should join socket to user notification room', async () => {
+                await service.joinUserRoom(mockSocket);
+
+                expect(jest.spyOn(mockSocket, 'join')).toHaveBeenCalledWith('user-user-123');
+            });
+
+            it('should derive room name from socket user dbId', async () => {
+                mockSocket.data.user.dbId = 'different-user-id';
+
+                await service.joinUserRoom(mockSocket);
+
+                expect(jest.spyOn(mockSocket, 'join')).toHaveBeenCalledWith(
+                    'user-different-user-id',
+                );
+            });
+
+            it('should log room join', async () => {
+                await service.joinUserRoom(mockSocket);
+
+                expect(mockLoggerService.log).toHaveBeenCalledWith(
+                    `Client ${mockSocket.id} joined user notification room: user-user-123`,
+                    'WebsocketService',
+                );
+            });
+
+            it('should resolve without errors', async () => {
+                await expect(service.joinUserRoom(mockSocket)).resolves.not.toThrow();
+            });
+        });
+
+        describe('leaveUserRoom', () => {
+            it('should leave socket from user notification room', async () => {
+                await service.leaveUserRoom(mockSocket);
+
+                expect(jest.spyOn(mockSocket, 'leave')).toHaveBeenCalledWith('user-user-123');
+            });
+
+            it('should derive room name from socket user dbId', async () => {
+                mockSocket.data.user.dbId = 'different-user-id';
+
+                await service.leaveUserRoom(mockSocket);
+
+                expect(jest.spyOn(mockSocket, 'leave')).toHaveBeenCalledWith(
+                    'user-different-user-id',
+                );
+            });
+
+            it('should log room leave', async () => {
+                await service.leaveUserRoom(mockSocket);
+
+                expect(mockLoggerService.log).toHaveBeenCalledWith(
+                    `Client ${mockSocket.id} left user notification room: user-user-123`,
+                    'WebsocketService',
+                );
+            });
+
+            it('should resolve without errors', async () => {
+                await expect(service.leaveUserRoom(mockSocket)).resolves.not.toThrow();
+            });
+        });
+
+        describe('broadcastUserNotification', () => {
+            beforeEach(() => {
+                mockNamespace.adapter.rooms.set('user-user-123', new Set(['client-1']));
+            });
+
+            it('should broadcast to correct user room', () => {
+                service.broadcastUserNotification('user-123', mockNotification);
+
+                expect(jest.spyOn(mockNamespace, 'to')).toHaveBeenCalledWith('user-user-123');
+            });
+
+            it('should emit userNotification event with correct payload', () => {
+                service.broadcastUserNotification('user-123', mockNotification);
+
+                expect(jest.spyOn(mockNamespace, 'emit')).toHaveBeenCalledWith('userNotification', {
+                    notification: mockNotification,
+                });
+            });
+
+            it('should log the broadcast', () => {
+                service.broadcastUserNotification('user-123', mockNotification);
+
+                expect(mockLoggerService.log).toHaveBeenCalledWith(
+                    'Broadcasting new notification to user room: user-user-123',
+                    'WebsocketService',
+                );
+            });
+
+            it('should handle broadcast error gracefully', () => {
+                jest.spyOn(mockNamespace, 'to').mockImplementationOnce(() => {
+                    throw new Error('Broadcast failed');
+                });
+
+                expect(() =>
+                    service.broadcastUserNotification('user-123', mockNotification),
+                ).not.toThrow();
+
+                expect(mockLoggerService.error).toHaveBeenCalledWith(
+                    'Failed to broadcast notification to user user-123',
+                    'Broadcast failed',
+                    'WebsocketService',
+                );
+            });
+
+            it('should log an error if server not initialized', () => {
+                const uninitializedService = new WebsocketService(
+                    mockDatabaseService as unknown as DatabaseService,
+                    mockFirebaseService as unknown as FirebaseService,
+                    mockSensorsService as unknown as SensorsService,
+                    mockRacksService as unknown as RacksService,
+                    mockLoggerService as unknown as MyLoggerService,
+                );
+
+                uninitializedService.broadcastUserNotification('user-123', mockNotification);
+
+                expect(mockLoggerService.error).toHaveBeenCalledWith(
+                    'Failed to broadcast notification to user user-123',
+                    'WebSocket server not initialized yet',
+                    'WebsocketService',
+                );
+            });
+
+            it('should broadcast different notifications to different users', () => {
+                service.broadcastUserNotification('user-123', mockNotification);
+                service.broadcastUserNotification('user-456', mockNotification);
+
+                expect(jest.spyOn(mockNamespace, 'to')).toHaveBeenCalledWith('user-user-123');
+                expect(jest.spyOn(mockNamespace, 'to')).toHaveBeenCalledWith('user-user-456');
+                expect(jest.spyOn(mockNamespace, 'emit')).toHaveBeenCalledTimes(2);
+            });
         });
     });
 });

@@ -29,3 +29,6 @@ export * from './plants.fixtures';
 
 //Automation fixtures
 export * from './automation.fixtures';
+
+// Notifications fixtures
+export * from './notifications.fixtures';

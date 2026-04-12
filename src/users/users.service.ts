@@ -14,6 +14,7 @@ import {
     UserInfoResponse,
     UserInfo,
     UserUpdatedResponse,
+    UserOnboardingStatusResponse,
 } from './interfaces/user.interface';
 import { isFirebaseAuthError } from '../common/type-guards';
 import { EmailService } from '../email/email.service';
@@ -138,6 +139,9 @@ export class UsersService {
                 street: addressParts[1] || '',
                 barangay: addressParts[2] || '',
                 city: addressParts[3] || '',
+                expoPushToken: user.expoPushToken,
+                completedPages: user.completedPages,
+                hasCompletedOnboarding: user.hasCompletedOnboarding,
                 createdAt: user.createdAt,
                 updatedAt: user.updatedAt,
             };
@@ -189,6 +193,9 @@ export class UsersService {
                 street: addressParts[1] || '',
                 barangay: addressParts[2] || '',
                 city: addressParts[3] || '',
+                expoPushToken: user.expoPushToken,
+                completedPages: user.completedPages,
+                hasCompletedOnboarding: user.hasCompletedOnboarding,
                 createdAt: user.createdAt,
                 updatedAt: user.updatedAt,
             };
@@ -254,6 +261,9 @@ export class UsersService {
                     lastName: dto.lastName,
                     suffix: dto.suffix,
                     address,
+                    expoPushToken: dto.expoPushToken,
+                    completedPages: dto.completedPages,
+                    hasCompletedOnboarding: dto.hasCompletedOnboarding,
                 },
             });
 
@@ -272,6 +282,9 @@ export class UsersService {
                 street: addressParts[1] || '',
                 barangay: addressParts[2] || '',
                 city: addressParts[3] || '',
+                expoPushToken: updatedUser.expoPushToken,
+                completedPages: updatedUser.completedPages,
+                hasCompletedOnboarding: updatedUser.hasCompletedOnboarding,
                 createdAt: updatedUser.createdAt,
                 updatedAt: updatedUser.updatedAt,
             };
@@ -309,5 +322,34 @@ export class UsersService {
             .split(',')
             .map((part) => part.trim())
             .filter((part) => part !== '');
+    }
+
+    async getOnboardingState(userId: string): Promise<UserOnboardingStatusResponse> {
+        try {
+            const user = await this.databaseService.user.findUnique({
+                where: { id: userId },
+                select: { completedPages: true, hasCompletedOnboarding: true },
+            });
+
+            if (!user) {
+                throw new NotFoundException('User not found');
+            }
+
+            return {
+                completedPages: user.completedPages,
+                hasCompletedOnboarding: user.hasCompletedOnboarding,
+            };
+        } catch (error) {
+            if (error instanceof NotFoundException) {
+                throw error;
+            }
+
+            this.logger.error(
+                `Error fetching onboarding state for user ${userId}`,
+                error instanceof Error ? error.message : String(error),
+                'UsersService',
+            );
+            throw new InternalServerErrorException('Failed to fetch onboarding state');
+        }
     }
 }

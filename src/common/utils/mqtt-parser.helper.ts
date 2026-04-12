@@ -1,6 +1,10 @@
 import { plainToInstance } from 'class-transformer';
 import { validate, type ValidationError } from 'class-validator';
 import { BadRequestException } from '@nestjs/common';
+import { NotificationType, type Rack } from '../../generated/prisma';
+import { type CreateNotificationPayload } from '../../notifications/interfaces/notification.interface';
+import { type EventEmitter2 } from '@nestjs/event-emitter';
+import { SensorDataDto } from '../../sensors/dto/sensor-data.dto';
 
 /**
  * Helper class for parsing and validating MQTT messages
@@ -8,18 +12,23 @@ import { BadRequestException } from '@nestjs/common';
 export class MqttMessageParser {
     /**
      * Parse and validate MQTT message payload
+     * @param rack - Rack associated with the incoming message (used for error notifications)
      * @param payload - Raw message payload (string)
      * @param dtoClass - DTO class to validate against
      * @param deviceId - Device identifier (for error logging)
+     * @param eventEmitter - Event emitter instance for emitting notifications on validation errors
      * @returns Validated DTO instance or null if validation fails
      */
     static async parseAndValidate<T extends object>(
+        rack: Rack & { user: { id: string; email: string } },
         payload: string,
         dtoClass: new () => T,
         deviceId: string,
+        eventEmitter: EventEmitter2,
     ): Promise<T> {
         // Parse JSON
         let data: object;
+
         try {
             data = JSON.parse(payload) as object;
         } catch (error) {
@@ -38,6 +47,20 @@ export class MqttMessageParser {
             const errorMessages = errors
                 .map((error) => Object.values(error.constraints || {}).join(', '))
                 .join('; ');
+
+            if (dtoClass === SensorDataDto) {
+                eventEmitter.emit('createNotification', {
+                    userId: rack.user.id,
+                    rackId: rack.id,
+                    type: NotificationType.ERROR,
+                    title: `Environment Irregularity Detected`,
+                    message: errorMessages,
+                    metadata: {
+                        screen: `/(tabs)/(racks)/${rack.id}`,
+                        ...data,
+                    },
+                } satisfies CreateNotificationPayload);
+            }
 
             throw new BadRequestException(
                 `Validation failed for device ${deviceId}: ${errorMessages}`,

@@ -3,13 +3,33 @@ import {
     IsNumber,
     IsOptional,
     IsString,
-    IsEnum,
     IsObject,
     ValidateNested,
     IsDefined,
+    IsIn,
+    IsEnum,
 } from 'class-validator';
 
-// Define Enums for validation
+export enum ErrorCode {
+    SENSOR_FAILURE = 'SENSOR_FAILURE',
+    SENSOR_TIMEOUT = 'SENSOR_TIMEOUT',
+    SENSOR_NOT_FOUND = 'SENSOR_NOT_FOUND',
+    SENSOR_OUT_OF_RANGE = 'SENSOR_OUT_OF_RANGE',
+    PUMP_FAILURE = 'PUMP_FAILURE',
+    PUMP_TIMEOUT = 'PUMP_TIMEOUT',
+    PUMP_NO_WATER = 'PUMP_NO_WATER',
+    PUMP_FALSE_START = 'PUMP_FALSE_START',
+    LIGHT_FAILURE = 'LIGHT_FAILURE',
+    UNKNOWN_ERROR = 'UNKNOWN_ERROR',
+}
+
+export enum RecoveryCode {
+    SENSOR_RECOVERED = 'SENSOR_RECOVERED',
+    PUMP_RECOVERED = 'PUMP_RECOVERED',
+    LIGHT_RECOVERED = 'LIGHT_RECOVERED',
+    UNKNOWN_RECOVERY = 'UNKNOWN_RECOVERY',
+}
+
 export enum ErrorSeverity {
     LOW = 'LOW',
     MEDIUM = 'MEDIUM',
@@ -17,12 +37,17 @@ export enum ErrorSeverity {
     CRITICAL = 'CRITICAL',
 }
 
-export enum SensorType {
+export enum HardwareType {
     TEMPERATURE = 'TEMPERATURE',
     HUMIDITY = 'HUMIDITY',
     MOISTURE = 'MOISTURE',
     LIGHT = 'LIGHT',
+    GROW_LIGHT = 'GROW_LIGHT',
+    WATER_PUMP = 'WATER_PUMP',
 }
+
+// Combined valid values for runtime validation
+const AllDeviceCodes = [...Object.values(ErrorCode), ...Object.values(RecoveryCode)];
 
 class ErrorDetailsDto {
     @Expose({ name: 'ac' })
@@ -40,16 +65,11 @@ class ErrorDetailsDto {
     errorData?: any;
 }
 
-/**
- * DTO for device error messages
- * Topic: nurtura/rack/{macAddress}/errors
- */
-
 export class DeviceErrorDto {
     @Expose({ name: 'c' })
-    @IsString()
     @IsDefined()
-    code!: string;
+    @IsIn(AllDeviceCodes) // ← correctly validates against both enums
+    code!: ErrorCode | RecoveryCode;
 
     @Expose({ name: 'm' })
     @IsString()
@@ -62,13 +82,13 @@ export class DeviceErrorDto {
 
     @Expose({ name: 'tm' })
     @IsOptional()
-    @IsNumber()
-    timestamp?: number;
+    @IsString()
+    timestamp?: string;
 
-    @Expose({ name: 'st' })
+    @Expose({ name: 'ht' })
     @IsOptional()
-    @IsEnum(SensorType)
-    sensorType?: SensorType;
+    @IsEnum(HardwareType)
+    hardwareType?: HardwareType;
 
     @Expose({ name: 'd' })
     @IsOptional()

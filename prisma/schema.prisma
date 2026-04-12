@@ -44,7 +44,6 @@ enum ActivityEventType {
     // Plant events
     PLANT_ADDED
     PLANT_REMOVED
-    PLANT_CHANGED
     LEAVES_HARVESTED
     PLANT_HARVESTED
     SEEDS_HARVESTED
@@ -52,8 +51,8 @@ enum ActivityEventType {
     // Device control events
     LIGHT_ON
     LIGHT_OFF
-    WATERING_ON
-    WATERING_OFF
+    WATERING_START
+    WATERING_STOP
     
     // System events
     AUTOMATION_TRIGGERED
@@ -64,11 +63,9 @@ enum ActivityEventType {
 }
 
 enum NotificationType {
-    SYSTEM
-    ALERT
-    WARNING
     INFO
-    SUCCESS
+    ERROR
+    AUTOMATION
 
     @@map("notification_type")
 }
@@ -76,7 +73,6 @@ enum NotificationType {
 enum NotificationStatus {
     UNREAD
     READ
-    ARCHIVED
 
     @@map("notification_status")
 }
@@ -85,9 +81,18 @@ enum DeviceStatus {
     ONLINE
     OFFLINE
     ERROR
-    MAINTENANCE
 
     @@map("device_status")
+}
+
+enum WateringState {
+    RUNNING
+    STOPPED
+}
+
+enum LightState {
+    ON
+    OFF
 }
 
 
@@ -107,6 +112,13 @@ model User {
     lastName   String  @map("last_name") @db.VarChar(100)
     suffix     String? @db.VarChar(20)
     address    String  @db.VarChar(500)
+
+    // Push notifications
+    expoPushToken String? @map("expo_push_token") @db.VarChar(255)
+
+    // Onboarding state
+    completedPages String[] @default([]) @map("completed_pages")
+    hasCompletedOnboarding Boolean @default(false) @map("has_completed_onboarding")
 
     // Timestamps
     createdAt DateTime @default(now()) @map("created_at")
@@ -130,6 +142,10 @@ model Plant {
     category        PlantCategory? @map("category")
     recommendedSoil SoilType?  @map("recommended_soil")
     description     String?    @db.VarChar(1000)
+
+    // Environmental thresholds
+    maxTemperature Float? @map("ideal_temperature") // Celsius
+    maxLightLevel    Float? @map("max_light_level")   // Lux
 
     // Status
     isActive Boolean @default(true) @map("is_active")
@@ -171,6 +187,10 @@ model Rack {
     lastSeenAt     DateTime?    @map("last_seen_at")
     lastWateredAt  DateTime?    @map("last_watered_at")
     lastLightOnAt  DateTime?    @map("last_light_on_at")
+
+     // Actuator states
+    wateringState  WateringState  @default(STOPPED) @map("watering_state")
+    lightState     LightState     @default(OFF)      @map("light_state")
 
     // Timestamps
     createdAt DateTime @default(now()) @map("created_at")
@@ -290,7 +310,6 @@ model AutomationRule {
     actions    Json
     
     // Execution tracking
-    cooldownMinutes Int?        @map("cooldown_minutes")
     lastTriggeredAt DateTime?   @map("last_triggered_at")
     triggerCount    Int         @default(0) @map("trigger_count")
 

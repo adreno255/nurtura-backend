@@ -11,3 +11,11 @@ export class UnsubscribeFromRackDto {
     @IsNotEmpty()
     rackId!: string;
 }
+
+export class SubscribeToUserNotificationsDto {
+    // No payload needed — user identity comes from the authenticated socket
+}
+
+export class UnsubscribeFromUserNotificationsDto {
+    // No payload needed
+}

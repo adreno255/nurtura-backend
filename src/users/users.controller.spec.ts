@@ -622,4 +622,90 @@ describe('UsersController', () => {
             ).rejects.toThrow(NotFoundException);
         });
     });
+
+    describe('getOnboardingState', () => {
+        const currentUser: CurrentUserPayload = {
+            dbId: testUserIds.primary,
+            firebaseUid: testFirebaseUids.primary,
+            email: testEmails.valid,
+        };
+
+        it('should return onboarding state successfully', async () => {
+            const mockResponse = {
+                completedPages: ['profile', 'preferences'],
+                hasCompletedOnboarding: false,
+            };
+            mockUsersService.getOnboardingState.mockResolvedValue(mockResponse);
+
+            const result = await controller.getOnboardingState(currentUser);
+
+            expect(result).toEqual(mockResponse);
+        });
+
+        it('should call UsersService.getOnboardingState with correct parameter', async () => {
+            mockUsersService.getOnboardingState.mockResolvedValue({
+                completedPages: [],
+                hasCompletedOnboarding: false,
+            });
+
+            await controller.getOnboardingState(currentUser);
+
+            expect(mockUsersService.getOnboardingState).toHaveBeenCalledWith(currentUser.dbId);
+        });
+
+        it('should call UsersService.getOnboardingState once', async () => {
+            mockUsersService.getOnboardingState.mockResolvedValue({
+                completedPages: [],
+                hasCompletedOnboarding: false,
+            });
+
+            await controller.getOnboardingState(currentUser);
+
+            expect(mockUsersService.getOnboardingState).toHaveBeenCalledTimes(1);
+        });
+
+        it('should propagate NotFoundException from service', async () => {
+            mockUsersService.getOnboardingState.mockRejectedValue(
+                new NotFoundException('User not found'),
+            );
+
+            await expect(controller.getOnboardingState(currentUser)).rejects.toThrow(
+                NotFoundException,
+            );
+        });
+
+        it('should propagate InternalServerErrorException from service', async () => {
+            mockUsersService.getOnboardingState.mockRejectedValue(
+                new InternalServerErrorException('Failed to fetch onboarding state'),
+            );
+
+            await expect(controller.getOnboardingState(currentUser)).rejects.toThrow(
+                InternalServerErrorException,
+            );
+        });
+
+        it('should return response with completedPages array', async () => {
+            mockUsersService.getOnboardingState.mockResolvedValue({
+                completedPages: ['profile'],
+                hasCompletedOnboarding: false,
+            });
+
+            const result = await controller.getOnboardingState(currentUser);
+
+            expect(result).toHaveProperty('completedPages');
+            expect(Array.isArray(result.completedPages)).toBe(true);
+        });
+
+        it('should return response with hasCompletedOnboarding boolean', async () => {
+            mockUsersService.getOnboardingState.mockResolvedValue({
+                completedPages: [],
+                hasCompletedOnboarding: false,
+            });
+
+            const result = await controller.getOnboardingState(currentUser);
+
+            expect(result).toHaveProperty('hasCompletedOnboarding');
+            expect(typeof result.hasCompletedOnboarding).toBe('boolean');
+        });
+    });
 });
