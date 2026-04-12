@@ -40,7 +40,7 @@ import { SystemRulesModule } from './system-rules/system-rules.module';
             {
                 ttl: 60000,
                 limit: process.env.NODE_ENV === 'test' ? 200 : 120,
-                blockDuration: 60000, // If they hit 60/min, they are banned for 1 minute
+                blockDuration: 60000, // If they hit 120/min, they are banned for 1 minute
             },
         ]),
         EventEmitterModule.forRoot(),
