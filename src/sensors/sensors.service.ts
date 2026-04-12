@@ -372,6 +372,128 @@ export class SensorsService {
     }
 
     /**
+     * Cleans up old raw sensor readings that already have corresponding hourly aggregates.
+     *
+     * @param days - Delete raw readings older than this many days (default: 30)
+     * @returns Cleanup summary
+     */
+    async cleanupAggregatedRawReadings(days: number = 30) {
+        const normalizedDays = Number.isFinite(days) && days > 0 ? days : 30;
+        const cleanupBefore = new Date(Date.now() - normalizedDays * 24 * 60 * 60 * 1000);
+
+        try {
+            const candidates = await this.databaseService.sensorReading.findMany({
+                where: {
+                    timestamp: {
+                        lt: cleanupBefore,
+                    },
+                },
+                select: {
+                    id: true,
+                    rackId: true,
+                    timestamp: true,
+                },
+                orderBy: { timestamp: 'asc' },
+            });
+
+            if (candidates.length === 0) {
+                this.logger.log(
+                    `Cleanup skipped: no raw sensor readings older than ${cleanupBefore.toISOString()} (${normalizedDays} day(s))`,
+                    'SensorsService',
+                );
+
+                return {
+                    days: normalizedDays,
+                    cleanupBefore,
+                    candidateReadings: 0,
+                    deletedReadings: 0,
+                    skippedReadings: 0,
+                    candidateBuckets: 0,
+                    matchedAggregatedBuckets: 0,
+                };
+            }
+
+            const candidateBucketKeys = new Set<string>();
+
+            for (const candidate of candidates) {
+                const hour = new Date(candidate.timestamp);
+                hour.setMinutes(0, 0, 0);
+                candidateBucketKeys.add(`${candidate.rackId}:${hour.toISOString()}`);
+            }
+
+            const availableAggregates = await this.databaseService.aggregatedSensorReading.findMany(
+                {
+                    where: {
+                        hour: {
+                            lt: cleanupBefore,
+                        },
+                    },
+                    select: {
+                        rackId: true,
+                        hour: true,
+                    },
+                },
+            );
+
+            const aggregateBucketKeys = new Set(
+                availableAggregates.map(
+                    (aggregate) => `${aggregate.rackId}:${aggregate.hour.toISOString()}`,
+                ),
+            );
+
+            const idsToDelete: string[] = [];
+            for (const candidate of candidates) {
+                const hour = new Date(candidate.timestamp);
+                hour.setMinutes(0, 0, 0);
+                const key = `${candidate.rackId}:${hour.toISOString()}`;
+
+                if (aggregateBucketKeys.has(key)) {
+                    idsToDelete.push(candidate.id);
+                }
+            }
+
+            let deletedCount = 0;
+            if (idsToDelete.length > 0) {
+                const deleteResult = await this.databaseService.sensorReading.deleteMany({
+                    where: {
+                        id: {
+                            in: idsToDelete,
+                        },
+                    },
+                });
+                deletedCount = deleteResult.count;
+            }
+
+            const matchedAggregatedBuckets = [...candidateBucketKeys].filter((bucketKey) =>
+                aggregateBucketKeys.has(bucketKey),
+            ).length;
+
+            this.logger.log(
+                `Cleanup summary: cleanupBefore=${cleanupBefore.toISOString()}, candidates=${candidates.length}, deleted=${deletedCount}, skipped=${candidates.length - deletedCount}, candidateBuckets=${candidateBucketKeys.size}, matchedAggregatedBuckets=${matchedAggregatedBuckets}`,
+                'SensorsService',
+            );
+
+            return {
+                days: normalizedDays,
+                cleanupBefore,
+                candidateReadings: candidates.length,
+                deletedReadings: deletedCount,
+                skippedReadings: candidates.length - deletedCount,
+                candidateBuckets: candidateBucketKeys.size,
+                matchedAggregatedBuckets,
+            };
+        } catch (error) {
+            this.logger.error(
+                'Failed to cleanup raw sensor readings after aggregation',
+                error instanceof Error ? error.message : String(error),
+                'SensorsService',
+            );
+
+            throw new InternalServerErrorException('Failed to cleanup raw sensor readings');
+        }
+    }
+
+    /**
      * Helper function to calculate statistics for a rack
      *
      * @param values - Array of sensor values

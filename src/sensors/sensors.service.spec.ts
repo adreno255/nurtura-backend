@@ -608,6 +608,87 @@ describe('SensorsService', () => {
         });
     });
 
+    describe('cleanupAggregatedRawReadings', () => {
+        it('should delete only raw readings that already have aggregated buckets', async () => {
+            const timestampA = new Date('2026-03-01T10:15:00.000Z');
+            const timestampB = new Date('2026-03-01T10:45:00.000Z');
+            const timestampC = new Date('2026-03-01T11:15:00.000Z');
+
+            mockDatabaseService.sensorReading.findMany.mockResolvedValue([
+                { id: 'raw-1', rackId: 'rack-1', timestamp: timestampA },
+                { id: 'raw-2', rackId: 'rack-1', timestamp: timestampB },
+                { id: 'raw-3', rackId: 'rack-2', timestamp: timestampC },
+            ]);
+
+            mockDatabaseService.aggregatedSensorReading.findMany.mockResolvedValue([
+                { rackId: 'rack-1', hour: new Date('2026-03-01T10:00:00.000Z') },
+            ]);
+
+            mockDatabaseService.sensorReading.deleteMany.mockResolvedValue({ count: 2 });
+
+            const result = await service.cleanupAggregatedRawReadings(30);
+
+            expect(mockDatabaseService.sensorReading.deleteMany).toHaveBeenCalledWith({
+                where: {
+                    id: {
+                        in: ['raw-1', 'raw-2'],
+                    },
+                },
+            });
+
+            expect(result).toEqual(
+                expect.objectContaining({
+                    days: 30,
+                    candidateReadings: 3,
+                    deletedReadings: 2,
+                    skippedReadings: 1,
+                    candidateBuckets: 2,
+                    matchedAggregatedBuckets: 1,
+                }),
+            );
+        });
+
+        it('should return zero cleanup summary when no candidates are found', async () => {
+            mockDatabaseService.sensorReading.findMany.mockResolvedValue([]);
+
+            const result = await service.cleanupAggregatedRawReadings();
+
+            expect(mockDatabaseService.aggregatedSensorReading.findMany).not.toHaveBeenCalled();
+            expect(mockDatabaseService.sensorReading.deleteMany).not.toHaveBeenCalled();
+            expect(result).toEqual(
+                expect.objectContaining({
+                    days: 30,
+                    candidateReadings: 0,
+                    deletedReadings: 0,
+                    skippedReadings: 0,
+                    candidateBuckets: 0,
+                    matchedAggregatedBuckets: 0,
+                }),
+            );
+        });
+
+        it('should fallback to 30 days when days is invalid', async () => {
+            mockDatabaseService.sensorReading.findMany.mockResolvedValue([]);
+
+            const result = await service.cleanupAggregatedRawReadings(0);
+
+            expect(result.days).toBe(30);
+        });
+
+        it('should throw InternalServerErrorException on cleanup failure', async () => {
+            mockDatabaseService.sensorReading.findMany.mockRejectedValue(
+                new Error('Database error'),
+            );
+
+            await expect(service.cleanupAggregatedRawReadings()).rejects.toThrow(
+                InternalServerErrorException,
+            );
+            await expect(service.cleanupAggregatedRawReadings()).rejects.toThrow(
+                'Failed to cleanup raw sensor readings',
+            );
+        });
+    });
+
     describe('processSensorData', () => {
         const rawMessage = JSON.stringify(mockSensorData);
 
