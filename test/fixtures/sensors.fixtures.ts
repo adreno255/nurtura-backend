@@ -209,3 +209,33 @@ export const highLightSensorData: SensorData = {
     moisture: 45.0,
     lightLevel: 1500, // High light
 };
+
+// ─────────────────────────────────────────────
+// SystemRulesService fixtures
+// ─────────────────────────────────────────────
+
+/** Safe baseline — satisfies no system rules. */
+export const safeSensorData: SensorData = {
+    temperature: 25,
+    humidity: 60,
+    moisture: 50,
+    lightLevel: 400,
+};
+
+/** Triggers P1: moisture critically below 20. */
+export const criticalMoistureSensorData: SensorData = {
+    ...safeSensorData,
+    moisture: 15,
+};
+
+/** Triggers high-temperature notification (> 37°C). */
+export const systemHighTempSensorData: SensorData = {
+    ...safeSensorData,
+    temperature: 38,
+};
+
+/** Triggers P2 when plant maxLightLevel is set to 800 lux. */
+export const excessLightSensorData: SensorData = {
+    ...safeSensorData,
+    lightLevel: 900,
+};

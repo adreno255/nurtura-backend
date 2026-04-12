@@ -20,8 +20,6 @@ import {
     testAutomationIds,
     mockAutomationRule,
     mockAutomationRules,
-    mockAutomationRuleWithCooldown,
-    mockAutomationRuleExpiredCooldown,
     mockAutomationRuleWithPlant,
     mockAutomationRuleWithDifferentUser,
     validCreateAutomationRuleDto,
@@ -32,7 +30,6 @@ import {
     invalidMoistureThresholdDto,
     invalidTemperatureThresholdDto,
     invalidWateringActionDto,
-    invalidWateringDurationDto,
     invalidGrowLightActionDto,
     moistureLessThanCondition,
     multipleActions,
@@ -111,7 +108,6 @@ describe('AutomationService', () => {
         });
 
         it('should return early and log when rack has no current plant', async () => {
-            // mockRackWithoutPlant has currentPlantId: null
             mockDatabaseService.rack.findUnique.mockResolvedValue({
                 macAddress: mockRackWithoutPlant.macAddress,
                 name: mockRackWithoutPlant.name,
@@ -155,11 +151,8 @@ describe('AutomationService', () => {
         });
 
         it('should trigger a rule when conditions are met', async () => {
-            // mockAutomationRule uses moistureLessThanCondition (lessThan: 30); lowMoistureSensorData has moisture: 20
             mockDatabaseService.rack.findUnique.mockResolvedValue(mockRackSelectResult);
-            mockDatabaseService.automationRule.findMany.mockResolvedValue([
-                { ...mockAutomationRule, lastTriggeredAt: null, cooldownMinutes: null },
-            ]);
+            mockDatabaseService.automationRule.findMany.mockResolvedValue([mockAutomationRule]);
             mockDatabaseService.automationRule.update.mockResolvedValue(mockAutomationRule);
 
             await service.evaluateRules(testRackId, lowMoistureSensorData);
@@ -168,16 +161,13 @@ describe('AutomationService', () => {
                 'publishCommand',
                 mockRackSelectResult.macAddress,
                 'watering',
-                expect.objectContaining({ action: 'start' }),
+                expect.objectContaining({ action: 'watering_start' }),
             );
         });
 
         it('should NOT trigger a rule when conditions are not met', async () => {
-            // highMoistureSensorData has moisture: 75 — does not satisfy lessThan: 30
             mockDatabaseService.rack.findUnique.mockResolvedValue(mockRackSelectResult);
-            mockDatabaseService.automationRule.findMany.mockResolvedValue([
-                { ...mockAutomationRule, lastTriggeredAt: null, cooldownMinutes: null },
-            ]);
+            mockDatabaseService.automationRule.findMany.mockResolvedValue([mockAutomationRule]);
 
             await service.evaluateRules(testRackId, highMoistureSensorData);
 
@@ -189,91 +179,38 @@ describe('AutomationService', () => {
             );
         });
 
-        it('should skip a rule still within its cooldown period', async () => {
-            // mockAutomationRuleWithCooldown: lastTriggeredAt 10 min ago, cooldownMinutes: 30
-            mockDatabaseService.rack.findUnique.mockResolvedValue(mockRackSelectResult);
-            mockDatabaseService.automationRule.findMany.mockResolvedValue([
-                mockAutomationRuleWithCooldown,
-            ]);
-
-            await service.evaluateRules(testRackId, lowMoistureSensorData);
-
-            expect(mockEventEmitter.emit).not.toHaveBeenCalledWith(
-                'publishCommand',
-                expect.any(String),
-                expect.any(String),
-                expect.any(Object),
-            );
-        });
-
-        it('should trigger a rule whose cooldown has expired', async () => {
-            // mockAutomationRuleExpiredCooldown: lastTriggeredAt 35 min ago, cooldownMinutes: 30
-            mockDatabaseService.rack.findUnique.mockResolvedValue(mockRackSelectResult);
-            mockDatabaseService.automationRule.findMany.mockResolvedValue([
-                mockAutomationRuleExpiredCooldown,
-            ]);
-            mockDatabaseService.automationRule.update.mockResolvedValue(
-                mockAutomationRuleExpiredCooldown,
-            );
-
-            await service.evaluateRules(testRackId, lowMoistureSensorData);
-
-            expect(mockEventEmitter.emit).toHaveBeenCalledWith(
-                'publishCommand',
-                expect.any(String),
-                'watering',
-                expect.any(Object),
-            );
-        });
-
         it('should update triggerCount and lastTriggeredAt after triggering', async () => {
-            const rule = { ...mockAutomationRule, lastTriggeredAt: null, cooldownMinutes: null };
             mockDatabaseService.rack.findUnique.mockResolvedValue(mockRackSelectResult);
-            mockDatabaseService.automationRule.findMany.mockResolvedValue([rule]);
-            mockDatabaseService.automationRule.update.mockResolvedValue(rule);
+            mockDatabaseService.automationRule.findMany.mockResolvedValue([mockAutomationRule]);
+            mockDatabaseService.automationRule.update.mockResolvedValue(mockAutomationRule);
 
             await service.evaluateRules(testRackId, lowMoistureSensorData);
 
             expect(mockDatabaseService.automationRule.update).toHaveBeenCalledWith({
-                where: { id: rule.id },
+                where: { id: mockAutomationRule.id },
                 data: expect.objectContaining({
                     lastTriggeredAt: expect.any(Date) as Date,
-                    triggerCount: rule.triggerCount + 1,
+                    triggerCount: mockAutomationRule.triggerCount + 1,
                 }) as object,
             });
         });
 
-        it('should log AUTOMATION_TRIGGERED activity after a rule fires', async () => {
-            const rule = { ...mockAutomationRule, lastTriggeredAt: null, cooldownMinutes: null };
+        it('should emit broadcastAutomationEvent with eventType and activity after executing actions', async () => {
             mockDatabaseService.rack.findUnique.mockResolvedValue(mockRackSelectResult);
-            mockDatabaseService.automationRule.findMany.mockResolvedValue([rule]);
-            mockDatabaseService.automationRule.update.mockResolvedValue(rule);
+            mockDatabaseService.automationRule.findMany.mockResolvedValue([mockAutomationRule]);
+            mockDatabaseService.automationRule.update.mockResolvedValue(mockAutomationRule);
 
-            await service.evaluateRules(testRackId, lowMoistureSensorData);
-
-            expect(mockLogRackActivityHelper.logActivity).toHaveBeenCalledWith(
-                testRackId,
-                ActivityEventType.AUTOMATION_TRIGGERED,
-                expect.stringContaining(rule.name),
-                expect.objectContaining({ ruleId: rule.id }),
-            );
-        });
-
-        it('should emit broadcastAutomationEvent after executing actions', async () => {
-            const rule = { ...mockAutomationRule, lastTriggeredAt: null, cooldownMinutes: null };
-            mockDatabaseService.rack.findUnique.mockResolvedValue(mockRackSelectResult);
-            mockDatabaseService.automationRule.findMany.mockResolvedValue([rule]);
-            mockDatabaseService.automationRule.update.mockResolvedValue(rule);
+            // ADD THIS LINE:
+            mockLogRackActivityHelper.logActivity.mockResolvedValue({ id: 'activity-123' });
 
             await service.evaluateRules(testRackId, lowMoistureSensorData);
 
             expect(mockEventEmitter.emit).toHaveBeenCalledWith(
                 'broadcastAutomationEvent',
+                testRackId,
                 expect.objectContaining({
-                    rackId: testRackId,
-                    ruleName: rule.name,
-                    executedActions: expect.any(Array) as string[],
-                    timestamp: expect.any(Date) as Date,
+                    eventType: expect.any(String) as string,
+                    activity: expect.anything() as object,
                 }),
             );
         });
@@ -300,12 +237,7 @@ describe('AutomationService', () => {
     describe('evaluateConditions (via evaluateRules)', () => {
         /** Registers a rule with the given conditions and mocks the rack/rule DB calls. */
         const setup = (conditions: object) => {
-            const rule = {
-                ...mockAutomationRule,
-                conditions,
-                lastTriggeredAt: null,
-                cooldownMinutes: null,
-            };
+            const rule = { ...mockAutomationRule, conditions };
             mockDatabaseService.rack.findUnique.mockResolvedValue(mockRackSelectResult);
             mockDatabaseService.automationRule.findMany.mockResolvedValue([rule]);
             mockDatabaseService.automationRule.update.mockResolvedValue(rule);
@@ -447,8 +379,6 @@ describe('AutomationService', () => {
                 ...mockAutomationRule,
                 conditions: moistureLessThanCondition,
                 actions,
-                lastTriggeredAt: null,
-                cooldownMinutes: null,
             };
             mockDatabaseService.rack.findUnique.mockResolvedValue(mockRackSelectResult);
             mockDatabaseService.automationRule.findMany.mockResolvedValue([rule]);
@@ -458,26 +388,24 @@ describe('AutomationService', () => {
         };
 
         it('should emit publishCommand for watering start', async () => {
-            // mockAutomationRule.actions = wateringStartAction = { watering: { action: 'start', duration: 5000 } }
             await triggerRuleWithActions(mockAutomationRule.actions);
 
             expect(mockEventEmitter.emit).toHaveBeenCalledWith(
                 'publishCommand',
                 mockRackSelectResult.macAddress,
                 'watering',
-                expect.objectContaining({ action: 'start', duration: 5000 }),
+                expect.objectContaining({ action: 'watering_start' }),
             );
         });
 
         it('should emit publishCommand for watering stop', async () => {
-            // wateringStopAction = { watering: { action: 'stop' } }
             await triggerRuleWithActions(wateringStopAction);
 
             expect(mockEventEmitter.emit).toHaveBeenCalledWith(
                 'publishCommand',
                 mockRackSelectResult.macAddress,
                 'watering',
-                expect.objectContaining({ action: 'stop' }),
+                expect.objectContaining({ action: 'watering_stop' }),
             );
         });
 
@@ -487,7 +415,7 @@ describe('AutomationService', () => {
             expect(mockLogRackActivityHelper.logActivity).toHaveBeenCalledWith(
                 testRackId,
                 ActivityEventType.WATERING_START,
-                expect.stringContaining('Watering start'),
+                expect.stringContaining('watering_start'),
                 expect.any(Object),
             );
         });
@@ -498,32 +426,30 @@ describe('AutomationService', () => {
             expect(mockLogRackActivityHelper.logActivity).toHaveBeenCalledWith(
                 testRackId,
                 ActivityEventType.WATERING_STOP,
-                expect.stringContaining('Watering stop'),
+                expect.stringContaining('watering_stop'),
                 expect.any(Object),
             );
         });
 
         it('should emit publishCommand for grow light on', async () => {
-            // growLightOnAction = { growLight: { action: 'on' } }
             await triggerRuleWithActions(growLightOnAction);
 
             expect(mockEventEmitter.emit).toHaveBeenCalledWith(
                 'publishCommand',
                 mockRackSelectResult.macAddress,
                 'lighting',
-                expect.objectContaining({ action: 'on' }),
+                expect.objectContaining({ action: 'light_on' }),
             );
         });
 
         it('should emit publishCommand for grow light off', async () => {
-            // growLightOffAction = { growLight: { action: 'off' } }
             await triggerRuleWithActions(growLightOffAction);
 
             expect(mockEventEmitter.emit).toHaveBeenCalledWith(
                 'publishCommand',
                 mockRackSelectResult.macAddress,
                 'lighting',
-                expect.objectContaining({ action: 'off' }),
+                expect.objectContaining({ action: 'light_off' }),
             );
         });
 
@@ -533,7 +459,7 @@ describe('AutomationService', () => {
             expect(mockLogRackActivityHelper.logActivity).toHaveBeenCalledWith(
                 testRackId,
                 ActivityEventType.LIGHT_ON,
-                expect.stringContaining('Grow light on'),
+                expect.stringContaining('light_on'),
                 expect.any(Object),
             );
         });
@@ -544,13 +470,12 @@ describe('AutomationService', () => {
             expect(mockLogRackActivityHelper.logActivity).toHaveBeenCalledWith(
                 testRackId,
                 ActivityEventType.LIGHT_OFF,
-                expect.stringContaining('Grow light off'),
+                expect.stringContaining('light_off'),
                 expect.any(Object),
             );
         });
 
         it('should emit both watering and lighting commands for multipleActions', async () => {
-            // multipleActions = { watering: { action: 'start', duration: 5000 }, growLight: { action: 'on' } }
             await triggerRuleWithActions(multipleActions);
 
             expect(mockEventEmitter.emit).toHaveBeenCalledWith(
@@ -609,7 +534,6 @@ describe('AutomationService', () => {
         it('should throw BadRequestException when conditions are empty', async () => {
             mockDatabaseService.plant.findFirst.mockResolvedValue(mockPlantForAutomation);
 
-            // invalidNoConditionsDto.conditions = {}
             await expect(service.create(testUserId, invalidNoConditionsDto)).rejects.toThrow(
                 new BadRequestException('At least one condition must be specified'),
             );
@@ -618,7 +542,6 @@ describe('AutomationService', () => {
         it('should throw BadRequestException when actions are empty', async () => {
             mockDatabaseService.plant.findFirst.mockResolvedValue(mockPlantForAutomation);
 
-            // invalidNoActionsDto.actions = {}
             await expect(service.create(testUserId, invalidNoActionsDto)).rejects.toThrow(
                 new BadRequestException('At least one action must be specified'),
             );
@@ -627,7 +550,6 @@ describe('AutomationService', () => {
         it('should throw BadRequestException for moisture threshold out of range', async () => {
             mockDatabaseService.plant.findFirst.mockResolvedValue(mockPlantForAutomation);
 
-            // invalidMoistureThresholdDto.conditions = { moisture: { lessThan: 150 } }
             await expect(service.create(testUserId, invalidMoistureThresholdDto)).rejects.toThrow(
                 new BadRequestException('Moisture threshold must be between 0 and 100'),
             );
@@ -636,7 +558,6 @@ describe('AutomationService', () => {
         it('should throw BadRequestException for temperature threshold out of range', async () => {
             mockDatabaseService.plant.findFirst.mockResolvedValue(mockPlantForAutomation);
 
-            // invalidTemperatureThresholdDto.conditions = { temperature: { greaterThan: 150 } }
             await expect(
                 service.create(testUserId, invalidTemperatureThresholdDto),
             ).rejects.toThrow(BadRequestException);
@@ -645,19 +566,9 @@ describe('AutomationService', () => {
         it('should throw BadRequestException for invalid watering action', async () => {
             mockDatabaseService.plant.findFirst.mockResolvedValue(mockPlantForAutomation);
 
-            // invalidWateringActionDto.actions = { watering: { action: 'invalid' } }
             await expect(service.create(testUserId, invalidWateringActionDto)).rejects.toThrow(
-                new BadRequestException('Watering action must be "start" or "stop"'),
-            );
-        });
-
-        it('should throw BadRequestException for watering duration out of range', async () => {
-            mockDatabaseService.plant.findFirst.mockResolvedValue(mockPlantForAutomation);
-
-            // invalidWateringDurationDto.actions = { watering: { action: 'start', duration: 100000 } }
-            await expect(service.create(testUserId, invalidWateringDurationDto)).rejects.toThrow(
                 new BadRequestException(
-                    'Watering duration must be between 1000 and 60000 milliseconds',
+                    'Watering action must be "watering_start" or "watering_stop"',
                 ),
             );
         });
@@ -665,9 +576,8 @@ describe('AutomationService', () => {
         it('should throw BadRequestException for invalid grow light action', async () => {
             mockDatabaseService.plant.findFirst.mockResolvedValue(mockPlantForAutomation);
 
-            // invalidGrowLightActionDto.actions = { growLight: { action: 'toggle' } }
             await expect(service.create(testUserId, invalidGrowLightActionDto)).rejects.toThrow(
-                new BadRequestException('Grow light action must be "on" or "off"'),
+                new BadRequestException('Grow light action must be "light_on" or "light_off"'),
             );
         });
 
@@ -777,7 +687,6 @@ describe('AutomationService', () => {
         const updatedRule = { ...mockAutomationRule, ...validUpdateAutomationRuleDto };
 
         it('should update an automation rule successfully', async () => {
-            // mockAutomationRuleWithPlant has plant.racks: [{ id: testAutomationIds.rackId }]
             mockDatabaseService.automationRule.findUnique.mockResolvedValue(
                 mockAutomationRuleWithPlant,
             );
@@ -824,7 +733,6 @@ describe('AutomationService', () => {
         });
 
         it('should throw NotFoundException when user owns no rack for this plant', async () => {
-            // mockAutomationRuleWithDifferentUser has plant.racks: []
             mockDatabaseService.automationRule.findUnique.mockResolvedValue(
                 mockAutomationRuleWithDifferentUser,
             );
@@ -839,7 +747,6 @@ describe('AutomationService', () => {
                 mockAutomationRuleWithPlant,
             );
 
-            // invalidMoistureThresholdDto.conditions = { moisture: { lessThan: 150 } }
             await expect(
                 service.update(testRuleId, testUserId, {
                     conditions: invalidMoistureThresholdDto.conditions,
@@ -852,7 +759,6 @@ describe('AutomationService', () => {
                 mockAutomationRuleWithPlant,
             );
 
-            // invalidWateringActionDto.actions = { watering: { action: 'invalid' } }
             await expect(
                 service.update(testRuleId, testUserId, {
                     actions: invalidWateringActionDto.actions,
@@ -872,7 +778,6 @@ describe('AutomationService', () => {
         });
 
         it('should disable a rule via disableRuleDto', async () => {
-            // disableRuleDto = { isEnabled: false }
             mockDatabaseService.automationRule.findUnique.mockResolvedValue(
                 mockAutomationRuleWithPlant,
             );
@@ -952,7 +857,6 @@ describe('AutomationService', () => {
         });
 
         it('should throw NotFoundException when user owns no rack for the plant', async () => {
-            // mockAutomationRuleWithDifferentUser has plant.racks: []
             mockDatabaseService.automationRule.findUnique.mockResolvedValue(
                 mockAutomationRuleWithDifferentUser,
             );

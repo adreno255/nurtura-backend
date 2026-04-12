@@ -72,6 +72,9 @@ export const validUser: User = {
     lastName: 'Doe',
     suffix: 'Jr.',
     address: 'Block 5, Sampaguita St, Brgy Commonwealth, Quezon City',
+    expoPushToken: null,
+    completedPages: [],
+    hasCompletedOnboarding: false,
     createdAt: new Date('2025-01-01T00:00:00.000Z'),
     updatedAt: new Date('2025-01-01T00:00:00.000Z'),
 };
@@ -88,6 +91,9 @@ export const minimalUser: User = {
     lastName: 'Doe',
     suffix: null,
     address: 'Block 5, Sampaguita St, Brgy Commonwealth, Quezon City',
+    expoPushToken: null,
+    completedPages: [],
+    hasCompletedOnboarding: false,
     createdAt: new Date('2025-01-01T00:00:00.000Z'),
     updatedAt: new Date('2025-01-01T00:00:00.000Z'),
 };
@@ -104,6 +110,9 @@ export const alternativeUser: User = {
     lastName: 'Johnson',
     suffix: null,
     address: 'Block 10, Orchid Ave, Brgy Greenfield, Makati',
+    expoPushToken: null,
+    completedPages: [],
+    hasCompletedOnboarding: true,
     createdAt: new Date('2025-01-03T00:00:00.000Z'),
     updatedAt: new Date('2025-01-03T00:00:00.000Z'),
 };
@@ -136,6 +145,9 @@ export const parsedUser: UserInfo = {
     street: 'Sampaguita St',
     barangay: 'Brgy Commonwealth',
     city: 'Quezon City',
+    expoPushToken: null,
+    completedPages: [],
+    hasCompletedOnboarding: false,
     createdAt: new Date('2025-01-01T00:00:00.000Z'),
     updatedAt: new Date('2025-01-01T00:00:00.000Z'),
 };

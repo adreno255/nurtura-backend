@@ -3,18 +3,7 @@
  * Reusable data objects for websocket gateway and service tests
  */
 
-import { type AutomatedEventDto } from '../../src/automation/dto';
 import { type DecodedIdToken } from 'firebase-admin/auth';
-
-/**
- * Alternative automation event for diversity in tests
- */
-export const alternativeAutomationEvent: AutomatedEventDto = {
-    rackId: 'rack-456',
-    ruleName: 'Auto Watering Cycle',
-    executedActions: ['watering: start for 5000ms', 'growLight: on'],
-    timestamp: new Date('2026-02-01T12:00:00.000Z'),
-};
 
 /**
  * Common test socket IDs

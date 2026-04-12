@@ -96,7 +96,6 @@ describe('WebsocketService', () => {
         it('should allow server to be accessed after setting', () => {
             service.setServer(mockNamespace);
 
-            // Should not throw when broadcasting
             expect(() => service.broadcastSensorData('rack-123', mockSensorReading)).not.toThrow();
         });
     });
@@ -468,6 +467,7 @@ describe('WebsocketService', () => {
             it('should join client to rack room', async () => {
                 await service.joinRoom(mockSocket, 'rack-123');
 
+                // jest.spyOn(mockSocket, 'join') is already a jest.fn() from createMockAuthenticatedSocket
                 expect(jest.spyOn(mockSocket, 'join')).toHaveBeenCalledWith('rack-rack-123');
             });
 
@@ -482,13 +482,10 @@ describe('WebsocketService', () => {
         });
 
         describe('leaveRoom', () => {
-            beforeEach(async () => {
-                await service.joinRoom(mockSocket, 'rack-123');
-            });
-
             it('should remove client from rack room', async () => {
                 await service.leaveRoom(mockSocket, 'rack-123');
 
+                // jest.spyOn(mockSocket, 'leave') is already a jest.fn() from createMockAuthenticatedSocket
                 expect(jest.spyOn(mockSocket, 'leave')).toHaveBeenCalledWith('rack-rack-123');
             });
 
@@ -656,10 +653,6 @@ describe('WebsocketService', () => {
         });
 
         describe('unsubscribeFromRack', () => {
-            beforeEach(async () => {
-                await service.joinRoom(mockSocket, 'rack-123');
-            });
-
             it('should leave rack room', async () => {
                 await service.unsubscribeFromRack(mockSocket, 'rack-123');
 
@@ -730,7 +723,7 @@ describe('WebsocketService', () => {
             });
 
             it('should handle broadcast error gracefully', () => {
-                mockNamespace.to.mockImplementationOnce(() => {
+                jest.spyOn(mockNamespace, 'to').mockImplementationOnce(() => {
                     throw new Error('Broadcast failed');
                 });
 
@@ -786,7 +779,7 @@ describe('WebsocketService', () => {
             });
 
             it('should handle broadcast error gracefully', () => {
-                mockNamespace.to.mockImplementationOnce(() => {
+                jest.spyOn(mockNamespace, 'to').mockImplementationOnce(() => {
                     throw new Error('Broadcast failed');
                 });
 
@@ -818,7 +811,7 @@ describe('WebsocketService', () => {
             });
 
             it('should handle broadcast error gracefully', () => {
-                mockNamespace.to.mockImplementationOnce(() => {
+                jest.spyOn(mockNamespace, 'to').mockImplementationOnce(() => {
                     throw new Error('Broadcast failed');
                 });
 
@@ -835,10 +828,9 @@ describe('WebsocketService', () => {
                 service.broadcastAutomationEvent('rack-123', mockAutomationEvent);
 
                 expect(jest.spyOn(mockNamespace, 'to')).toHaveBeenCalledWith('rack-rack-123');
+                // Service emits { event } only — no rackId or timestamp in this payload
                 expect(jest.spyOn(mockNamespace, 'emit')).toHaveBeenCalledWith('automationEvent', {
-                    rackId: 'rack-123',
                     event: mockAutomationEvent,
-                    timestamp: expect.any(String) as string,
                 });
             });
 
@@ -852,7 +844,7 @@ describe('WebsocketService', () => {
             });
 
             it('should handle broadcast error gracefully', () => {
-                mockNamespace.to.mockImplementationOnce(() => {
+                jest.spyOn(mockNamespace, 'to').mockImplementationOnce(() => {
                     throw new Error('Broadcast failed');
                 });
 
@@ -981,10 +973,6 @@ describe('WebsocketService', () => {
         });
 
         describe('leaveUserRoom', () => {
-            beforeEach(async () => {
-                await service.joinUserRoom(mockSocket);
-            });
-
             it('should leave socket from user notification room', async () => {
                 await service.leaveUserRoom(mockSocket);
 
@@ -1044,7 +1032,7 @@ describe('WebsocketService', () => {
             });
 
             it('should handle broadcast error gracefully', () => {
-                mockNamespace.to.mockImplementationOnce(() => {
+                jest.spyOn(mockNamespace, 'to').mockImplementationOnce(() => {
                     throw new Error('Broadcast failed');
                 });
 

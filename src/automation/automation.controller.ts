@@ -33,7 +33,7 @@ import { type PaginationQueryDto } from '../common/dto/pagination-query.dto';
 export class AutomationController {
     constructor(private readonly automationService: AutomationService) {}
 
-    @Get('racks/:plantId/rules')
+    @Get('plants/:plantId/rules')
     @HttpCode(HttpStatus.OK)
     @ApiOperation({
         summary: 'Get all automation rules for a plant',
@@ -100,20 +100,20 @@ export class AutomationController {
             properties: {
                 statusCode: { type: 'number', example: 401 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/automation/racks/clx123abc456/rules' },
+                path: { type: 'string', example: '/automation/plants/clx123abc456/rules' },
                 message: { type: 'string', example: 'Authentication required' },
             },
         },
     })
     @ApiNotFoundResponse({
-        description: 'Rack not found',
+        description: 'Plant not found',
         schema: {
             type: 'object',
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/automation/racks/clx123abc456/rules' },
-                message: { type: 'string', example: 'Rack not found' },
+                path: { type: 'string', example: '/automation/plants/clx123abc456/rules' },
+                message: { type: 'string', example: 'Plant not found' },
             },
         },
     })
@@ -124,7 +124,7 @@ export class AutomationController {
             properties: {
                 statusCode: { type: 'number', example: 500 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
-                path: { type: 'string', example: '/automation/racks/clx123abc456/rules' },
+                path: { type: 'string', example: '/automation/plants/clx123abc456/rules' },
                 message: { type: 'string', example: 'Failed to retrieve automation rules' },
             },
         },
@@ -165,7 +165,7 @@ export class AutomationController {
                         },
                         actions: {
                             type: 'object',
-                            example: { watering: { action: 'start', duration: 5000 } },
+                            example: { watering: { action: 'watering_start' } },
                         },
                         isEnabled: { type: 'boolean', example: true },
                     },
@@ -198,14 +198,14 @@ export class AutomationController {
         },
     })
     @ApiNotFoundResponse({
-        description: 'Rack not found',
+        description: 'Plant not found',
         schema: {
             type: 'object',
             properties: {
                 statusCode: { type: 'number', example: 404 },
                 timestamp: { type: 'string', example: '2025-12-27T10:30:00.000Z' },
                 path: { type: 'string', example: '/automation/rules' },
-                message: { type: 'string', example: 'Rack not found' },
+                message: { type: 'string', example: 'Plant not found' },
             },
         },
     })

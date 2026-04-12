@@ -384,7 +384,19 @@ describe('RacksController', () => {
             expect(mockRacksService.create).toHaveBeenCalledWith(mockUser.dbId, createRackDto);
         });
 
-        it('should propagate ConflictException for duplicate MAC address', async () => {
+        it('should return recovered rack message when rack was previously archived', async () => {
+            const recoveredResponse = {
+                message: 'Archived rack recovered succefully.',
+                rackId: testRackId,
+            };
+            mockRacksService.create.mockResolvedValue(recoveredResponse);
+
+            const result = await controller.create(mockUser, createRackDto);
+
+            expect(result).toEqual(recoveredResponse);
+        });
+
+        it('should propagate ConflictException for duplicate active MAC address', async () => {
             mockRacksService.create.mockRejectedValue(
                 new ConflictException('MAC address already registered'),
             );
@@ -727,6 +739,14 @@ describe('RacksController', () => {
             );
         });
 
+        it('should include totalHarvestCount in the response', async () => {
+            mockRacksService.getHarvestActivities.mockResolvedValue(harvestActivityResponse);
+
+            const result = await controller.getHarvestActivities(mockUser, baseActivityQuery);
+
+            expect(result).toHaveProperty('totalHarvestCount', 150);
+        });
+
         it('should propagate NotFoundException for unauthorized rack filter', async () => {
             mockRacksService.getHarvestActivities.mockRejectedValue(
                 new NotFoundException(`Rack ${testRackId} not found or access denied`),
@@ -816,6 +836,118 @@ describe('RacksController', () => {
     // RACK OPERATION ENDPOINTS
     // ─────────────────────────────────────────────
 
+    describe('checkAssignToRack', () => {
+        const checkNoWarningResponse = {
+            hasWarning: false,
+            latestTemperatureReading: null,
+            maxTemperatureThreshold: 30,
+        };
+
+        const checkWithWarningResponse = {
+            hasWarning: true,
+            latestTemperatureReading: 35,
+            maxTemperatureThreshold: 25,
+        };
+
+        it('should return check result with no warning', async () => {
+            mockRacksService.checkAssignToRack.mockResolvedValue(checkNoWarningResponse);
+
+            const result = await controller.checkAssignToRack(
+                testRackId,
+                validAssignPlantToRackDto,
+                mockUser,
+            );
+
+            expect(result).toEqual(checkNoWarningResponse);
+            expect(mockRacksService.checkAssignToRack).toHaveBeenCalledWith(
+                testRackId,
+                mockUser.dbId,
+                validAssignPlantToRackDto,
+            );
+            expect(mockRacksService.checkAssignToRack).toHaveBeenCalledTimes(1);
+        });
+
+        it('should return check result with temperature warning', async () => {
+            mockRacksService.checkAssignToRack.mockResolvedValue(checkWithWarningResponse);
+
+            const result = await controller.checkAssignToRack(
+                testRackId,
+                validAssignPlantToRackDto,
+                mockUser,
+            );
+
+            expect(result).toEqual(checkWithWarningResponse);
+            expect(result.hasWarning).toBe(true);
+            expect(result.latestTemperatureReading).toBe(35);
+        });
+
+        it('should pass rackId, userId, and dto in the correct order', async () => {
+            mockRacksService.checkAssignToRack.mockResolvedValue(checkNoWarningResponse);
+
+            await controller.checkAssignToRack(testRackId, validAssignPlantToRackDto, mockUser);
+
+            expect(mockRacksService.checkAssignToRack).toHaveBeenCalledWith(
+                testRackId,
+                mockUser.dbId,
+                validAssignPlantToRackDto,
+            );
+        });
+
+        it('should use the authenticated user dbId, not firebaseUid', async () => {
+            mockRacksService.checkAssignToRack.mockResolvedValue(checkNoWarningResponse);
+
+            await controller.checkAssignToRack(testRackId, validAssignPlantToRackDto, mockUser);
+
+            expect(mockRacksService.checkAssignToRack).toHaveBeenCalledWith(
+                expect.any(String),
+                mockUser.dbId,
+                expect.any(Object),
+            );
+        });
+
+        it('should propagate NotFoundException when plant does not exist', async () => {
+            mockRacksService.checkAssignToRack.mockRejectedValue(
+                new NotFoundException('Plant with ID not found'),
+            );
+
+            await expect(
+                controller.checkAssignToRack(testRackId, validAssignPlantToRackDto, mockUser),
+            ).rejects.toThrow(NotFoundException);
+        });
+
+        it('should propagate BadRequestException for inactive plant', async () => {
+            mockRacksService.checkAssignToRack.mockRejectedValue(
+                new BadRequestException('Cannot assign an inactive plant to a rack'),
+            );
+
+            await expect(
+                controller.checkAssignToRack(testRackId, inactivePlantAssignDto, mockUser),
+            ).rejects.toThrow(BadRequestException);
+        });
+
+        it('should propagate BadRequestException when rack already has a plant', async () => {
+            mockRacksService.checkAssignToRack.mockRejectedValue(
+                new BadRequestException(
+                    'This rack already has a plant assigned. Please remove the current plant before assigning a new one.',
+                ),
+            );
+
+            await expect(
+                controller.checkAssignToRack(testRackId, validAssignPlantToRackDto, mockUser),
+            ).rejects.toThrow(BadRequestException);
+        });
+
+        it('should propagate InternalServerErrorException from service', async () => {
+            mockRacksService.checkAssignToRack.mockRejectedValue(
+                new InternalServerErrorException('Failed to check plant assignment'),
+            );
+
+            await expect(
+                controller.checkAssignToRack(testRackId, validAssignPlantToRackDto, mockUser),
+            ).rejects.toThrow(InternalServerErrorException);
+        });
+    });
+
     describe('assignToRack', () => {
         it('should assign a plant to a rack successfully', async () => {
             mockRacksService.assignToRack.mockResolvedValue(assignSuccessResponse);
@@ -854,6 +986,18 @@ describe('RacksController', () => {
 
             await expect(
                 controller.assignToRack(testRackId, inactivePlantAssignDto, mockUser),
+            ).rejects.toThrow(BadRequestException);
+        });
+
+        it('should propagate BadRequestException when rack already has a plant', async () => {
+            mockRacksService.assignToRack.mockRejectedValue(
+                new BadRequestException(
+                    'This rack already has a plant assigned. Please remove the current plant before assigning a new one.',
+                ),
+            );
+
+            await expect(
+                controller.assignToRack(testRackId, validAssignPlantToRackDto, mockUser),
             ).rejects.toThrow(BadRequestException);
         });
 
@@ -1200,6 +1344,28 @@ describe('RacksController', () => {
                 createRackDto,
             );
         });
+
+        it('should use dbId for all write operations', async () => {
+            mockRacksService.assignToRack.mockResolvedValue(assignSuccessResponse);
+            mockRacksService.unassignFromRack.mockResolvedValue(unassignFromRackSuccessResponse);
+            mockRacksService.harvestPlantFromRack.mockResolvedValue(harvestSuccessResponse);
+
+            await controller.assignToRack(testRackId, validAssignPlantToRackDto, mockUser);
+            await controller.unassignFromRack(testRackId, { plantId: testPlantId }, mockUser);
+            await controller.harvestPlantFromRack(testRackId, harvestDto, mockUser);
+
+            for (const method of [
+                mockRacksService.assignToRack,
+                mockRacksService.unassignFromRack,
+                mockRacksService.harvestPlantFromRack,
+            ]) {
+                expect(method).toHaveBeenCalledWith(
+                    expect.any(String),
+                    mockUser.dbId,
+                    expect.any(Object),
+                );
+            }
+        });
     });
 
     describe('response format consistency', () => {
@@ -1246,6 +1412,49 @@ describe('RacksController', () => {
 
             expect(result).toHaveProperty('message');
             expect(result).not.toHaveProperty('rack');
+        });
+
+        it('assignToRack should return message only', async () => {
+            mockRacksService.assignToRack.mockResolvedValue(assignSuccessResponse);
+
+            const result = await controller.assignToRack(
+                testRackId,
+                validAssignPlantToRackDto,
+                mockUser,
+            );
+
+            expect(result).toHaveProperty('message');
+        });
+
+        it('checkAssignToRack should return hasWarning, latestTemperatureReading, maxTemperatureThreshold', async () => {
+            mockRacksService.checkAssignToRack.mockResolvedValue({
+                hasWarning: false,
+                latestTemperatureReading: null,
+                maxTemperatureThreshold: null,
+            });
+
+            const result = await controller.checkAssignToRack(
+                testRackId,
+                validAssignPlantToRackDto,
+                mockUser,
+            );
+
+            expect(result).toHaveProperty('hasWarning');
+            expect(result).toHaveProperty('latestTemperatureReading');
+            expect(result).toHaveProperty('maxTemperatureThreshold');
+        });
+
+        it('getHarvestActivities should include totalHarvestCount alongside pagination meta', async () => {
+            mockRacksService.getHarvestActivities.mockResolvedValue({
+                ...expectedPaginatedResponse,
+                totalHarvestCount: 42,
+            });
+
+            const result = await controller.getHarvestActivities(mockUser, baseActivityQuery);
+
+            expect(result).toHaveProperty('data');
+            expect(result).toHaveProperty('meta');
+            expect(result).toHaveProperty('totalHarvestCount');
         });
     });
 });

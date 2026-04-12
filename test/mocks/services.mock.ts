@@ -9,6 +9,7 @@ export const createMockLogRackActivityHelper = () => ({
 
 export const createMockEventEmitter = () => ({
     emit: jest.fn(),
+    emitAsync: jest.fn().mockResolvedValue(undefined),
     on: jest.fn(),
     removeListener: jest.fn(),
 });
@@ -75,6 +76,7 @@ export const createMockRacksService = () => ({
     harvestLeavesFromRack: jest.fn(),
     harvestPlantFromRack: jest.fn(),
     harvestSeedsFromRack: jest.fn(),
+    checkAssignToRack: jest.fn(),
     assignToRack: jest.fn(),
     unassignFromRack: jest.fn(),
     getRecentActivities: jest.fn(),
@@ -100,6 +102,7 @@ export const createMockAutomationService = () => ({
     delete: jest.fn(),
     validateConditions: jest.fn(),
     validateActions: jest.fn(),
+    applySystemLightAction: jest.fn(),
 });
 
 export const createMockNotificationsService = () => ({
@@ -109,4 +112,10 @@ export const createMockNotificationsService = () => ({
     markAllAsRead: jest.fn(),
     remove: jest.fn(),
     handleCreateNotification: jest.fn(),
+});
+
+export const createMockSystemRulesService = () => ({
+    evaluate: jest.fn(),
+    evaluateLightPriority: jest.fn(),
+    evaluateHighTemperature: jest.fn(),
 });

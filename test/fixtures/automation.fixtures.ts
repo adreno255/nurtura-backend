@@ -7,11 +7,13 @@
 import {
     type CreateAutomationRuleDto,
     type UpdateAutomationRuleDto,
+    type WateringActionDto,
+    type GrowLightActionDto,
+    type SensorActionDto,
+    type RuleActionsDto,
+    type AutomatedEventDto,
 } from '../../src/automation/dto';
-import {
-    type RuleConditions,
-    type RuleActions,
-} from '../../src/automation/interfaces/automation.interface';
+import { type RuleConditions } from '../../src/automation/interfaces/automation.interface';
 
 /**
  * Common test IDs
@@ -91,39 +93,62 @@ export const rangeCondition: RuleConditions = {
 };
 
 /**
- * Rule actions
+ * Individual action DTOs
  */
-export const wateringStartAction: RuleActions = {
-    watering: {
-        action: 'watering_start',
-    },
+export const wateringStartActionDto: WateringActionDto = {
+    action: 'watering_start',
 };
 
-export const wateringStopAction: RuleActions = {
-    watering: {
-        action: 'watering_stop',
-    },
+export const wateringStopActionDto: WateringActionDto = {
+    action: 'watering_stop',
 };
 
-export const growLightOnAction: RuleActions = {
-    growLight: {
-        action: 'light_on',
-    },
+export const growLightOnActionDto: GrowLightActionDto = {
+    action: 'light_on',
 };
 
-export const growLightOffAction: RuleActions = {
-    growLight: {
-        action: 'light_off',
-    },
+export const growLightOffActionDto: GrowLightActionDto = {
+    action: 'light_off',
 };
 
-export const multipleActions: RuleActions = {
-    watering: {
-        action: 'watering_start',
-    },
-    growLight: {
-        action: 'light_on',
-    },
+export const sensorStartActionDto: SensorActionDto = {
+    action: 'sensor_start',
+};
+
+export const sensorStopActionDto: SensorActionDto = {
+    action: 'sensor_stop',
+};
+
+/**
+ * Rule actions (composite DTOs)
+ */
+export const wateringStartAction: RuleActionsDto = {
+    watering: wateringStartActionDto,
+};
+
+export const wateringStopAction: RuleActionsDto = {
+    watering: wateringStopActionDto,
+};
+
+export const growLightOnAction: RuleActionsDto = {
+    growLight: growLightOnActionDto,
+};
+
+export const growLightOffAction: RuleActionsDto = {
+    growLight: growLightOffActionDto,
+};
+
+export const sensorStartAction: RuleActionsDto = {
+    // Only sensor action, no other actions
+};
+
+export const sensorStopAction: RuleActionsDto = {
+    // Only sensor action, no other actions
+};
+
+export const multipleActions: RuleActionsDto = {
+    watering: wateringStartActionDto,
+    growLight: growLightOnActionDto,
 };
 
 /**
@@ -352,25 +377,57 @@ export const mockDisabledRules = [mockDisabledAutomationRule];
 /**
  * Automation event data
  */
-export const mockAutomationEvent = {
-    rackId: testAutomationIds.rackId,
-    ruleName: mockAutomationRule.name,
-    executedActions: ['watering:start for 5000ms'],
-    timestamp: new Date('2025-02-01T10:00:00.000Z'),
+export const mockAutomationEvent: AutomatedEventDto = {
+    eventType: 'WATERING_START',
+    activity: {
+        id: 'activity-120',
+        rackId: testAutomationIds.rackId,
+        eventType: 'WATERING_START',
+        timestamp: '2025-02-01T10:00:00.000Z',
+    },
 };
 
-export const mockLightingAutomationEvent = {
-    rackId: testAutomationIds.rackId,
-    ruleName: mockLightingAutomationRule.name,
-    executedActions: ['growLight:on'],
-    timestamp: new Date('2025-02-01T10:00:00.000Z'),
+export const mockLightingAutomationEvent: AutomatedEventDto = {
+    eventType: 'LIGHT_ON',
+    activity: {
+        id: 'activity-121',
+        rackId: testAutomationIds.rackId,
+        eventType: 'LIGHT_ON',
+        timestamp: '2025-02-01T10:00:00.000Z',
+    },
 };
 
-export const mockMultipleActionsEvent = {
-    rackId: testAutomationIds.rackId,
-    ruleName: 'Multi-action rule',
-    executedActions: ['watering:start for 5000ms', 'growLight:on'],
-    timestamp: new Date('2025-02-01T10:00:00.000Z'),
+export const mockMultipleActionsEvent: AutomatedEventDto = {
+    eventType: 'WATERING_START',
+    activity: {
+        id: 'activity-122',
+        rackId: testAutomationIds.rackId,
+        eventType: 'WATERING_START',
+        timestamp: '2025-02-01T10:00:00.000Z',
+    },
+};
+
+/**
+ * Automated event DTOs
+ */
+export const mockWateringAutomatedEventDto: AutomatedEventDto = {
+    eventType: 'WATERING_START',
+    activity: {
+        id: 'activity-123',
+        rackId: testAutomationIds.rackId,
+        eventType: 'WATERING_START',
+        timestamp: '2025-02-05T14:45:00.000Z',
+    },
+};
+
+export const mockLightingAutomatedEventDto: AutomatedEventDto = {
+    eventType: 'LIGHT_ON',
+    activity: {
+        id: 'activity-124',
+        rackId: testAutomationIds.rackId,
+        eventType: 'LIGHT_ON',
+        timestamp: '2025-02-05T14:46:00.000Z',
+    },
 };
 
 /**

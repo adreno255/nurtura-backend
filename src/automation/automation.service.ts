@@ -225,7 +225,7 @@ export class AutomationService implements OnModuleInit {
     }
 
     /**
-     * Evaluates whether rule conditions are met based light_on sensor data.
+     * Evaluates whether rule conditions are met based on sensor data.
      * All conditions use AND logic — every specified condition must be satisfied.
      */
     private evaluateConditions(conditions: RuleConditions, sensorData: SensorData): boolean {
@@ -977,14 +977,18 @@ export class AutomationService implements OnModuleInit {
         }
 
         if (actions.watering) {
-            if (!['watering_start', 'stop'].includes(actions.watering.action)) {
-                throw new BadRequestException('Watering action must be "watering_start" or "stop"');
+            if (!['watering_start', 'watering_stop'].includes(actions.watering.action)) {
+                throw new BadRequestException(
+                    'Watering action must be "watering_start" or "watering_stop"',
+                );
             }
         }
 
         if (actions.growLight) {
-            if (!['light_on', 'off'].includes(actions.growLight.action)) {
-                throw new BadRequestException('Grow light action must be "light_on" or "off"');
+            if (!['light_on', 'light_off'].includes(actions.growLight.action)) {
+                throw new BadRequestException(
+                    'Grow light action must be "light_on" or "light_off"',
+                );
             }
         }
     }

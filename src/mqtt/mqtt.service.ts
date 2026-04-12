@@ -353,4 +353,42 @@ export class MqttService implements OnModuleInit, OnModuleDestroy {
             });
         }
     }
+
+    /**
+     * Publishes a simulated sensor payload directly to the broker.
+     * Only available in non-production environments.
+     * The message routes through the broker back to processSensorData
+     * exactly as if the ESP32 sent it.
+     */
+    async publishSimulated(
+        macAddress: string,
+        topic: 'sensors' | 'status' | 'errors',
+        payload: object,
+    ): Promise<void> {
+        if (!this.client || !this.client.connected) {
+            throw new Error('MQTT client not connected');
+        }
+
+        const fullTopic = `nurtura/rack/${macAddress}/${topic}`;
+        const message = JSON.stringify(payload);
+
+        return new Promise((resolve, reject) => {
+            this.client!.publish(fullTopic, message, { qos: 1 }, (err) => {
+                if (err) {
+                    this.logger.error(
+                        `[Simulation] Failed to publish to ${fullTopic}`,
+                        err.message,
+                        'MqttService',
+                    );
+                    reject(err);
+                } else {
+                    this.logger.log(
+                        `[Simulation] Published to ${fullTopic}: ${message}`,
+                        'MqttService',
+                    );
+                    resolve();
+                }
+            });
+        });
+    }
 }

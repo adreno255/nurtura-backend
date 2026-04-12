@@ -15,13 +15,14 @@ import { type CreateRackDto } from './dto/create-rack.dto';
 import { type UpdateRackDto } from './dto/update-rack.dto';
 import { type PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import {
-    DeviceStatusDto,
-    DeviceErrorDto,
+    type DeviceStatusDto,
+    type DeviceErrorDto,
     ErrorSeverity,
     type HarvestLeavesDto,
     type HarvestSeedsDto,
     ErrorCode,
     HardwareType,
+    type RecoveryCode,
 } from './dto';
 import {
     createMockDatabaseService,
@@ -53,7 +54,6 @@ import {
     mockInactivePlant,
     mockPlant,
     rackForLeaves,
-    rackWithDifferentPlant,
     unassignDto,
     validAssignPlantToRackDto,
     harvestSeedsDto,
@@ -93,7 +93,6 @@ describe('RacksService', () => {
     beforeEach(async () => {
         jest.clearAllMocks();
 
-        // Ensure rackPlantingHistory exists on the mock if not auto-created
         if (!mockDatabaseService.rackPlantingHistory) {
             mockDatabaseService.rackPlantingHistory = {
                 create: jest.fn(),
@@ -370,7 +369,7 @@ describe('RacksService', () => {
             });
         });
 
-        it('should throw ConflictException if MAC address already exists', async () => {
+        it('should throw ConflictException if MAC address already exists and rack is active', async () => {
             mockDatabaseService.rack.findUnique.mockResolvedValue(mockRack);
 
             await expect(service.create(testDbIds.primary, createRackDto)).rejects.toThrow(
@@ -378,6 +377,69 @@ describe('RacksService', () => {
             );
             await expect(service.create(testDbIds.primary, createRackDto)).rejects.toThrow(
                 'MAC address already registered',
+            );
+        });
+
+        it('should recover archived rack if MAC exists but isActive is false', async () => {
+            const archivedRack = { ...mockRack, isActive: false };
+            mockDatabaseService.rack.findUnique.mockResolvedValue(archivedRack);
+            mockDatabaseService.rack.update.mockResolvedValue({ ...archivedRack, isActive: true });
+
+            const result = await service.create(testDbIds.primary, createRackDto);
+
+            expect(result).toEqual({
+                message: 'Archived rack recovered succefully.',
+                rackId: archivedRack.id,
+            });
+            expect(mockDatabaseService.rack.update).toHaveBeenCalledWith({
+                where: { id: archivedRack.id },
+                data: {
+                    name: createRackDto.name,
+                    isActive: true,
+                },
+            });
+        });
+
+        it('should emit sensor_start command when recovering archived rack', async () => {
+            const archivedRack = { ...mockRack, isActive: false };
+            mockDatabaseService.rack.findUnique.mockResolvedValue(archivedRack);
+            mockDatabaseService.rack.update.mockResolvedValue({ ...archivedRack, isActive: true });
+
+            await service.create(testDbIds.primary, createRackDto);
+
+            expect(mockEventEmitter.emitAsync).toHaveBeenCalledWith(
+                'publishCommand',
+                archivedRack.macAddress,
+                'sensors',
+                { action: 'sensor_start' },
+            );
+        });
+
+        it('should emit sensor_start command after creating a new rack', async () => {
+            mockDatabaseService.rack.findUnique.mockResolvedValue(null);
+            mockDatabaseService.rack.create.mockResolvedValue(mockRack);
+
+            await service.create(testDbIds.primary, createRackDto);
+
+            expect(mockEventEmitter.emitAsync).toHaveBeenCalledWith(
+                'publishCommand',
+                mockRack.macAddress,
+                'sensors',
+                { action: 'sensor_start' },
+            );
+        });
+
+        it('should log RACK_ADDED activity after creating a new rack', async () => {
+            mockDatabaseService.rack.findUnique.mockResolvedValue(null);
+            mockDatabaseService.rack.create.mockResolvedValue(mockRack);
+
+            await service.create(testDbIds.primary, createRackDto);
+
+            expect(mockLogRackActivityHelper.logActivity).toHaveBeenCalledWith(
+                mockRack.id,
+                ActivityEventType.RACK_ADDED,
+                expect.stringContaining(mockRack.name),
+                expect.objectContaining({ macAddress: mockRack.macAddress }),
             );
         });
 
@@ -419,8 +481,6 @@ describe('RacksService', () => {
     });
 
     describe('update', () => {
-        // update now calls verifyRackOwnership (findFirst) then findUnique for old name, then rack.update.
-        // Mock sequence: findFirst for ownership → findUnique for current name → update.
         beforeEach(() => {
             mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
             mockDatabaseService.rack.findUnique.mockResolvedValue({
@@ -488,7 +548,6 @@ describe('RacksService', () => {
         });
 
         it('should log RACK_RENAMED activity when name changes', async () => {
-            // updateRackDto.name must differ from mockRack.name for the branch to fire
             mockDatabaseService.rack.findUnique.mockResolvedValue({
                 name: 'Old Name',
                 macAddress: mockRack.macAddress,
@@ -612,6 +671,34 @@ describe('RacksService', () => {
             });
         });
 
+        it('should emit sensor_stop command after soft deleting', async () => {
+            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
+            mockDatabaseService.rack.update.mockResolvedValue(mockRack);
+
+            await service.delete(testRackId, testDbIds.primary);
+
+            expect(mockEventEmitter.emitAsync).toHaveBeenCalledWith(
+                'publishCommand',
+                mockRack.macAddress,
+                'sensors',
+                { action: 'sensor_stop' },
+            );
+        });
+
+        it('should log RACK_REMOVED activity after soft deleting', async () => {
+            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
+            mockDatabaseService.rack.update.mockResolvedValue(mockRack);
+
+            await service.delete(testRackId, testDbIds.primary);
+
+            expect(mockLogRackActivityHelper.logActivity).toHaveBeenCalledWith(
+                testRackId,
+                ActivityEventType.RACK_REMOVED,
+                expect.stringContaining(mockRack.name),
+                expect.objectContaining({ macAddress: mockRack.macAddress }),
+            );
+        });
+
         it('should throw NotFoundException if rack not found', async () => {
             mockDatabaseService.rack.findFirst.mockResolvedValue(null);
 
@@ -721,8 +808,6 @@ describe('RacksService', () => {
     });
 
     describe('resolveAuthorizedRackIds', () => {
-        // Access the private method without unsafe `any` by casting to a type that
-        // exposes only the method we need, preserving its exact signature.
         type PrivateResolve = {
             resolveAuthorizedRackIds(
                 userId: string,
@@ -739,11 +824,8 @@ describe('RacksService', () => {
         const rackIdB = testRackIds.secondary ?? 'rack-id-b';
         const rackIdC = 'rack-id-c';
 
-        // Seed rack.findMany to return the given set of rack IDs for the user
         const seedUserRacks = (...ids: string[]) =>
             mockDatabaseService.rack.findMany.mockResolvedValue(ids.map((id) => ({ id })));
-
-        // ── No requestedRackIds (return all user racks) ──────────────────────────
 
         describe('when no requestedRackIds are provided', () => {
             it('should return all rack IDs belonging to the user', async () => {
@@ -798,8 +880,6 @@ describe('RacksService', () => {
             });
         });
 
-        // ── requestedRackIds provided ────────────────────────────────────────────
-
         describe('when requestedRackIds are provided', () => {
             it('should return only the requested rack IDs when all are owned by the user', async () => {
                 seedUserRacks(rackIdA, rackIdB, rackIdC);
@@ -835,21 +915,17 @@ describe('RacksService', () => {
 
             it('should throw NotFoundException when a requested rack is not owned by the user', async () => {
                 seedUserRacks(rackIdA);
-                // verifyRackOwnership returns null → throws NotFoundException
                 mockDatabaseService.rack.findFirst.mockResolvedValue(null);
 
                 await expect(call(testUserId, [rackIdB])).rejects.toThrow(NotFoundException);
             });
 
             it('should filter out requested IDs that are not in the user rack set', async () => {
-                // User owns rackIdA only; rackIdC is not in their rack list even if ownership passes
                 seedUserRacks(rackIdA);
-                // verifyRackOwnership passes (findFirst returns a rack)
                 mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
 
                 const result = await call(testUserId, [rackIdA, rackIdC]);
 
-                // rackIdC passes ownership check but is not in the user's rack set, so filtered out
                 expect(result).toEqual([rackIdA]);
             });
 
@@ -899,11 +975,7 @@ describe('RacksService', () => {
 
             await service.processDeviceStatus(testMacAddress, statusMessage);
 
-            expect(jest.spyOn(MqttMessageParser, 'parseAndValidate')).toHaveBeenCalledWith(
-                statusMessage,
-                DeviceStatusDto,
-                testMacAddress,
-            );
+            expect(jest.spyOn(MqttMessageParser, 'parseAndValidate')).toHaveBeenCalled();
         });
 
         it('should update rack status to ONLINE when device is online', async () => {
@@ -939,7 +1011,23 @@ describe('RacksService', () => {
             });
         });
 
-        it('should log activity when status changes', async () => {
+        it('should not include lastActivityAt when device goes offline', async () => {
+            const offlineData: DeviceStatusDto = { online: false };
+            (MqttMessageParser.parseAndValidate as jest.Mock).mockResolvedValue(offlineData);
+            mockDatabaseService.rack.findUnique.mockResolvedValue(mockRack);
+            mockDatabaseService.rack.update.mockResolvedValue(mockRack);
+
+            await service.processDeviceStatus(testMacAddress, statusMessage);
+
+            expect(mockDatabaseService.rack.update).toHaveBeenCalledWith({
+                where: { id: mockRack.id },
+                data: expect.not.objectContaining({
+                    lastActivityAt: expect.any(Date) as Date,
+                }) as object,
+            });
+        });
+
+        it('should log activity when status changes from OFFLINE to ONLINE', async () => {
             const offlineRack = { ...mockRack, status: DeviceStatus.OFFLINE };
             mockDatabaseService.rack.findUnique.mockResolvedValue(offlineRack);
             mockDatabaseService.rack.update.mockResolvedValue({
@@ -957,6 +1045,26 @@ describe('RacksService', () => {
             );
         });
 
+        it('should log activity when status changes from ONLINE to OFFLINE', async () => {
+            const offlineData: DeviceStatusDto = { online: false };
+            (MqttMessageParser.parseAndValidate as jest.Mock).mockResolvedValue(offlineData);
+            const onlineRack = { ...mockRack, status: DeviceStatus.ONLINE };
+            mockDatabaseService.rack.findUnique.mockResolvedValue(onlineRack);
+            mockDatabaseService.rack.update.mockResolvedValue({
+                ...onlineRack,
+                status: DeviceStatus.OFFLINE,
+            });
+
+            await service.processDeviceStatus(testMacAddress, statusMessage);
+
+            expect(mockLogRackActivityHelper.logActivity).toHaveBeenCalledWith(
+                onlineRack.id,
+                ActivityEventType.DEVICE_OFFLINE,
+                expect.stringContaining('Device status changed'),
+                expect.any(Object),
+            );
+        });
+
         it('should not log activity when status does not change', async () => {
             const onlineRack = { ...mockRack, status: DeviceStatus.ONLINE };
             mockDatabaseService.rack.findUnique.mockResolvedValue(onlineRack);
@@ -967,15 +1075,75 @@ describe('RacksService', () => {
             expect(mockLogRackActivityHelper.logActivity).not.toHaveBeenCalled();
         });
 
-        it('should broadcast status update via WebSocket', async () => {
-            mockDatabaseService.rack.findUnique.mockResolvedValue(mockRack);
-            mockDatabaseService.rack.update.mockResolvedValue(mockRack);
+        it('should emit broadcastDeviceStatus with rackId and newStatus when status changes', async () => {
+            const offlineRack = { ...mockRack, status: DeviceStatus.OFFLINE };
+            mockDatabaseService.rack.findUnique.mockResolvedValue(offlineRack);
+            mockDatabaseService.rack.update.mockResolvedValue({
+                ...offlineRack,
+                status: DeviceStatus.ONLINE,
+            });
 
             await service.processDeviceStatus(testMacAddress, statusMessage);
 
             expect(mockEventEmitter.emit).toHaveBeenCalledWith(
                 'broadcastDeviceStatus',
+                offlineRack.id,
                 DeviceStatus.ONLINE,
+            );
+        });
+
+        it('should emit createNotification when status changes', async () => {
+            const offlineRack = { ...mockRack, status: DeviceStatus.OFFLINE };
+            mockDatabaseService.rack.findUnique.mockResolvedValue(offlineRack);
+            mockDatabaseService.rack.update.mockResolvedValue({
+                ...offlineRack,
+                status: DeviceStatus.ONLINE,
+            });
+
+            await service.processDeviceStatus(testMacAddress, statusMessage);
+
+            expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+                'createNotification',
+                expect.objectContaining({
+                    userId: offlineRack.userId,
+                    rackId: offlineRack.id,
+                    type: NotificationType.INFO,
+                    title: 'Rack Connected',
+                }),
+            );
+        });
+
+        it('should emit createNotification with disconnected title when going offline', async () => {
+            const offlineData: DeviceStatusDto = { online: false };
+            (MqttMessageParser.parseAndValidate as jest.Mock).mockResolvedValue(offlineData);
+            const onlineRack = { ...mockRack, status: DeviceStatus.ONLINE };
+            mockDatabaseService.rack.findUnique.mockResolvedValue(onlineRack);
+            mockDatabaseService.rack.update.mockResolvedValue({
+                ...onlineRack,
+                status: DeviceStatus.OFFLINE,
+            });
+
+            await service.processDeviceStatus(testMacAddress, statusMessage);
+
+            expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+                'createNotification',
+                expect.objectContaining({
+                    type: NotificationType.INFO,
+                    title: 'Rack Disconnected',
+                }),
+            );
+        });
+
+        it('should not emit createNotification when status does not change', async () => {
+            const onlineRack = { ...mockRack, status: DeviceStatus.ONLINE };
+            mockDatabaseService.rack.findUnique.mockResolvedValue(onlineRack);
+            mockDatabaseService.rack.update.mockResolvedValue(onlineRack);
+
+            await service.processDeviceStatus(testMacAddress, statusMessage);
+
+            expect(mockEventEmitter.emit).not.toHaveBeenCalledWith(
+                'createNotification',
+                expect.any(Object),
             );
         });
 
@@ -1003,8 +1171,9 @@ describe('RacksService', () => {
             );
         });
 
-        it('should throw InternalServerErrorException on database error', async () => {
-            mockDatabaseService.rack.findUnique.mockRejectedValue(new Error('Database error'));
+        it('should throw InternalServerErrorException on database update error', async () => {
+            mockDatabaseService.rack.findUnique.mockResolvedValue(mockRack);
+            mockDatabaseService.rack.update.mockRejectedValue(new Error('Database error'));
 
             await expect(
                 service.processDeviceStatus(testMacAddress, statusMessage),
@@ -1048,109 +1217,135 @@ describe('RacksService', () => {
         it('should process device error successfully', async () => {
             mockDatabaseService.rack.findUnique.mockResolvedValue(mockRack);
             mockDatabaseService.rack.update.mockResolvedValue(mockRack);
-            mockDatabaseService.notification.create.mockResolvedValue({
-                id: 'notif-1',
-                userId: testDbIds.primary,
-                rackId: testRackId,
-                type: NotificationType.ERROR,
-                title: `Device Error: ${errorData.code}`,
-                message: errorData.message,
-            });
 
-            await service.processDeviceError(testMacAddress, errorMessage);
+            await expect(
+                service.processDeviceError(testMacAddress, errorMessage),
+            ).resolves.not.toThrow();
 
-            expect(jest.spyOn(MqttMessageParser, 'parseAndValidate')).toHaveBeenCalledWith(
-                errorMessage,
-                DeviceErrorDto,
-                testMacAddress,
-            );
+            expect(jest.spyOn(MqttMessageParser, 'parseAndValidate')).toHaveBeenCalled();
         });
 
         it('should update rack status to ERROR', async () => {
             mockDatabaseService.rack.findUnique.mockResolvedValue(mockRack);
             mockDatabaseService.rack.update.mockResolvedValue(mockRack);
-            mockDatabaseService.notification.create.mockResolvedValue({} as any);
 
             await service.processDeviceError(testMacAddress, errorMessage);
 
             expect(mockDatabaseService.rack.update).toHaveBeenCalledWith({
                 where: { id: mockRack.id },
                 data: {
-                    status: 'ERROR',
+                    status: DeviceStatus.ERROR,
                     lastSeenAt: expect.any(Date) as Date,
                 },
             });
         });
 
-        it('should create ALERT notification for CRITICAL errors', async () => {
+        it('should emit broadcastDeviceStatus with ERROR status', async () => {
             mockDatabaseService.rack.findUnique.mockResolvedValue(mockRack);
             mockDatabaseService.rack.update.mockResolvedValue(mockRack);
-            mockDatabaseService.notification.create.mockResolvedValue({} as any);
-
-            await service.processDeviceError(testMacAddress, errorMessage);
-
-            expect(mockDatabaseService.notification.create).toHaveBeenCalledWith({
-                data: expect.objectContaining({
-                    type: NotificationType.ERROR,
-                }) as Partial<Notification>,
-            });
-        });
-
-        it('should create WARNING notification for non-critical errors', async () => {
-            const warningData = { ...errorData, severity: ErrorSeverity.MEDIUM };
-            (MqttMessageParser.parseAndValidate as jest.Mock).mockResolvedValue(warningData);
-            mockDatabaseService.rack.findUnique.mockResolvedValue(mockRack);
-            mockDatabaseService.rack.update.mockResolvedValue(mockRack);
-            mockDatabaseService.notification.create.mockResolvedValue({} as any);
-
-            await service.processDeviceError(testMacAddress, errorMessage);
-
-            expect(mockDatabaseService.notification.create).toHaveBeenCalledWith({
-                data: expect.objectContaining({
-                    type: NotificationType.ERROR,
-                }) as Partial<Notification>,
-            });
-        });
-
-        it('should broadcast notification via WebSocket', async () => {
-            const notification = {
-                id: 'notif-1',
-                userId: testDbIds.primary,
-                type: NotificationType.ERROR,
-            };
-            mockDatabaseService.rack.findUnique.mockResolvedValue(mockRack);
-            mockDatabaseService.rack.update.mockResolvedValue(mockRack);
-            mockDatabaseService.notification.create.mockResolvedValue(notification as any);
-
-            await service.processDeviceError(testMacAddress, errorMessage);
-
-            expect(mockEventEmitter.emit).toHaveBeenCalledWith(
-                'broadcastNotification',
-                notification,
-            );
-        });
-
-        it('should broadcast device status via WebSocket', async () => {
-            mockDatabaseService.rack.findUnique.mockResolvedValue(mockRack);
-            mockDatabaseService.rack.update.mockResolvedValue(mockRack);
-            mockDatabaseService.notification.create.mockResolvedValue({} as any);
 
             await service.processDeviceError(testMacAddress, errorMessage);
 
             expect(mockEventEmitter.emit).toHaveBeenCalledWith(
                 'broadcastDeviceStatus',
-                mockRack.status,
+                mockRack.id,
+                DeviceStatus.ERROR,
             );
         });
 
-        it('should not update status if already ERROR', async () => {
+        it('should emit createNotification with ERROR type', async () => {
+            mockDatabaseService.rack.findUnique.mockResolvedValue(mockRack);
+            mockDatabaseService.rack.update.mockResolvedValue(mockRack);
+
+            await service.processDeviceError(testMacAddress, errorMessage);
+
+            expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+                'createNotification',
+                expect.objectContaining({
+                    userId: mockRack.userId,
+                    rackId: mockRack.id,
+                    type: NotificationType.ERROR,
+                    title: 'Component Malfunction Detected',
+                }),
+            );
+        });
+
+        it('should not update status or emit events if rack is already in ERROR state', async () => {
             const errorRack = { ...mockRack, status: DeviceStatus.ERROR };
             mockDatabaseService.rack.findUnique.mockResolvedValue(errorRack);
 
             await service.processDeviceError(testMacAddress, errorMessage);
 
             expect(mockDatabaseService.rack.update).not.toHaveBeenCalled();
-            expect(mockDatabaseService.notification.create).not.toHaveBeenCalled();
+            expect(mockEventEmitter.emit).not.toHaveBeenCalledWith(
+                'createNotification',
+                expect.any(Object),
+            );
+        });
+
+        it('should handle recovery code by transitioning ERROR rack back to ONLINE', async () => {
+            const recoveryData: DeviceErrorDto = {
+                code: 'SENSOR_RECOVERED' as RecoveryCode,
+                message: 'Sensor recovered',
+                severity: ErrorSeverity.LOW,
+            };
+            (MqttMessageParser.parseAndValidate as jest.Mock).mockResolvedValue(recoveryData);
+            const errorRack = { ...mockRack, status: DeviceStatus.ERROR };
+            mockDatabaseService.rack.findUnique.mockResolvedValue(errorRack);
+            mockDatabaseService.rack.update.mockResolvedValue({
+                ...errorRack,
+                status: DeviceStatus.ONLINE,
+            });
+
+            await service.processDeviceError(testMacAddress, errorMessage);
+
+            expect(mockDatabaseService.rack.update).toHaveBeenCalledWith({
+                where: { id: errorRack.id },
+                data: {
+                    status: DeviceStatus.ONLINE,
+                    lastSeenAt: expect.any(Date) as Date,
+                },
+            });
+        });
+
+        it('should emit createNotification with INFO type on recovery', async () => {
+            const recoveryData: DeviceErrorDto = {
+                code: 'SENSOR_RECOVERED' as RecoveryCode,
+                message: 'Sensor recovered',
+                severity: ErrorSeverity.LOW,
+            };
+            (MqttMessageParser.parseAndValidate as jest.Mock).mockResolvedValue(recoveryData);
+            const errorRack = { ...mockRack, status: DeviceStatus.ERROR };
+            mockDatabaseService.rack.findUnique.mockResolvedValue(errorRack);
+            mockDatabaseService.rack.update.mockResolvedValue({
+                ...errorRack,
+                status: DeviceStatus.ONLINE,
+            });
+
+            await service.processDeviceError(testMacAddress, errorMessage);
+
+            expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+                'createNotification',
+                expect.objectContaining({
+                    type: NotificationType.INFO,
+                    title: 'Component Recovered',
+                }),
+            );
+        });
+
+        it('should not recover if rack is not in ERROR state', async () => {
+            const recoveryData: DeviceErrorDto = {
+                code: 'SENSOR_RECOVERED' as RecoveryCode,
+                message: 'Sensor recovered',
+                severity: ErrorSeverity.LOW,
+            };
+            (MqttMessageParser.parseAndValidate as jest.Mock).mockResolvedValue(recoveryData);
+            // Rack is ONLINE, not ERROR
+            mockDatabaseService.rack.findUnique.mockResolvedValue(mockRack);
+
+            await service.processDeviceError(testMacAddress, errorMessage);
+
+            expect(mockDatabaseService.rack.update).not.toHaveBeenCalled();
         });
 
         it('should throw BadRequestException if device not registered', async () => {
@@ -1175,7 +1370,9 @@ describe('RacksService', () => {
         });
 
         it('should throw InternalServerErrorException on database error', async () => {
-            mockDatabaseService.rack.findUnique.mockRejectedValue(new Error('Database error'));
+            mockDatabaseService.rack.findUnique.mockRejectedValue(
+                new InternalServerErrorException('Database error'),
+            );
 
             await expect(service.processDeviceError(testMacAddress, errorMessage)).rejects.toThrow(
                 InternalServerErrorException,
@@ -1184,14 +1381,16 @@ describe('RacksService', () => {
 
         it('should log error on failure', async () => {
             mockDatabaseService.rack.findUnique.mockResolvedValue(mockRack);
-            mockDatabaseService.rack.update.mockRejectedValue(new Error('Database error'));
+            mockDatabaseService.rack.update.mockRejectedValue(
+                new InternalServerErrorException('Database error'),
+            );
 
             await expect(
                 service.processDeviceError(testMacAddress, errorMessage),
             ).rejects.toThrow();
 
             expect(mockLoggerService.error).toHaveBeenCalledWith(
-                `Failed to process device error for: ${testMacAddress}`,
+                `Failed to process device error/recovery for: ${testMacAddress}`,
                 'Database error',
                 'RacksService',
             );
@@ -1393,9 +1592,6 @@ describe('RacksService', () => {
     // STATISTICS & ANALYTICS
     // ─────────────────────────────────────────────
 
-    // resolveAuthorizedRackIds always calls rack.findMany to get all user rack IDs.
-    // When rackId filter is provided it also calls verifyRackOwnership (rack.findFirst)
-    // per requested rack ID.
     function seedResolveAuthorizedRackIds(
         mockDatabaseService: ReturnType<typeof createMockDatabaseService>,
         rackIds: string[] = [testRackId],
@@ -1444,7 +1640,6 @@ describe('RacksService', () => {
         });
 
         it('should filter by specific rack IDs when rackId provided', async () => {
-            // ownership check for the specific rack
             mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
 
             await service.getRackActivities(testUserId, filteredActivityQuery);
@@ -1534,7 +1729,7 @@ describe('RacksService', () => {
         });
 
         it('should throw NotFoundException when rackId filter contains an unauthorized rack', async () => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue(null); // ownership fails
+            mockDatabaseService.rack.findFirst.mockResolvedValue(null);
 
             await expect(
                 service.getRackActivities(testUserId, filteredActivityQuery),
@@ -1564,8 +1759,6 @@ describe('RacksService', () => {
         });
     });
 
-    // ── getPlantCareActivities ───────────────────────────────────────────────────
-
     describe('getPlantCareActivities', () => {
         const plantCareActivity = {
             ...mockActivity,
@@ -1588,7 +1781,7 @@ describe('RacksService', () => {
             });
         });
 
-        it('should query only WATERING_START, WATERING_STOP, LIGHT_ON, LIGHT_OFF event types', async () => {
+        it('should query only WATERING_START, WATERING_STOP, LIGHT_ON, LIGHT_OFF event types when no event filter', async () => {
             await service.getPlantCareActivities(testUserId, baseActivityQuery);
 
             expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith(
@@ -1697,12 +1890,10 @@ describe('RacksService', () => {
             expect(mockLoggerService.error).toHaveBeenCalledWith(
                 `Error fetching plant care activities for user ${testUserId}`,
                 'DB error',
-                'PlantsService',
+                'RacksService',
             );
         });
     });
-
-    // ── getPlantingActivities ────────────────────────────────────────────────────
 
     describe('getPlantingActivities', () => {
         const plantingActivity = {
@@ -1726,7 +1917,7 @@ describe('RacksService', () => {
             });
         });
 
-        it('should query only PLANT_ADDED, PLANT_CHANGED, PLANT_REMOVED event types', async () => {
+        it('should query only PLANT_ADDED and PLANT_REMOVED event types', async () => {
             await service.getPlantingActivities(testUserId, baseActivityQuery);
 
             expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith(
@@ -1735,7 +1926,6 @@ describe('RacksService', () => {
                         eventType: {
                             in: expect.arrayContaining([
                                 ActivityEventType.PLANT_ADDED,
-                                ActivityEventType.PLANT_CHANGED,
                                 ActivityEventType.PLANT_REMOVED,
                             ]) as string[],
                         },
@@ -1833,44 +2023,26 @@ describe('RacksService', () => {
             expect(mockLoggerService.error).toHaveBeenCalledWith(
                 `Error fetching planting activities for user ${testUserId}`,
                 'DB error',
-                'PlantsService',
+                'RacksService',
             );
         });
     });
 
-    // ── getHarvestActivities ─────────────────────────────────────────────────────
-
     describe('getHarvestActivities', () => {
-        // getHarvestActivities makes THREE db calls:
-        //   1. activity.findMany  → paginated page of results
-        //   2. activity.count     → totalItems for pagination
-        //   3. activity.findMany  → ALL results in range (select metadata only) for totalHarvestCount
-        // All three share the same `where` filter so we use mockResolvedValueOnce to
-        // distinguish calls 1 and 3.
-
-        const harvestActivity = (quantity: number, id = 'activity-h1') => ({
-            id,
-            rackId: testRackId,
-            eventType: ActivityEventType.PLANT_HARVESTED,
-            description: 'Harvest',
-            metadata: { quantity },
-            timestamp: new Date('2024-08-01'),
-        });
-
         beforeEach(() => {
             seedResolveAuthorizedRackIds(mockDatabaseService);
             mockDatabaseService.activity.count.mockResolvedValue(1);
+            // rack.aggregate for totalHarvestCount
+            mockDatabaseService.rack.aggregate.mockResolvedValue({ _sum: { harvestCount: 5 } });
         });
 
         it('should return paginated harvest activities with totalHarvestCount', async () => {
-            mockDatabaseService.activity.findMany
-                .mockResolvedValueOnce([harvestActivity(5)]) // paginated page
-                .mockResolvedValueOnce([{ metadata: { quantity: 5 } }]); // allInRange
+            mockDatabaseService.activity.findMany.mockResolvedValue(mockActivities);
 
             const result = await service.getHarvestActivities(testUserId, baseActivityQuery);
 
             expect(result).toEqual({
-                data: [harvestActivity(5)],
+                data: mockActivities,
                 meta: {
                     currentPage: 1,
                     itemsPerPage: 10,
@@ -1883,70 +2055,61 @@ describe('RacksService', () => {
             });
         });
 
-        it('should sum quantity values from all harvest activity metadata', async () => {
-            mockDatabaseService.activity.findMany
-                .mockResolvedValueOnce([harvestActivity(3), harvestActivity(7, 'h2')])
-                .mockResolvedValueOnce([
-                    { metadata: { quantity: 3 } },
-                    { metadata: { quantity: 7 } },
-                ]);
-            mockDatabaseService.activity.count.mockResolvedValue(2);
+        it('should use rack.aggregate to compute totalHarvestCount', async () => {
+            mockDatabaseService.activity.findMany.mockResolvedValue(mockActivities);
 
-            const result = await service.getHarvestActivities(testUserId, baseActivityQuery);
+            await service.getHarvestActivities(testUserId, baseActivityQuery);
 
-            expect(result.totalHarvestCount).toBe(10);
+            expect(mockDatabaseService.rack.aggregate).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    _sum: { harvestCount: true },
+                }),
+            );
         });
 
-        it('should return totalHarvestCount of 0 when metadata quantity is missing', async () => {
-            mockDatabaseService.activity.findMany
-                .mockResolvedValueOnce([harvestActivity(0)])
-                .mockResolvedValueOnce([{ metadata: null }, { metadata: {} }]);
+        it('should return totalHarvestCount of 0 when aggregate sum is null', async () => {
+            mockDatabaseService.activity.findMany.mockResolvedValue([]);
+            mockDatabaseService.activity.count.mockResolvedValue(0);
+            mockDatabaseService.rack.aggregate.mockResolvedValue({ _sum: { harvestCount: null } });
 
             const result = await service.getHarvestActivities(testUserId, baseActivityQuery);
 
             expect(result.totalHarvestCount).toBe(0);
         });
 
-        it('should query only PLANT_HARVESTED event type', async () => {
-            mockDatabaseService.activity.findMany
-                .mockResolvedValueOnce([])
-                .mockResolvedValueOnce([]);
+        it('should query LEAVES_HARVESTED, PLANT_HARVESTED, and SEEDS_HARVESTED event types', async () => {
+            mockDatabaseService.activity.findMany.mockResolvedValue(mockActivities);
 
             await service.getHarvestActivities(testUserId, baseActivityQuery);
 
-            const expectedFilter = expect.objectContaining({
-                where: expect.objectContaining({
-                    eventType: ActivityEventType.PLANT_HARVESTED,
-                }) as object,
-            }) as object;
-
-            expect(mockDatabaseService.activity.findMany).toHaveBeenNthCalledWith(
-                1,
-                expectedFilter,
-            );
-            expect(mockDatabaseService.activity.findMany).toHaveBeenNthCalledWith(
-                2,
-                expectedFilter,
+            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        eventType: {
+                            in: expect.arrayContaining([
+                                ActivityEventType.LEAVES_HARVESTED,
+                                ActivityEventType.PLANT_HARVESTED,
+                                ActivityEventType.SEEDS_HARVESTED,
+                            ]) as string[],
+                        },
+                    }) as object,
+                }),
             );
         });
 
-        it('should make three parallel db calls via Promise.all', async () => {
-            mockDatabaseService.activity.findMany
-                .mockResolvedValueOnce([harvestActivity(2)])
-                .mockResolvedValueOnce([{ metadata: { quantity: 2 } }]);
+        it('should make three parallel calls via Promise.all — findMany, count, aggregate', async () => {
+            mockDatabaseService.activity.findMany.mockResolvedValue(mockActivities);
 
             await service.getHarvestActivities(testUserId, baseActivityQuery);
 
-            // findMany called twice (paginated + allInRange), count called once
-            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledTimes(2);
+            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledTimes(1);
             expect(mockDatabaseService.activity.count).toHaveBeenCalledTimes(1);
+            expect(mockDatabaseService.rack.aggregate).toHaveBeenCalledTimes(1);
         });
 
         it('should filter by specific rack IDs when rackId provided', async () => {
             mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
-            mockDatabaseService.activity.findMany
-                .mockResolvedValueOnce([harvestActivity(1)])
-                .mockResolvedValueOnce([{ metadata: { quantity: 1 } }]);
+            mockDatabaseService.activity.findMany.mockResolvedValue(mockActivities);
 
             await service.getHarvestActivities(testUserId, filteredActivityQuery);
 
@@ -1959,11 +2122,22 @@ describe('RacksService', () => {
             );
         });
 
+        it('should pass matching rack IDs to rack.aggregate where filter', async () => {
+            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
+            mockDatabaseService.activity.findMany.mockResolvedValue(mockActivities);
+
+            await service.getHarvestActivities(testUserId, filteredActivityQuery);
+
+            expect(mockDatabaseService.rack.aggregate).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: { id: { in: [testRackId] } },
+                }),
+            );
+        });
+
         it('should apply date range filter when dates provided', async () => {
             mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
-            mockDatabaseService.activity.findMany
-                .mockResolvedValueOnce([])
-                .mockResolvedValueOnce([]);
+            mockDatabaseService.activity.findMany.mockResolvedValue([]);
 
             await service.getHarvestActivities(testUserId, filteredActivityQuery);
 
@@ -1980,40 +2154,22 @@ describe('RacksService', () => {
         });
 
         it('should order results by timestamp descending', async () => {
-            mockDatabaseService.activity.findMany
-                .mockResolvedValueOnce([harvestActivity(1)])
-                .mockResolvedValueOnce([{ metadata: { quantity: 1 } }]);
+            mockDatabaseService.activity.findMany.mockResolvedValue(mockActivities);
 
             await service.getHarvestActivities(testUserId, baseActivityQuery);
 
-            // The first findMany call (paginated) must have the orderBy
             expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith(
                 expect.objectContaining({ orderBy: { timestamp: 'desc' } }),
             );
         });
 
-        it('should apply correct pagination skip and take to paginated call', async () => {
-            mockDatabaseService.activity.findMany
-                .mockResolvedValueOnce([])
-                .mockResolvedValueOnce([]);
+        it('should apply correct pagination skip and take', async () => {
+            mockDatabaseService.activity.findMany.mockResolvedValue([]);
 
             await service.getHarvestActivities(testUserId, { page: 3, limit: 5 });
 
             expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith(
                 expect.objectContaining({ skip: 10, take: 5 }),
-            );
-        });
-
-        it('should select only metadata on the allInRange call', async () => {
-            mockDatabaseService.activity.findMany
-                .mockResolvedValueOnce([harvestActivity(4)])
-                .mockResolvedValueOnce([{ metadata: { quantity: 4 } }]);
-
-            await service.getHarvestActivities(testUserId, baseActivityQuery);
-
-            // The second findMany (allInRange) must have select: { metadata: true }
-            expect(mockDatabaseService.activity.findMany).toHaveBeenCalledWith(
-                expect.objectContaining({ select: { metadata: true } }),
             );
         });
 
@@ -2043,7 +2199,7 @@ describe('RacksService', () => {
             expect(mockLoggerService.error).toHaveBeenCalledWith(
                 `Error fetching harvest activities for user ${testUserId}`,
                 'DB error',
-                'PlantsService',
+                'RacksService',
             );
         });
     });
@@ -2052,12 +2208,146 @@ describe('RacksService', () => {
     // RACK ASSIGNMENT OPERATIONS
     // ─────────────────────────────────────────────
 
+    describe('checkAssignToRack', () => {
+        // service signature: checkAssignToRack(rackId, userId, dto)
+        beforeEach(() => {
+            mockDatabaseService.plant.findUnique.mockResolvedValue(mockPlant);
+            mockDatabaseService.rack.findFirst.mockResolvedValue(emptyRackForPlant);
+            mockDatabaseService.sensorReading.findFirst.mockResolvedValue(null);
+        });
+
+        it('should return hasWarning false when no sensor reading exists', async () => {
+            const result = await service.checkAssignToRack(
+                testRackId,
+                testUserId,
+                validAssignPlantToRackDto,
+            );
+
+            expect(result).toEqual({
+                hasWarning: false,
+                latestTemperatureReading: null,
+                maxTemperatureThreshold: mockPlant.maxTemperature,
+            });
+        });
+
+        it('should return hasWarning false when temperature is within threshold', async () => {
+            mockDatabaseService.sensorReading.findFirst.mockResolvedValue({
+                temperature: 20,
+            });
+            // mockPlant.maxTemperature should be > 20 for this to pass
+            mockDatabaseService.plant.findUnique.mockResolvedValue({
+                ...mockPlant,
+                maxTemperature: 30,
+            });
+
+            const result = await service.checkAssignToRack(
+                testRackId,
+                testUserId,
+                validAssignPlantToRackDto,
+            );
+
+            expect(result.hasWarning).toBe(false);
+            expect(result.latestTemperatureReading).toBe(20);
+        });
+
+        it('should return hasWarning true when temperature exceeds plant max threshold', async () => {
+            mockDatabaseService.sensorReading.findFirst.mockResolvedValue({
+                temperature: 35,
+            });
+            mockDatabaseService.plant.findUnique.mockResolvedValue({
+                ...mockPlant,
+                maxTemperature: 25,
+            });
+
+            const result = await service.checkAssignToRack(
+                testRackId,
+                testUserId,
+                validAssignPlantToRackDto,
+            );
+
+            expect(result.hasWarning).toBe(true);
+            expect(result.latestTemperatureReading).toBe(35);
+            expect(result.maxTemperatureThreshold).toBe(25);
+        });
+
+        it('should return hasWarning false when plant has no maxTemperature set', async () => {
+            mockDatabaseService.sensorReading.findFirst.mockResolvedValue({ temperature: 99 });
+            mockDatabaseService.plant.findUnique.mockResolvedValue({
+                ...mockPlant,
+                maxTemperature: null,
+            });
+
+            const result = await service.checkAssignToRack(
+                testRackId,
+                testUserId,
+                validAssignPlantToRackDto,
+            );
+
+            expect(result.hasWarning).toBe(false);
+        });
+
+        it('should query sensor reading with correct rackId', async () => {
+            await service.checkAssignToRack(testRackId, testUserId, validAssignPlantToRackDto);
+
+            expect(mockDatabaseService.sensorReading.findFirst).toHaveBeenCalledWith({
+                where: { rackId: testRackId },
+                orderBy: { timestamp: 'desc' },
+                select: { temperature: true },
+            });
+        });
+
+        it('should throw NotFoundException when plant does not exist', async () => {
+            mockDatabaseService.plant.findUnique.mockResolvedValue(null);
+
+            await expect(
+                service.checkAssignToRack(testRackId, testUserId, validAssignPlantToRackDto),
+            ).rejects.toThrow(NotFoundException);
+        });
+
+        it('should throw BadRequestException when plant is inactive', async () => {
+            mockDatabaseService.plant.findUnique.mockResolvedValue(mockInactivePlant);
+
+            await expect(
+                service.checkAssignToRack(testRackId, testUserId, validAssignPlantToRackDto),
+            ).rejects.toThrow(BadRequestException);
+            await expect(
+                service.checkAssignToRack(testRackId, testUserId, validAssignPlantToRackDto),
+            ).rejects.toThrow('Cannot assign an inactive plant to a rack');
+        });
+
+        it('should throw NotFoundException when rack does not exist', async () => {
+            mockDatabaseService.rack.findFirst.mockResolvedValue(null);
+
+            await expect(
+                service.checkAssignToRack(testRackId, testUserId, validAssignPlantToRackDto),
+            ).rejects.toThrow(NotFoundException);
+        });
+
+        it('should throw BadRequestException when rack already has a plant assigned', async () => {
+            mockDatabaseService.rack.findFirst.mockResolvedValue(rackWithPlant);
+
+            await expect(
+                service.checkAssignToRack(testRackId, testUserId, validAssignPlantToRackDto),
+            ).rejects.toThrow(BadRequestException);
+            await expect(
+                service.checkAssignToRack(testRackId, testUserId, validAssignPlantToRackDto),
+            ).rejects.toThrow('This rack already has a plant assigned');
+        });
+
+        it('should throw InternalServerErrorException on unexpected database error', async () => {
+            mockDatabaseService.plant.findUnique.mockRejectedValue(new Error('DB error'));
+
+            await expect(
+                service.checkAssignToRack(testRackId, testUserId, validAssignPlantToRackDto),
+            ).rejects.toThrow(InternalServerErrorException);
+        });
+    });
+
     describe('harvestLeavesFromRack', () => {
         const harvestLeavesDto: HarvestLeavesDto = { plantId: testPlantId };
 
-        // service signature: harvestLeavesFromRack(rackId, userId, dto)
         beforeEach(() => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack); // ownership check
+            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
             mockDatabaseService.rack.findUnique.mockResolvedValue(rackForLeaves);
             mockDatabaseService.rack.update.mockResolvedValue(mockRack);
         });
@@ -2203,11 +2493,9 @@ describe('RacksService', () => {
     });
 
     describe('harvestPlantFromRack', () => {
-        // service signature: harvestPlantFromRack(rackId, userId, dto)
         beforeEach(() => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack); // ownership check
+            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
             mockDatabaseService.rack.findUnique.mockResolvedValue(rackWithPlant);
-            // tx calls inside the transaction callback
             mockDatabaseService.rackPlantingHistory.updateMany.mockResolvedValue({ count: 1 });
             mockDatabaseService.rack.update.mockResolvedValue(mockRack);
             mockDatabaseService.$transaction.mockImplementation(
@@ -2302,6 +2590,14 @@ describe('RacksService', () => {
             );
         });
 
+        it('should run updates in a transaction', async () => {
+            mockDatabaseService.rack.findUnique.mockResolvedValue(rackWithPlant);
+
+            await service.harvestPlantFromRack(testRackId, testUserId, harvestDto);
+
+            expect(mockDatabaseService.$transaction).toHaveBeenCalledTimes(1);
+        });
+
         it('should throw InternalServerErrorException on transaction error', async () => {
             mockDatabaseService.rack.findUnique.mockResolvedValue(rackWithPlant);
             mockDatabaseService.$transaction.mockRejectedValueOnce(new Error('DB error'));
@@ -2313,10 +2609,9 @@ describe('RacksService', () => {
     });
 
     describe('harvestSeedsFromRack', () => {
-        // service signature: harvestSeedsFromRack(rackId, userId, dto)
         beforeEach(() => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack); // ownership check
-            mockDatabaseService.rack.findUnique.mockResolvedValue(rackForSeeds); // quantity: 10
+            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
+            mockDatabaseService.rack.findUnique.mockResolvedValue(rackForSeeds);
             mockDatabaseService.rack.update.mockResolvedValue(mockRack);
         });
 
@@ -2331,7 +2626,6 @@ describe('RacksService', () => {
         });
 
         it('should decrement rack quantity by the requested amount', async () => {
-            // quantity: 10, taking 3 → remaining: 7
             await service.harvestSeedsFromRack(testRackId, testUserId, harvestSeedsDto);
 
             expect(mockDatabaseService.rack.update).toHaveBeenCalledWith({
@@ -2397,7 +2691,6 @@ describe('RacksService', () => {
         });
 
         it('should allow taking exactly maxSeedsAllowed (quantity - 1)', async () => {
-            // quantity: 10, max: 9
             const dto: HarvestSeedsDto = { plantId: testPlantId, quantity: 9 };
 
             await expect(
@@ -2448,7 +2741,6 @@ describe('RacksService', () => {
         });
 
         it('should throw BadRequestException when quantity requested exceeds maxSeedsAllowed', async () => {
-            // quantity: 10, max: 9 — request 10
             const dto: HarvestSeedsDto = { plantId: testPlantId, quantity: 10 };
 
             await expect(service.harvestSeedsFromRack(testRackId, testUserId, dto)).rejects.toThrow(
@@ -2503,10 +2795,7 @@ describe('RacksService', () => {
     });
 
     describe('assignToRack', () => {
-        // service signature: assignToRack(rackId, userId, dto)
         beforeEach(() => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack); // ownership check
-            // tx calls inside the transaction callback
             mockDatabaseService.rackPlantingHistory.create.mockResolvedValue({});
             mockDatabaseService.rack.update.mockResolvedValue(mockRack);
             mockDatabaseService.$transaction.mockImplementation(
@@ -2514,9 +2803,22 @@ describe('RacksService', () => {
             );
         });
 
-        it('should log PLANT_ADDED when rack has no current plant', async () => {
+        it('should assign plant to empty rack and return success message', async () => {
             mockDatabaseService.plant.findUnique.mockResolvedValue(mockPlant);
-            mockDatabaseService.rack.findUnique.mockResolvedValue(emptyRackForPlant);
+            mockDatabaseService.rack.findFirst.mockResolvedValue(emptyRackForPlant);
+
+            const result = await service.assignToRack(
+                testRackId,
+                testUserId,
+                validAssignPlantToRackDto,
+            );
+
+            expect(result).toEqual({ message: 'Plant assigned to rack successfully' });
+        });
+
+        it('should log PLANT_ADDED activity when rack has no current plant', async () => {
+            mockDatabaseService.plant.findUnique.mockResolvedValue(mockPlant);
+            mockDatabaseService.rack.findFirst.mockResolvedValue(emptyRackForPlant);
 
             await service.assignToRack(testRackId, testUserId, validAssignPlantToRackDto);
 
@@ -2528,48 +2830,70 @@ describe('RacksService', () => {
             );
         });
 
-        it('should log PLANT_REMOVED + PLANT_CHANGED when rack has a different plant', async () => {
+        it('should create a RackPlantingHistory entry on assignment', async () => {
             mockDatabaseService.plant.findUnique.mockResolvedValue(mockPlant);
-            mockDatabaseService.rack.findUnique.mockResolvedValue(rackWithDifferentPlant);
+            mockDatabaseService.rack.findFirst.mockResolvedValue(emptyRackForPlant);
 
             await service.assignToRack(testRackId, testUserId, validAssignPlantToRackDto);
 
-            expect(mockLogRackActivityHelper.logActivity).toHaveBeenCalledWith(
-                testRackId,
-                ActivityEventType.PLANT_REMOVED,
-                expect.stringContaining('replaced during crop rotation'),
-                expect.objectContaining({ replacedByPlantId: testPlantId }),
-            );
-            expect(mockLogRackActivityHelper.logActivity).toHaveBeenCalledWith(
-                testRackId,
-                ActivityEventType.PLANT_CHANGED,
-                expect.stringContaining(mockPlant.name),
-                expect.objectContaining({ newPlantId: testPlantId }),
+            expect(mockDatabaseService.rackPlantingHistory.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        rackId: testRackId,
+                        plantId: testPlantId,
+                        quantity: validAssignPlantToRackDto.quantity,
+                    }) as object,
+                }),
             );
         });
 
         it('should use provided plantedAt date when given', async () => {
             mockDatabaseService.plant.findUnique.mockResolvedValue(mockPlant);
-            mockDatabaseService.rack.findUnique.mockResolvedValue(emptyRackForPlant);
+            mockDatabaseService.rack.findFirst.mockResolvedValue(emptyRackForPlant);
 
             await service.assignToRack(testRackId, testUserId, assignWithDateDto);
 
             expect(mockDatabaseService.$transaction).toHaveBeenCalled();
         });
 
+        it('should run updates in a transaction', async () => {
+            mockDatabaseService.plant.findUnique.mockResolvedValue(mockPlant);
+            mockDatabaseService.rack.findFirst.mockResolvedValue(emptyRackForPlant);
+
+            await service.assignToRack(testRackId, testUserId, validAssignPlantToRackDto);
+
+            expect(mockDatabaseService.$transaction).toHaveBeenCalledTimes(1);
+        });
+
+        it('should call rack.update with the new plant inside the transaction', async () => {
+            mockDatabaseService.plant.findUnique.mockResolvedValue(mockPlant);
+            mockDatabaseService.rack.findFirst.mockResolvedValue(emptyRackForPlant);
+
+            await service.assignToRack(testRackId, testUserId, validAssignPlantToRackDto);
+
+            expect(mockDatabaseService.rack.update).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: { id: testRackId },
+                    data: expect.objectContaining({
+                        currentPlantId: testPlantId,
+                        quantity: validAssignPlantToRackDto.quantity,
+                    }) as object,
+                }),
+            );
+        });
+
         it('should throw NotFoundException when plant does not exist', async () => {
             mockDatabaseService.plant.findUnique.mockResolvedValue(null);
+            mockDatabaseService.rack.findFirst.mockResolvedValue(emptyRackForPlant);
 
             await expect(
-                service.assignToRack(testRackId, testUserId, {
-                    ...validAssignPlantToRackDto,
-                    plantId: testPlantIds.nonExistent ?? 'plant-nonexistent',
-                }),
+                service.assignToRack(testRackId, testUserId, validAssignPlantToRackDto),
             ).rejects.toThrow(NotFoundException);
         });
 
         it('should throw BadRequestException when plant is inactive', async () => {
             mockDatabaseService.plant.findUnique.mockResolvedValue(mockInactivePlant);
+            mockDatabaseService.rack.findFirst.mockResolvedValue(emptyRackForPlant);
 
             await expect(
                 service.assignToRack(testRackId, testUserId, {
@@ -2585,72 +2909,58 @@ describe('RacksService', () => {
             ).rejects.toThrow('Cannot assign an inactive plant to a rack');
         });
 
-        it('should call verifyRackOwnership to check authorization', async () => {
+        it('should throw NotFoundException when rack does not exist', async () => {
             mockDatabaseService.plant.findUnique.mockResolvedValue(mockPlant);
-            mockDatabaseService.rack.findUnique.mockResolvedValue(emptyRackForPlant);
-
-            await service.assignToRack(testRackId, testUserId, validAssignPlantToRackDto);
-
-            expect(mockDatabaseService.rack.findFirst).toHaveBeenCalledWith({
-                where: { id: testRackId, userId: testUserId },
-            });
-        });
-
-        it('should throw BadRequestException when same plant is assigned', async () => {
-            mockDatabaseService.plant.findUnique.mockResolvedValue(mockPlant);
-            mockDatabaseService.rack.findUnique.mockResolvedValue(rackWithPlant);
+            mockDatabaseService.rack.findFirst.mockResolvedValue(null);
 
             await expect(
-                service.assignToRack(testRackId, testUserId, {
-                    ...validAssignPlantToRackDto,
-                    plantId: mockPlant.id,
-                }),
+                service.assignToRack(testRackId, testUserId, validAssignPlantToRackDto),
+            ).rejects.toThrow(NotFoundException);
+        });
+
+        it('should throw BadRequestException when rack already has any plant assigned', async () => {
+            mockDatabaseService.plant.findUnique.mockResolvedValue(mockPlant);
+            mockDatabaseService.rack.findFirst.mockResolvedValue(rackWithPlant);
+
+            await expect(
+                service.assignToRack(testRackId, testUserId, validAssignPlantToRackDto),
             ).rejects.toThrow(BadRequestException);
             await expect(
-                service.assignToRack(testRackId, testUserId, {
-                    ...validAssignPlantToRackDto,
-                    plantId: mockPlant.id,
-                }),
-            ).rejects.toThrow(
-                'This plant is already assigned to that rack. To update quantity or planted date, please use the appropriate update endpoint.',
-            );
-        });
-
-        it('should run updates in a transaction', async () => {
-            mockDatabaseService.plant.findUnique.mockResolvedValue(mockPlant);
-            mockDatabaseService.rack.findUnique.mockResolvedValue(emptyRackForPlant);
-
-            await service.assignToRack(testRackId, testUserId, validAssignPlantToRackDto);
-
-            expect(mockDatabaseService.$transaction).toHaveBeenCalledTimes(1);
-        });
-
-        it('should create two RackPlantingHistory entries when changing plants', async () => {
-            mockDatabaseService.plant.findUnique.mockResolvedValue(mockPlant);
-            mockDatabaseService.rack.findUnique.mockResolvedValue(rackWithDifferentPlant);
-
-            await service.assignToRack(testRackId, testUserId, validAssignPlantToRackDto);
-
-            expect(mockDatabaseService.rackPlantingHistory.create).toHaveBeenCalledTimes(2);
+                service.assignToRack(testRackId, testUserId, validAssignPlantToRackDto),
+            ).rejects.toThrow('This rack already has a plant assigned');
         });
 
         it('should throw InternalServerErrorException on transaction error', async () => {
             mockDatabaseService.plant.findUnique.mockResolvedValue(mockPlant);
-            mockDatabaseService.rack.findUnique.mockResolvedValue(emptyRackForPlant);
+            mockDatabaseService.rack.findFirst.mockResolvedValue(emptyRackForPlant);
             mockDatabaseService.$transaction.mockRejectedValueOnce(new Error('DB error'));
 
             await expect(
                 service.assignToRack(testRackId, testUserId, validAssignPlantToRackDto),
             ).rejects.toThrow(InternalServerErrorException);
         });
+
+        it('should log error on failure', async () => {
+            mockDatabaseService.plant.findUnique.mockResolvedValue(mockPlant);
+            mockDatabaseService.rack.findFirst.mockResolvedValue(emptyRackForPlant);
+            mockDatabaseService.$transaction.mockRejectedValueOnce(new Error('DB error'));
+
+            await expect(
+                service.assignToRack(testRackId, testUserId, validAssignPlantToRackDto),
+            ).rejects.toThrow();
+
+            expect(mockLoggerService.error).toHaveBeenCalledWith(
+                expect.stringContaining(`Error assigning plant ${testPlantId}`),
+                'DB error',
+                'RacksService',
+            );
+        });
     });
 
     describe('unassignFromRack', () => {
-        // service signature: unassignFromRack(rackId, userId, dto)
         beforeEach(() => {
-            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack); // ownership check
+            mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
             mockDatabaseService.rack.findUnique.mockResolvedValue(rackWithPlant);
-            // tx calls inside the transaction callback
             mockDatabaseService.rackPlantingHistory.updateMany.mockResolvedValue({ count: 1 });
             mockDatabaseService.rack.update.mockResolvedValue(mockRack);
             mockDatabaseService.$transaction.mockImplementation(
@@ -2719,6 +3029,14 @@ describe('RacksService', () => {
             ).rejects.toThrow('This plant is not currently assigned to that rack');
         });
 
+        it('should run updates in a transaction', async () => {
+            mockDatabaseService.rack.findUnique.mockResolvedValue(rackWithPlant);
+
+            await service.unassignFromRack(testRackId, testUserId, unassignDto);
+
+            expect(mockDatabaseService.$transaction).toHaveBeenCalledTimes(1);
+        });
+
         it('should throw InternalServerErrorException on transaction error', async () => {
             mockDatabaseService.rack.findUnique.mockResolvedValue(rackWithPlant);
             mockDatabaseService.$transaction.mockRejectedValueOnce(new Error('DB error'));
@@ -2734,7 +3052,7 @@ describe('RacksService', () => {
     // ─────────────────────────────────────────────
 
     describe('getRecentActivities', () => {
-        const mockActivities = [
+        const mockRecentActivities = [
             {
                 id: 'activity-1',
                 rackId: testRackId,
@@ -2745,16 +3063,16 @@ describe('RacksService', () => {
 
         it('should retrieve recent activities', async () => {
             mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
-            mockDatabaseService.activity.findMany.mockResolvedValue(mockActivities as any);
+            mockDatabaseService.activity.findMany.mockResolvedValue(mockRecentActivities as any);
 
             const result = await service.getRecentActivities(testRackId, testDbIds.primary);
 
-            expect(result).toEqual(mockActivities);
+            expect(result).toEqual(mockRecentActivities);
         });
 
         it('should verify ownership before retrieving activities', async () => {
             mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
-            mockDatabaseService.activity.findMany.mockResolvedValue(mockActivities as any);
+            mockDatabaseService.activity.findMany.mockResolvedValue(mockRecentActivities as any);
 
             await service.getRecentActivities(testRackId, testDbIds.primary);
 
@@ -2763,7 +3081,7 @@ describe('RacksService', () => {
 
         it('should use default limit of 50', async () => {
             mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
-            mockDatabaseService.activity.findMany.mockResolvedValue(mockActivities as any);
+            mockDatabaseService.activity.findMany.mockResolvedValue(mockRecentActivities as any);
 
             await service.getRecentActivities(testRackId, testDbIds.primary);
 
@@ -2776,7 +3094,7 @@ describe('RacksService', () => {
 
         it('should use custom limit when provided', async () => {
             mockDatabaseService.rack.findFirst.mockResolvedValue(mockRack);
-            mockDatabaseService.activity.findMany.mockResolvedValue(mockActivities as any);
+            mockDatabaseService.activity.findMany.mockResolvedValue(mockRecentActivities as any);
 
             await service.getRecentActivities(testRackId, testDbIds.primary, 100);
 

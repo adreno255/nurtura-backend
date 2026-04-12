@@ -12,7 +12,7 @@ import { RackWithUserAndCurrentPlant } from '../racks/interfaces/rack.interface'
 export class SystemRulesService {
     private static readonly HIGH_TEMP_THRESHOLD = 37;
     private static readonly LIGHT_ON_HOUR = 8; // 08:00
-    private static readonly LIGHT_OFF_HOUR = 0; // 00:00 (midnight)
+    private static readonly LIGHT_OFF_HOUR = 23; // 23:00
 
     constructor(
         private readonly eventEmitter: EventEmitter2,
@@ -32,7 +32,7 @@ export class SystemRulesService {
      *
      * Priority 1: moisture < 20 → light_off (system, all plants)
      * Priority 2: lightLevel > plant max threshold → light_off (system, plant-specific threshold)
-     * Priority 3: time-based schedule → light_on / light_off (baseline)
+     * Priority 3: time-based schedule → light_on (08:00–22:59) / light_off (23:00–07:59) (baseline)
      */
     private async evaluateLightPriority(
         rack: RackWithUserAndCurrentPlant,
@@ -79,7 +79,8 @@ export class SystemRulesService {
 
         // Priority 3: schedule-based (baseline)
         const hour = new Date().getHours();
-        const isLightOnWindow = hour >= SystemRulesService.LIGHT_ON_HOUR;
+        const isLightOnWindow =
+            hour >= SystemRulesService.LIGHT_ON_HOUR && hour < SystemRulesService.LIGHT_OFF_HOUR;
         const action = isLightOnWindow ? 'light_on' : 'light_off';
 
         this.logger.log(

@@ -69,7 +69,6 @@ describe('AutomationController', () => {
                     description: mockAutomationRule.description,
                     conditions: mockAutomationRule.conditions,
                     actions: mockAutomationRule.actions,
-                    cooldownMinutes: mockAutomationRule.cooldownMinutes,
                     isEnabled: mockAutomationRule.isEnabled,
                 },
             };
@@ -132,7 +131,6 @@ describe('AutomationController', () => {
                     name: lightingDto.name,
                     conditions: lightingDto.conditions,
                     actions: lightingDto.actions,
-                    cooldownMinutes: lightingDto.cooldownMinutes,
                     isEnabled: true,
                 },
             };
@@ -466,24 +464,6 @@ describe('AutomationController', () => {
             expect(result.rule.isEnabled).toBe(false);
         });
 
-        it('should update cooldown period', async () => {
-            const cooldownUpdate: UpdateAutomationRuleDto = { cooldownMinutes: 60 };
-            const expectedResponse = {
-                message: 'Automation rule updated successfully',
-                rule: {
-                    ...mockAutomationRule,
-                    cooldownMinutes: 60,
-                },
-            };
-
-            mockAutomationService.update.mockResolvedValue(expectedResponse);
-
-            const result = await controller.updateRule(ruleId, currentUser, cooldownUpdate);
-
-            expect(result).toEqual(expectedResponse);
-            expect(result.rule.cooldownMinutes).toBe(60);
-        });
-
         it('should throw NotFoundException when rule not found', async () => {
             const error = new NotFoundException('Automation rule not found');
             mockAutomationService.update.mockRejectedValue(error);
@@ -516,8 +496,21 @@ describe('AutomationController', () => {
             );
         });
 
-        it('should throw BadRequestException for invalid actions', async () => {
-            const error = new BadRequestException('Watering action must be "start" or "stop"');
+        it('should throw BadRequestException for invalid watering action', async () => {
+            const error = new BadRequestException(
+                'Watering action must be "watering_start" or "watering_stop"',
+            );
+            mockAutomationService.update.mockRejectedValue(error);
+
+            await expect(controller.updateRule(ruleId, currentUser, updateRuleDto)).rejects.toThrow(
+                error,
+            );
+        });
+
+        it('should throw BadRequestException for invalid grow light action', async () => {
+            const error = new BadRequestException(
+                'Grow light action must be "light_on" or "light_off"',
+            );
             mockAutomationService.update.mockRejectedValue(error);
 
             await expect(controller.updateRule(ruleId, currentUser, updateRuleDto)).rejects.toThrow(
@@ -622,7 +615,7 @@ describe('AutomationController', () => {
             expect(mockAutomationService.delete).toHaveBeenCalledWith('', currentUser.dbId);
         });
 
-        it('should handle empty string rackId', async () => {
+        it('should handle empty string plantId', async () => {
             const expectedResponse = {
                 data: [],
                 meta: {
@@ -700,7 +693,6 @@ describe('AutomationController', () => {
 
             await controller.createRule(currentUser, validCreateAutomationRuleDto);
 
-            // Verify that user.dbId is used (comes from CurrentUser decorator)
             expect(mockAutomationService.create).toHaveBeenCalledWith(
                 currentUser.dbId,
                 validCreateAutomationRuleDto,
@@ -716,7 +708,6 @@ describe('AutomationController', () => {
 
             await controller.deleteRule(ruleId, currentUser);
 
-            // Should use dbId, not firebaseUid
             expect(mockAutomationService.delete).toHaveBeenCalledWith(ruleId, currentUser.dbId);
             expect(mockAutomationService.delete).not.toHaveBeenCalledWith(
                 ruleId,
@@ -743,10 +734,10 @@ describe('AutomationController', () => {
             }
         });
 
-        it('should accept valid rackId format', async () => {
-            const validRackIds = ['rack-123', 'clx456def', 'xyz-abc-123'];
+        it('should accept valid plantId format', async () => {
+            const validPlantIds = ['plant-123', 'clx456def', 'xyz-abc-123'];
 
-            for (const testRackId of validRackIds) {
+            for (const testPlantId of validPlantIds) {
                 mockAutomationService.findAll.mockResolvedValue({
                     data: [],
                     meta: {
@@ -759,10 +750,10 @@ describe('AutomationController', () => {
                     },
                 });
 
-                await controller.getPlantRules(testRackId, currentUser, { page: 1, limit: 10 });
+                await controller.getPlantRules(testPlantId, currentUser, { page: 1, limit: 10 });
 
                 expect(mockAutomationService.findAll).toHaveBeenCalledWith(
-                    testRackId,
+                    testPlantId,
                     currentUser.dbId,
                     { page: 1, limit: 10 },
                 );

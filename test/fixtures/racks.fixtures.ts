@@ -3,7 +3,8 @@
  * Reusable data for rack-related tests
  */
 
-import { DeviceStatus } from '../../src/generated/prisma';
+import { DeviceStatus, WateringState, LightState } from '../../src/generated/prisma';
+import { type RackWithUserAndCurrentPlant } from '../../src/racks/interfaces/rack.interface';
 import type { CreateRackDto } from '../../src/racks/dto/create-rack.dto';
 import type { UpdateRackDto } from '../../src/racks/dto/update-rack.dto';
 import { ActivityEventType } from '../../src/generated/prisma';
@@ -36,6 +37,35 @@ export const mockRack = {
         id: 'user-123',
         email: 'test@example.com',
     },
+};
+
+/**
+ * Rack fixture shaped for SystemRulesService (RackWithUserAndCurrentPlant).
+ * Satisfies the full Rack entity + userId + currentPlant relation.
+ */
+export const systemRulesMockRack: RackWithUserAndCurrentPlant = {
+    id: 'rack-001',
+    userId: 'user-001',
+    name: 'Test Rack',
+    macAddress: 'AA:BB:CC:DD:EE:FF',
+    description: null,
+    mqttTopic: null,
+    isActive: true,
+    status: DeviceStatus.ONLINE,
+    wateringState: WateringState.STOPPED,
+    lightState: LightState.OFF,
+    currentPlantId: 'plant-001',
+    quantity: 0,
+    plantedAt: null,
+    harvestCount: 0,
+    lastHarvestAt: null,
+    lastActivityAt: null,
+    lastSeenAt: null,
+    lastWateredAt: null,
+    lastLightOnAt: null,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    currentPlant: { id: 'plant-001', name: 'Basil' },
 };
 
 /**

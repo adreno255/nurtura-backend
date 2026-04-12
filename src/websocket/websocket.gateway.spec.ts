@@ -92,14 +92,12 @@ describe('WebsocketGateway', () => {
 
             gateway.afterInit(mockServer);
 
-            // Get the middleware function
             const middleware = (mockServer.use as jest.MockedFunction<Namespace['use']>).mock
                 .calls[0][0] as (
                 socket: AuthenticatedSocket,
                 next: (err?: Error) => void,
             ) => Promise<void>;
 
-            // Call middleware
             await middleware(mockSocket, next);
 
             expect(mockWebsocketService.validateConnection).toHaveBeenCalledWith(mockSocket);
@@ -317,7 +315,6 @@ describe('WebsocketGateway', () => {
                 'VALIDATION_ERROR',
                 'WebsocketGateway',
             );
-
             expect(jest.spyOn(mockClient, 'emit')).toHaveBeenCalledWith('error', {
                 message: 'Failed to subscribe to rack',
                 error: 'VALIDATION_ERROR',
@@ -339,7 +336,6 @@ describe('WebsocketGateway', () => {
                 'Rack not found',
                 'WebsocketGateway',
             );
-
             expect(jest.spyOn(mockClient, 'emit')).toHaveBeenCalledWith('error', {
                 message: 'Failed to subscribe to rack',
                 error: 'Rack not found',
@@ -451,7 +447,6 @@ describe('WebsocketGateway', () => {
                 'VALIDATION_ERROR',
                 'WebsocketGateway',
             );
-
             expect(jest.spyOn(mockClient, 'emit')).toHaveBeenCalledWith('error', {
                 message: 'Failed to unsubscribe from rack',
                 error: 'VALIDATION_ERROR',
@@ -472,7 +467,6 @@ describe('WebsocketGateway', () => {
                 'Rack not found',
                 'WebsocketGateway',
             );
-
             expect(jest.spyOn(mockClient, 'emit')).toHaveBeenCalledWith('error', {
                 message: 'Failed to unsubscribe from rack',
                 error: 'Rack not found',
@@ -570,9 +564,7 @@ describe('WebsocketGateway', () => {
 
             expect(jest.spyOn(mockClient, 'emit')).toHaveBeenCalledWith(
                 'statusAck',
-                expect.objectContaining({
-                    subscribedRacks: [],
-                }),
+                expect.objectContaining({ subscribedRacks: [] }),
             );
         });
 
@@ -587,9 +579,7 @@ describe('WebsocketGateway', () => {
 
             expect(jest.spyOn(mockClient, 'emit')).toHaveBeenCalledWith(
                 'statusAck',
-                expect.objectContaining({
-                    subscribedRacks: multipleRacks,
-                }),
+                expect.objectContaining({ subscribedRacks: multipleRacks }),
             );
         });
     });
@@ -644,7 +634,8 @@ describe('WebsocketGateway', () => {
                 gateway.broadcastDeviceStatus(testRackIds.primary, status);
             });
 
-            expect(mockWebsocketService.broadcastDeviceStatus).toHaveBeenCalledTimes(4);
+            // 3 statuses iterated = 3 calls
+            expect(mockWebsocketService.broadcastDeviceStatus).toHaveBeenCalledTimes(3);
         });
 
         it('should broadcast to multiple racks', () => {

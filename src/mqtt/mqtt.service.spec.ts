@@ -24,8 +24,89 @@ import {
     type Packet,
 } from 'mqtt';
 
-// Mock mqtt module
 jest.mock('mqtt');
+
+// ─────────────────────────────────────────────
+// Shared types
+// ─────────────────────────────────────────────
+
+type MessageHandler = (topic: string, message: Buffer) => Promise<void>;
+type SubscribeCallback = (err: Error | null, grants: ISubscriptionGrant[]) => void;
+type ConnackPacket = IConnackPacket;
+
+const CONNACK: ConnackPacket = {
+    cmd: 'connack',
+    returnCode: 0,
+    retain: false,
+    qos: 0,
+    dup: false,
+    length: 0,
+    topic: null,
+    payload: null,
+} as unknown as IConnackPacket;
+
+const CONNACK_SESSION: Partial<ConnackPacket> = {
+    cmd: 'connack',
+    returnCode: 0,
+    sessionPresent: false,
+};
+
+// ─────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────
+
+/** Fires the 'connect' handler registered via client.once() to resolve the connection promise. */
+function triggerConnect(mockClient: ReturnType<typeof createMockMqttClient>) {
+    setImmediate(() => {
+        const handler = mockClient.once.mock.calls.find((c) => c[0] === 'connect')?.[1] as
+            | ((p: ConnackPacket) => void)
+            | undefined;
+        handler?.(CONNACK);
+    });
+}
+
+/** Fires the 'error' handler registered via client.once() to reject the connection promise. */
+function triggerConnectError(mockClient: ReturnType<typeof createMockMqttClient>, error: Error) {
+    setImmediate(() => {
+        const handler = mockClient.once.mock.calls.find((c) => c[0] === 'error')?.[1] as
+            | ((e: Error) => void)
+            | undefined;
+        handler?.(error);
+    });
+}
+
+/** Retrieves the persistent event handler registered via client.on(event). */
+function getEventHandler<T extends (...args: any[]) => any>(
+    mockClient: ReturnType<typeof createMockMqttClient>,
+    event: string,
+): T | undefined {
+    return mockClient.on.mock.calls.find((c) => c[0] === event)?.[1] as T | undefined;
+}
+
+/** Builds the test module with optional config overrides. */
+async function buildModule(
+    configOverrides: Record<string, unknown>,
+    mockClient: ReturnType<typeof createMockMqttClient>,
+) {
+    (mqtt.connect as jest.Mock).mockReturnValue(mockClient);
+
+    const module: TestingModule = await Test.createTestingModule({
+        providers: [
+            MqttService,
+            { provide: ConfigService, useValue: createMockConfigService(configOverrides) },
+            { provide: MyLoggerService, useValue: createMockLogger() },
+            { provide: SensorsService, useValue: createMockSensorsService() },
+            { provide: RacksService, useValue: createMockRacksService() },
+            { provide: EventEmitter2, useValue: createMockEventEmitter() },
+        ],
+    }).compile();
+
+    return module.get<MqttService>(MqttService);
+}
+
+// ─────────────────────────────────────────────
+// Suite
+// ─────────────────────────────────────────────
 
 describe('MqttService', () => {
     let service: MqttService;
@@ -37,45 +118,25 @@ describe('MqttService', () => {
         MQTT_USERNAME: 'test-user',
         MQTT_PASSWORD: 'test-password',
     });
-
     const mockLoggerService = createMockLogger();
     const mockSensorsService = createMockSensorsService();
     const mockRacksService = createMockRacksService();
-
     const mockEventEmitter = createMockEventEmitter();
 
     beforeEach(async () => {
         jest.clearAllMocks();
 
-        // Create fresh mock client for each test
         mockMqttClient = createMockMqttClient();
-
-        // Mock mqtt.connect to return our mock client
         (mqtt.connect as jest.Mock).mockReturnValue(mockMqttClient);
 
         const module: TestingModule = await Test.createTestingModule({
             providers: [
                 MqttService,
-                {
-                    provide: ConfigService,
-                    useValue: mockConfigService,
-                },
-                {
-                    provide: MyLoggerService,
-                    useValue: mockLoggerService,
-                },
-                {
-                    provide: SensorsService,
-                    useValue: mockSensorsService,
-                },
-                {
-                    provide: RacksService,
-                    useValue: mockRacksService,
-                },
-                {
-                    provide: EventEmitter2,
-                    useValue: mockEventEmitter,
-                },
+                { provide: ConfigService, useValue: mockConfigService },
+                { provide: MyLoggerService, useValue: mockLoggerService },
+                { provide: SensorsService, useValue: mockSensorsService },
+                { provide: RacksService, useValue: mockRacksService },
+                { provide: EventEmitter2, useValue: mockEventEmitter },
             ],
         }).compile();
 
@@ -90,55 +151,24 @@ describe('MqttService', () => {
         expect(service).toBeDefined();
     });
 
+    // ─────────────────────────────────────────────
+    // onModuleInit
+    // ─────────────────────────────────────────────
+
     describe('onModuleInit', () => {
-        it('should connect to MQTT broker on initialization', async () => {
-            // Trigger 'connect' event immediately
-            setImmediate(() => {
-                const connectHandler = mockMqttClient.once.mock.calls.find(
-                    (call) => call[0] === 'connect',
-                )?.[1] as (packet: IConnackPacket) => void; // Explicitly type the handler
-
-                if (connectHandler) {
-                    connectHandler({
-                        cmd: 'connack',
-                        returnCode: 0,
-                        retain: false,
-                        qos: 0,
-                        dup: false,
-                        length: 0,
-                        topic: null,
-                        payload: null,
-                    } as unknown as IConnackPacket); // Cast to the actual Interface
-                }
-            });
-
+        /** Initialises the service, resolving the connection promise synchronously. */
+        const init = async () => {
+            triggerConnect(mockMqttClient);
             await service.onModuleInit();
+        };
 
+        it('should connect to MQTT broker on initialization', async () => {
+            await init();
             expect(mqtt.connect).toHaveBeenCalled();
         });
 
         it('should retrieve MQTT configuration from ConfigService', async () => {
-            setImmediate(() => {
-                const connectHandler = mockMqttClient.once.mock.calls.find(
-                    (call) => call[0] === 'connect',
-                )?.[1] as (packet: IConnackPacket) => void; // Explicitly type the handler
-
-                if (connectHandler) {
-                    connectHandler({
-                        cmd: 'connack',
-                        returnCode: 0,
-                        retain: false,
-                        qos: 0,
-                        dup: false,
-                        length: 0,
-                        topic: null,
-                        payload: null,
-                    } as unknown as IConnackPacket); // Cast to the actual Interface
-                }
-            });
-
-            await service.onModuleInit();
-
+            await init();
             expect(mockConfigService.get).toHaveBeenCalledWith('MQTT_HOST');
             expect(mockConfigService.get).toHaveBeenCalledWith('MQTT_PORT', 8883);
             expect(mockConfigService.get).toHaveBeenCalledWith('MQTT_USERNAME');
@@ -146,27 +176,7 @@ describe('MqttService', () => {
         });
 
         it('should connect with correct MQTT URL', async () => {
-            setImmediate(() => {
-                const connectHandler = mockMqttClient.once.mock.calls.find(
-                    (call) => call[0] === 'connect',
-                )?.[1] as (packet: IConnackPacket) => void; // Explicitly type the handler
-
-                if (connectHandler) {
-                    connectHandler({
-                        cmd: 'connack',
-                        returnCode: 0,
-                        retain: false,
-                        qos: 0,
-                        dup: false,
-                        length: 0,
-                        topic: null,
-                        payload: null,
-                    } as unknown as IConnackPacket); // Cast to the actual Interface
-                }
-            });
-
-            await service.onModuleInit();
-
+            await init();
             expect(mqtt.connect).toHaveBeenCalledWith(
                 'mqtts://test.mqtt.broker.com:8883',
                 expect.any(Object),
@@ -174,118 +184,32 @@ describe('MqttService', () => {
         });
 
         it('should connect with correct credentials', async () => {
-            setImmediate(() => {
-                const connectHandler = mockMqttClient.once.mock.calls.find(
-                    (call) => call[0] === 'connect',
-                )?.[1] as (packet: IConnackPacket) => void; // Explicitly type the handler
-
-                if (connectHandler) {
-                    connectHandler({
-                        cmd: 'connack',
-                        returnCode: 0,
-                        retain: false,
-                        qos: 0,
-                        dup: false,
-                        length: 0,
-                        topic: null,
-                        payload: null,
-                    } as unknown as IConnackPacket); // Cast to the actual Interface
-                }
-            });
-
-            await service.onModuleInit();
-
+            await init();
             expect(mqtt.connect).toHaveBeenCalledWith(
                 expect.any(String),
-                expect.objectContaining({
-                    username: 'test-user',
-                    password: 'test-password',
-                }),
+                expect.objectContaining({ username: 'test-user', password: 'test-password' }),
             );
         });
 
         it('should connect with TLS enabled', async () => {
-            setImmediate(() => {
-                const connectHandler = mockMqttClient.once.mock.calls.find(
-                    (call) => call[0] === 'connect',
-                )?.[1] as (packet: IConnackPacket) => void; // Explicitly type the handler
-
-                if (connectHandler) {
-                    connectHandler({
-                        cmd: 'connack',
-                        returnCode: 0,
-                        retain: false,
-                        qos: 0,
-                        dup: false,
-                        length: 0,
-                        topic: null,
-                        payload: null,
-                    } as unknown as IConnackPacket); // Cast to the actual Interface
-                }
-            });
-
-            await service.onModuleInit();
-
+            await init();
             expect(mqtt.connect).toHaveBeenCalledWith(
                 expect.any(String),
-                expect.objectContaining({
-                    rejectUnauthorized: true,
-                }),
+                expect.objectContaining({ rejectUnauthorized: true }),
             );
         });
 
-        it('should generate unique client ID', async () => {
-            setImmediate(() => {
-                const connectHandler = mockMqttClient.once.mock.calls.find(
-                    (call) => call[0] === 'connect',
-                )?.[1] as (packet: IConnackPacket) => void; // Explicitly type the handler
-
-                if (connectHandler) {
-                    connectHandler({
-                        cmd: 'connack',
-                        returnCode: 0,
-                        retain: false,
-                        qos: 0,
-                        dup: false,
-                        length: 0,
-                        topic: null,
-                        payload: null,
-                    } as unknown as IConnackPacket); // Cast to the actual Interface
-                }
-            });
-
-            await service.onModuleInit();
-
+        it('should generate a unique client ID', async () => {
+            await init();
             const [, options] = (mqtt.connect as jest.Mock).mock.calls[0] as [
                 string,
                 IClientOptions,
             ];
-
             expect(options.clientId).toMatch(/^nurtura-backend-[a-f0-9]{6}$/);
         });
 
         it('should configure reconnection settings', async () => {
-            setImmediate(() => {
-                const connectHandler = mockMqttClient.once.mock.calls.find(
-                    (call) => call[0] === 'connect',
-                )?.[1] as (packet: IConnackPacket) => void; // Explicitly type the handler
-
-                if (connectHandler) {
-                    connectHandler({
-                        cmd: 'connack',
-                        returnCode: 0,
-                        retain: false,
-                        qos: 0,
-                        dup: false,
-                        length: 0,
-                        topic: null,
-                        payload: null,
-                    } as unknown as IConnackPacket); // Cast to the actual Interface
-                }
-            });
-
-            await service.onModuleInit();
-
+            await init();
             expect(mqtt.connect).toHaveBeenCalledWith(
                 expect.any(String),
                 expect.objectContaining({
@@ -298,165 +222,26 @@ describe('MqttService', () => {
         });
 
         it('should log bootstrap message on successful connection', async () => {
-            setImmediate(() => {
-                const connectHandler = mockMqttClient.once.mock.calls.find(
-                    (call) => call[0] === 'connect',
-                )?.[1] as (packet: IConnackPacket) => void; // Explicitly type the handler
-
-                if (connectHandler) {
-                    connectHandler({
-                        cmd: 'connack',
-                        returnCode: 0,
-                        retain: false,
-                        qos: 0,
-                        dup: false,
-                        length: 0,
-                        topic: null,
-                        payload: null,
-                    } as unknown as IConnackPacket); // Cast to the actual Interface
-                }
-            });
-
-            await service.onModuleInit();
-
+            await init();
             expect(mockLoggerService.bootstrap).toHaveBeenCalledWith(
                 'Connected to MQTT broker',
                 'MqttService',
             );
         });
 
-        it('should throw error if MQTT_HOST is not configured', async () => {
-            const invalidConfigService = createMockConfigService({
-                MQTT_HOST: undefined,
-                MQTT_USERNAME: 'test-user',
-                MQTT_PASSWORD: 'test-password',
-            });
-
-            const module: TestingModule = await Test.createTestingModule({
-                providers: [
-                    MqttService,
-                    {
-                        provide: ConfigService,
-                        useValue: invalidConfigService,
-                    },
-                    {
-                        provide: MyLoggerService,
-                        useValue: mockLoggerService,
-                    },
-                    {
-                        provide: SensorsService,
-                        useValue: mockSensorsService,
-                    },
-                    {
-                        provide: RacksService,
-                        useValue: mockRacksService,
-                    },
-                    {
-                        provide: EventEmitter2,
-                        useValue: mockEventEmitter,
-                    },
-                ],
-            }).compile();
-
-            const invalidService = module.get<MqttService>(MqttService);
-
-            await expect(invalidService.onModuleInit()).rejects.toThrow(
-                'MQTT configuration is incomplete',
-            );
-        });
-
-        it('should throw error if MQTT_USERNAME is not configured', async () => {
-            const invalidConfigService = createMockConfigService({
-                MQTT_HOST: 'test.broker.com',
-                MQTT_USERNAME: undefined,
-                MQTT_PASSWORD: 'test-password',
-            });
-
-            const module: TestingModule = await Test.createTestingModule({
-                providers: [
-                    MqttService,
-                    {
-                        provide: ConfigService,
-                        useValue: invalidConfigService,
-                    },
-                    {
-                        provide: MyLoggerService,
-                        useValue: mockLoggerService,
-                    },
-                    {
-                        provide: SensorsService,
-                        useValue: mockSensorsService,
-                    },
-                    {
-                        provide: RacksService,
-                        useValue: mockRacksService,
-                    },
-                    {
-                        provide: EventEmitter2,
-                        useValue: mockEventEmitter,
-                    },
-                ],
-            }).compile();
-
-            const invalidService = module.get<MqttService>(MqttService);
-
-            await expect(invalidService.onModuleInit()).rejects.toThrow(
-                'MQTT configuration is incomplete',
-            );
-        });
-
-        it('should throw error if MQTT_PASSWORD is not configured', async () => {
-            const invalidConfigService = createMockConfigService({
-                MQTT_HOST: 'test.broker.com',
-                MQTT_USERNAME: 'test-user',
-                MQTT_PASSWORD: undefined,
-            });
-
-            const module: TestingModule = await Test.createTestingModule({
-                providers: [
-                    MqttService,
-                    {
-                        provide: ConfigService,
-                        useValue: invalidConfigService,
-                    },
-                    {
-                        provide: MyLoggerService,
-                        useValue: mockLoggerService,
-                    },
-                    {
-                        provide: SensorsService,
-                        useValue: mockSensorsService,
-                    },
-                    {
-                        provide: RacksService,
-                        useValue: mockRacksService,
-                    },
-                    {
-                        provide: EventEmitter2,
-                        useValue: mockEventEmitter,
-                    },
-                ],
-            }).compile();
-
-            const invalidService = module.get<MqttService>(MqttService);
-
-            await expect(invalidService.onModuleInit()).rejects.toThrow(
-                'MQTT configuration is incomplete',
-            );
+        it.each([
+            ['MQTT_HOST', { MQTT_HOST: undefined, MQTT_USERNAME: 'u', MQTT_PASSWORD: 'p' }],
+            ['MQTT_USERNAME', { MQTT_HOST: 'host', MQTT_USERNAME: undefined, MQTT_PASSWORD: 'p' }],
+            ['MQTT_PASSWORD', { MQTT_HOST: 'host', MQTT_USERNAME: 'u', MQTT_PASSWORD: undefined }],
+        ])('should throw if %s is not configured', async (_, config) => {
+            const svc = await buildModule(config, createMockMqttClient());
+            await expect(svc.onModuleInit()).rejects.toThrow('MQTT configuration is incomplete');
         });
 
         it('should log error if connection fails', async () => {
-            const connectionError = new Error('Connection refused');
-
-            setImmediate(() => {
-                const errorHandler = mockMqttClient.once.mock.calls.find(
-                    (call) => call[0] === 'error',
-                )?.[1] as ((error: Error) => void) | undefined;
-                if (errorHandler) errorHandler(connectionError);
-            });
-
+            const error = new Error('Connection refused');
+            triggerConnectError(mockMqttClient, error);
             await expect(service.onModuleInit()).rejects.toThrow('Connection refused');
-
             expect(mockLoggerService.error).toHaveBeenCalledWith(
                 'Failed to connect to MQTT broker',
                 'Connection refused',
@@ -465,43 +250,19 @@ describe('MqttService', () => {
         });
 
         it('should reject promise on connection error', async () => {
-            const connectionError = new Error('Authentication failed');
-
-            setImmediate(() => {
-                const errorHandler = mockMqttClient.once.mock.calls.find(
-                    (call) => call[0] === 'error',
-                )?.[1] as ((error: Error) => void) | undefined;
-                if (errorHandler) errorHandler(connectionError);
-            });
-
+            triggerConnectError(mockMqttClient, new Error('Authentication failed'));
             await expect(service.onModuleInit()).rejects.toThrow('Authentication failed');
         });
     });
 
+    // ─────────────────────────────────────────────
+    // event handlers
+    // ─────────────────────────────────────────────
+
     describe('event handlers', () => {
         beforeEach(async () => {
-            // Establish connection for event handler tests
-            setImmediate(() => {
-                const connectHandler = mockMqttClient.once.mock.calls.find(
-                    (call) => call[0] === 'connect',
-                )?.[1] as (packet: IConnackPacket) => void; // Explicitly type the handler
-
-                if (connectHandler) {
-                    connectHandler({
-                        cmd: 'connack',
-                        returnCode: 0,
-                        retain: false,
-                        qos: 0,
-                        dup: false,
-                        length: 0,
-                        topic: null,
-                        payload: null,
-                    } as unknown as IConnackPacket); // Cast to the actual Interface
-                }
-            });
-
+            triggerConnect(mockMqttClient);
             await service.onModuleInit();
-            // Only clear logger mocks, not mqtt client mocks needed for finding handlers
             mockLoggerService.log.mockClear();
             mockLoggerService.bootstrap.mockClear();
             mockLoggerService.warn.mockClear();
@@ -510,607 +271,340 @@ describe('MqttService', () => {
         });
 
         it('should handle connect event', () => {
-            const connectHandler = mockMqttClient.on.mock.calls.find(
-                (call) => call[0] === 'connect',
-            )?.[1] as (packet: IConnackPacket) => void;
-
-            expect(connectHandler).toBeDefined();
-
-            if (connectHandler) {
-                connectHandler({ cmd: 'connack', returnCode: 0, sessionPresent: false });
-                expect(mockLoggerService.log).toHaveBeenCalledWith(
-                    'MQTT client connected',
-                    'MqttService',
-                );
-            }
+            const handler = getEventHandler<(p: Partial<ConnackPacket>) => void>(
+                mockMqttClient,
+                'connect',
+            );
+            handler?.(CONNACK_SESSION);
+            expect(mockLoggerService.log).toHaveBeenCalledWith(
+                'MQTT client connected',
+                'MqttService',
+            );
         });
 
         it('should handle disconnect event', () => {
-            const disconnectHandler = mockMqttClient.on.mock.calls.find(
-                (call) => call[0] === 'disconnect',
-            )?.[1] as () => void;
-
-            expect(disconnectHandler).toBeDefined();
-
-            if (disconnectHandler) {
-                disconnectHandler();
-                expect(mockLoggerService.warn).toHaveBeenCalledWith(
-                    'Disconnected from MQTT broker',
-                    'MqttService',
-                );
-            }
+            const handler = getEventHandler<() => void>(mockMqttClient, 'disconnect');
+            handler?.();
+            expect(mockLoggerService.warn).toHaveBeenCalledWith(
+                'Disconnected from MQTT broker',
+                'MqttService',
+            );
         });
 
         it('should handle offline event', () => {
-            const offlineHandler = mockMqttClient.on.mock.calls.find(
-                (call) => call[0] === 'offline',
-            )?.[1] as () => void;
-
-            expect(offlineHandler).toBeDefined();
-
-            if (offlineHandler) {
-                offlineHandler();
-                expect(mockLoggerService.warn).toHaveBeenCalledWith(
-                    'MQTT client is offline',
-                    'MqttService',
-                );
-            }
+            const handler = getEventHandler<() => void>(mockMqttClient, 'offline');
+            handler?.();
+            expect(mockLoggerService.warn).toHaveBeenCalledWith(
+                'MQTT client is offline',
+                'MqttService',
+            );
         });
 
         it('should handle error event', () => {
-            const errorHandler = mockMqttClient.on.mock.calls.find(
-                (call) => call[0] === 'error',
-            )?.[1] as (error: Error) => void;
-
-            expect(errorHandler).toBeDefined();
-
-            if (errorHandler) {
-                const testError = new Error('Test error');
-                errorHandler(testError);
-                expect(mockLoggerService.error).toHaveBeenCalledWith(
-                    'MQTT client error',
-                    'Test error',
-                    'MqttService',
-                );
-            }
+            const handler = getEventHandler<(e: Error) => void>(mockMqttClient, 'error');
+            handler?.(new Error('Test error'));
+            expect(mockLoggerService.error).toHaveBeenCalledWith(
+                'MQTT client error',
+                'Test error',
+                'MqttService',
+            );
         });
 
         it('should handle close event', () => {
-            // 1. Cast the handler to a function that takes no arguments
-            const closeHandler = mockMqttClient.on.mock.calls.find(
-                (call) => call[0] === 'close',
-            )?.[1] as () => void;
-
-            expect(closeHandler).toBeDefined();
-
-            if (closeHandler) {
-                closeHandler();
-
-                expect(mockLoggerService.warn).toHaveBeenCalledWith(
-                    'MQTT connection closed',
-                    'MqttService',
-                );
-            }
+            const handler = getEventHandler<() => void>(mockMqttClient, 'close');
+            handler?.();
+            expect(mockLoggerService.warn).toHaveBeenCalledWith(
+                'MQTT connection closed',
+                'MqttService',
+            );
         });
 
         it('should handle reconnect event', () => {
-            const reconnectHandler = mockMqttClient.on.mock.calls.find(
-                (call) => call[0] === 'reconnect',
-            )?.[1] as () => void;
-
-            expect(reconnectHandler).toBeDefined();
-
-            if (reconnectHandler) {
-                reconnectHandler();
-                expect(mockLoggerService.log).toHaveBeenCalledWith(
-                    expect.stringContaining('Reconnecting to MQTT broker'),
-                    'MqttService',
-                );
-            }
+            const handler = getEventHandler<() => void>(mockMqttClient, 'reconnect');
+            handler?.();
+            expect(mockLoggerService.log).toHaveBeenCalledWith(
+                expect.stringContaining('Reconnecting to MQTT broker'),
+                'MqttService',
+            );
         });
 
         it('should stop reconnecting after max attempts', () => {
-            const reconnectHandler = mockMqttClient.on.mock.calls.find(
-                (call) => call[0] === 'reconnect',
-            )?.[1] as () => void;
-
-            if (reconnectHandler) {
-                // Trigger reconnect 10 times
-                for (let i = 0; i < 10; i++) {
-                    reconnectHandler();
-                }
-
-                expect(mockLoggerService.error).toHaveBeenCalledWith(
-                    'Max reconnection attempts reached. Stopping reconnection.',
-                    '',
-                    'MqttService',
-                );
-                expect(jest.spyOn(mockMqttClient, 'end')).toHaveBeenCalledWith(true);
-            }
+            const handler = getEventHandler<() => void>(mockMqttClient, 'reconnect');
+            for (let i = 0; i < 10; i++) handler?.();
+            expect(mockLoggerService.error).toHaveBeenCalledWith(
+                'Max reconnection attempts reached. Stopping reconnection.',
+                '',
+                'MqttService',
+            );
+            expect(jest.spyOn(mockMqttClient, 'end')).toHaveBeenCalledWith(true);
         });
 
         it('should reset reconnect attempts on successful connection', () => {
-            const reconnectHandler = mockMqttClient.on.mock.calls.find(
-                (call) => call[0] === 'reconnect',
-            )?.[1] as () => void;
-            const connectHandler = mockMqttClient.on.mock.calls.find(
-                (call) => call[0] === 'connect',
-            )?.[1] as (packet: IConnackPacket) => void;
+            const reconnect = getEventHandler<() => void>(mockMqttClient, 'reconnect');
+            const connect = getEventHandler<(p: Partial<ConnackPacket>) => void>(
+                mockMqttClient,
+                'connect',
+            );
 
-            if (reconnectHandler && connectHandler) {
-                // Trigger some reconnects
-                reconnectHandler();
-                reconnectHandler();
+            reconnect?.();
+            reconnect?.();
+            connect?.(CONNACK_SESSION);
 
-                // Then successful connection
-                connectHandler({ cmd: 'connack', returnCode: 0, sessionPresent: false });
-
-                // Should not have logged error about max attempts
-                expect(mockLoggerService.error).not.toHaveBeenCalledWith(
-                    expect.stringContaining('Max reconnection attempts'),
-                    expect.any(String),
-                    expect.any(String),
-                );
-            }
+            expect(mockLoggerService.error).not.toHaveBeenCalledWith(
+                expect.stringContaining('Max reconnection attempts'),
+                expect.any(String),
+                expect.any(String),
+            );
         });
     });
 
+    // ─────────────────────────────────────────────
+    // subscription
+    // ─────────────────────────────────────────────
+
     describe('subscription', () => {
+        // Captured before clearAllMocks() so tests can invoke it without inspecting .on.mock.calls
+        let connectHandler: ((p: Partial<ConnackPacket>) => void) | undefined;
+
+        /** Triggers the persistent on-connect handler to drive subscribeToTopics(). */
+        const fireConnect = () => {
+            mockMqttClient.connected = true;
+            connectHandler?.(CONNACK_SESSION);
+        };
+
+        /** Resolves all pending subscribe callbacks so topics are added to subscribedTopics[]. */
+        const resolveSubscriptions = () => {
+            (mockMqttClient.subscribe as jest.Mock).mock.calls.forEach(
+                ([topic, , cb]: [string, unknown, SubscribeCallback]) => {
+                    cb?.(null, [{ topic, qos: 1 }]);
+                },
+            );
+        };
+
         beforeEach(async () => {
-            setImmediate(() => {
-                const connectHandler = mockMqttClient.once.mock.calls.find(
-                    (call) => call[0] === 'connect',
-                )?.[1] as (packet: IConnackPacket) => void; // Explicitly type the handler
-
-                if (connectHandler) {
-                    connectHandler({
-                        cmd: 'connack',
-                        returnCode: 0,
-                        retain: false,
-                        qos: 0,
-                        dup: false,
-                        length: 0,
-                        topic: null,
-                        payload: null,
-                    } as unknown as IConnackPacket); // Cast to the actual Interface
-                }
-            });
-
+            triggerConnect(mockMqttClient);
             await service.onModuleInit();
+            // Capture before clearing — clearAllMocks() wipes on.mock.calls
+            connectHandler = getEventHandler<(p: Partial<ConnackPacket>) => void>(
+                mockMqttClient,
+                'connect',
+            );
             jest.clearAllMocks();
         });
 
-        it('should subscribe to sensor data topic', () => {
-            // Trigger connect event to initiate subscription
-            const connectHandler = mockMqttClient.on.mock.calls.find(
-                (call) => call[0] === 'connect',
-            )?.[1] as (packet: IConnackPacket) => void;
-
-            if (connectHandler) {
-                mockMqttClient.connected = true;
-                connectHandler({ cmd: 'connack', returnCode: 0, sessionPresent: false });
-
+        it.each(['nurtura/rack/+/sensors', 'nurtura/rack/+/status', 'nurtura/rack/+/errors'])(
+            'should subscribe to %s topic',
+            (topic) => {
+                fireConnect();
                 expect(jest.spyOn(mockMqttClient, 'subscribe')).toHaveBeenCalledWith(
-                    'nurtura/rack/+/sensors',
+                    topic,
                     expect.objectContaining({ qos: 1 }),
                     expect.any(Function),
                 );
-            }
-        });
-
-        it('should subscribe to status topic', () => {
-            const connectHandler = mockMqttClient.on.mock.calls.find(
-                (call) => call[0] === 'connect',
-            )?.[1] as (packet: IConnackPacket) => void;
-
-            if (connectHandler) {
-                mockMqttClient.connected = true;
-                connectHandler({ cmd: 'connack', returnCode: 0, sessionPresent: false });
-
-                expect(jest.spyOn(mockMqttClient, 'subscribe')).toHaveBeenCalledWith(
-                    'nurtura/rack/+/status',
-                    expect.objectContaining({ qos: 1 }),
-                    expect.any(Function),
-                );
-            }
-        });
-
-        it('should subscribe to errors topic', () => {
-            const connectHandler = mockMqttClient.on.mock.calls.find(
-                (call) => call[0] === 'connect',
-            )?.[1] as (packet: IConnackPacket) => void;
-
-            if (connectHandler) {
-                mockMqttClient.connected = true;
-                connectHandler({ cmd: 'connack', returnCode: 0, sessionPresent: false });
-
-                expect(jest.spyOn(mockMqttClient, 'subscribe')).toHaveBeenCalledWith(
-                    'nurtura/rack/+/errors',
-                    expect.objectContaining({ qos: 1 }),
-                    expect.any(Function),
-                );
-            }
-        });
+            },
+        );
 
         it('should use QoS 1 for all subscriptions', () => {
-            const connectHandler = mockMqttClient.on.mock.calls.find(
-                (call) => call[0] === 'connect',
-            )?.[1] as (packet: IConnackPacket) => void;
-
-            if (connectHandler) {
-                mockMqttClient.connected = true;
-                connectHandler({ cmd: 'connack', returnCode: 0, sessionPresent: false });
-
-                const subscribeCalls = jest.spyOn(mockMqttClient, 'subscribe').mock.calls;
-                subscribeCalls.forEach((call) => {
-                    expect(call[1]).toMatchObject({ qos: 1 });
-                });
-            }
+            fireConnect();
+            (jest.spyOn(mockMqttClient, 'subscribe') as jest.SpyInstance).mock.calls.forEach(
+                ([, opts]) => expect(opts).toMatchObject({ qos: 1 }),
+            );
         });
 
         it('should log successful subscription', () => {
-            const connectHandler = mockMqttClient.on.mock.calls.find(
-                (call) => call[0] === 'connect',
-            )?.[1] as (packet: IConnackPacket) => void;
-
-            if (connectHandler) {
-                mockMqttClient.connected = true;
-                connectHandler({
-                    cmd: 'connack',
-                    returnCode: 0,
-                    sessionPresent: false,
-                } as IConnackPacket);
-
-                type SubscribeCallback = (err: Error | null, grants: ISubscriptionGrant[]) => void;
-                const subscribeArgs = (mockMqttClient.subscribe as jest.Mock).mock.calls[0] as [
-                    string | string[],
-                    IClientSubscribeOptions,
-                    SubscribeCallback | undefined,
-                ];
-
-                const callback = subscribeArgs[2] as (
-                    err: Error | null,
-                    grants: ISubscriptionGrant[],
-                ) => void;
-
-                expect(callback).toBeDefined();
-
-                if (callback) {
-                    callback(null, [{ topic: 'nurtura/rack/+/sensors', qos: 1 }]);
-
-                    expect(mockLoggerService.bootstrap).toHaveBeenCalledWith(
-                        expect.stringContaining('Subscribed to topic: nurtura/rack/+/sensors'),
-                        'MqttService',
-                    );
-                }
-            }
+            fireConnect();
+            const [topic, , cb] = (mockMqttClient.subscribe as jest.Mock).mock.calls[0] as [
+                string,
+                IClientSubscribeOptions,
+                SubscribeCallback,
+            ];
+            cb?.(null, [{ topic, qos: 1 }]);
+            expect(mockLoggerService.bootstrap).toHaveBeenCalledWith(
+                expect.stringContaining(`Subscribed to topic: ${topic}`),
+                'MqttService',
+            );
         });
 
         it('should log error on subscription failure', () => {
-            const connectHandler = mockMqttClient.on.mock.calls.find(
-                (call) => call[0] === 'connect',
-            )?.[1] as (packet: IConnackPacket) => void;
-
-            if (connectHandler) {
-                mockMqttClient.connected = true;
-                connectHandler({
-                    cmd: 'connack',
-                    returnCode: 0,
-                    sessionPresent: false,
-                } as IConnackPacket);
-
-                type SubscribeCallback = (
-                    err: Error | null,
-                    grants: ISubscriptionGrant[] | null,
-                ) => void;
-                const subscribeCall = (mockMqttClient.subscribe as jest.Mock).mock.calls[0] as [
-                    string,
-                    any,
-                    SubscribeCallback,
-                ];
-
-                const callback = subscribeCall[2];
-                const error = new Error('Subscription failed');
-
-                if (callback) {
-                    callback(error, null);
-
-                    expect(mockLoggerService.error).toHaveBeenCalledWith(
-                        expect.stringContaining('Failed to subscribe to topic'),
-                        'Subscription failed',
-                        'MqttService',
-                    );
-                }
-            }
+            fireConnect();
+            const [, , cb] = (mockMqttClient.subscribe as jest.Mock).mock.calls[0] as [
+                string,
+                IClientSubscribeOptions,
+                SubscribeCallback,
+            ];
+            cb?.(new Error('Subscription failed'), []);
+            expect(mockLoggerService.error).toHaveBeenCalledWith(
+                expect.stringContaining('Failed to subscribe to topic'),
+                'Subscription failed',
+                'MqttService',
+            );
         });
 
         it('should not subscribe if client is not connected', () => {
-            const connectHandler = mockMqttClient.on.mock.calls.find(
-                (call) => call[0] === 'connect',
-            )?.[1] as (packet: IConnackPacket) => void;
-
-            if (connectHandler) {
-                mockMqttClient.connected = false;
-                jest.clearAllMocks();
-
-                connectHandler({ cmd: 'connack', returnCode: 0, sessionPresent: false });
-
-                expect(jest.spyOn(mockMqttClient, 'subscribe')).not.toHaveBeenCalled();
-                expect(mockLoggerService.warn).toHaveBeenCalledWith(
-                    'Cannot subscribe: MQTT client not connected',
-                    'MqttService',
-                );
-            }
+            mockMqttClient.connected = false;
+            connectHandler?.(CONNACK_SESSION);
+            expect(jest.spyOn(mockMqttClient, 'subscribe')).not.toHaveBeenCalled();
+            expect(mockLoggerService.warn).toHaveBeenCalledWith(
+                'Cannot subscribe: MQTT client not connected',
+                'MqttService',
+            );
         });
 
         it('should prevent duplicate subscriptions on reconnect', () => {
-            const connectHandler = mockMqttClient.on.mock.calls.find(
-                (call) => call[0] === 'connect',
-            )?.[1] as (packet: IConnackPacket) => void;
+            fireConnect();
+            resolveSubscriptions();
+            jest.clearAllMocks();
 
-            if (connectHandler) {
-                mockMqttClient.connected = true;
-
-                connectHandler({
-                    cmd: 'connack',
-                    returnCode: 0,
-                    sessionPresent: false,
-                } as IConnackPacket);
-
-                type SubscribeCallback = (err: Error | null, grants: ISubscriptionGrant[]) => void;
-                const subscribeCalls = (mockMqttClient.subscribe as jest.Mock).mock.calls as Array<
-                    [string, any, SubscribeCallback]
-                >;
-
-                subscribeCalls.forEach((call) => {
-                    const [topic, , callback] = call;
-                    if (callback) {
-                        callback(null, [{ topic, qos: 1 }]);
-                    }
-                });
-
-                jest.clearAllMocks();
-
-                connectHandler({
-                    cmd: 'connack',
-                    returnCode: 0,
-                    sessionPresent: false,
-                } as IConnackPacket);
-
-                expect(jest.spyOn(mockMqttClient, 'subscribe')).not.toHaveBeenCalled();
-                expect(mockLoggerService.debug).toHaveBeenCalledWith(
-                    expect.stringContaining('Already subscribed'),
-                    'MqttService',
-                );
-            }
+            // Second connect — all topics already tracked
+            fireConnect();
+            expect(jest.spyOn(mockMqttClient, 'subscribe')).not.toHaveBeenCalled();
+            expect(mockLoggerService.debug).toHaveBeenCalledWith(
+                expect.stringContaining('Already subscribed'),
+                'MqttService',
+            );
         });
     });
 
+    // ─────────────────────────────────────────────
+    // message routing
+    // ─────────────────────────────────────────────
+
     describe('message routing', () => {
+        let messageHandler: MessageHandler;
+
         beforeEach(async () => {
-            setImmediate(() => {
-                const connectHandler = mockMqttClient.once.mock.calls.find(
-                    (call) => call[0] === 'connect',
-                )?.[1] as (packet: IConnackPacket) => void; // Explicitly type the handler
-
-                if (connectHandler) {
-                    connectHandler({
-                        cmd: 'connack',
-                        returnCode: 0,
-                        retain: false,
-                        qos: 0,
-                        dup: false,
-                        length: 0,
-                        topic: null,
-                        payload: null,
-                    } as unknown as IConnackPacket); // Cast to the actual Interface
-                }
-            });
-
+            triggerConnect(mockMqttClient);
             await service.onModuleInit();
+            // Capture before clearing — clearAllMocks() wipes on.mock.calls
+            messageHandler = getEventHandler<MessageHandler>(mockMqttClient, 'message')!;
             jest.clearAllMocks();
         });
 
+        const topic = (type: string) => `nurtura/rack/${mqttTestMacAddresses.valid}/${type}`;
+
         it('should route sensor messages to SensorsService', async () => {
-            const messageHandler = mockMqttClient.on.mock.calls.find(
-                (call) => call[0] === 'message',
-            )?.[1] as ((topic: string, message: any) => Promise<void>) | undefined;
-
-            if (messageHandler) {
-                const topic = `nurtura/rack/${mqttTestMacAddresses.valid}/sensors`;
-                const message = Buffer.from(mqttTestMessages.validSensorData);
-
-                await messageHandler(topic, message);
-
-                expect(mockSensorsService.processSensorData).toHaveBeenCalledWith(
-                    mqttTestMacAddresses.valid,
-                    mqttTestMessages.validSensorData,
-                );
-            }
+            await messageHandler(topic('sensors'), Buffer.from(mqttTestMessages.validSensorData));
+            expect(mockSensorsService.processSensorData).toHaveBeenCalledWith(
+                mqttTestMacAddresses.valid,
+                mqttTestMessages.validSensorData,
+            );
         });
 
         it('should route status messages to RacksService', async () => {
-            const messageHandler = mockMqttClient.on.mock.calls.find(
-                (call) => call[0] === 'message',
-            )?.[1] as ((topic: string, message: any) => Promise<void>) | undefined;
-
-            if (messageHandler) {
-                const topic = `nurtura/rack/${mqttTestMacAddresses.valid}/status`;
-                const message = Buffer.from(mqttTestMessages.deviceOnline);
-
-                await messageHandler(topic, message);
-
-                expect(mockRacksService.processDeviceStatus).toHaveBeenCalledWith(
-                    mqttTestMacAddresses.valid,
-                    mqttTestMessages.deviceOnline,
-                );
-            }
+            await messageHandler(topic('status'), Buffer.from(mqttTestMessages.deviceOnline));
+            expect(mockRacksService.processDeviceStatus).toHaveBeenCalledWith(
+                mqttTestMacAddresses.valid,
+                mqttTestMessages.deviceOnline,
+            );
         });
 
         it('should route error messages to RacksService', async () => {
-            const messageHandler = mockMqttClient.on.mock.calls.find(
-                (call) => call[0] === 'message',
-            )?.[1] as ((topic: string, message: any) => Promise<void>) | undefined;
-
-            if (messageHandler) {
-                const topic = `nurtura/rack/${mqttTestMacAddresses.valid}/errors`;
-                const message = Buffer.from(mqttTestMessages.deviceError);
-
-                await messageHandler(topic, message);
-
-                expect(mockRacksService.processDeviceError).toHaveBeenCalledWith(
-                    mqttTestMacAddresses.valid,
-                    mqttTestMessages.deviceError,
-                );
-            }
+            await messageHandler(topic('errors'), Buffer.from(mqttTestMessages.deviceError));
+            expect(mockRacksService.processDeviceError).toHaveBeenCalledWith(
+                mqttTestMacAddresses.valid,
+                mqttTestMessages.deviceError,
+            );
         });
 
-        it('should log received message', async () => {
-            const messageHandler = mockMqttClient.on.mock.calls.find(
-                (call) => call[0] === 'message',
-            )?.[1] as ((topic: string, message: any) => Promise<void>) | undefined;
-
-            if (messageHandler) {
-                const topic = `nurtura/rack/${mqttTestMacAddresses.valid}/sensors`;
-                const message = Buffer.from(mqttTestMessages.validSensorData);
-
-                await messageHandler(topic, message);
-
-                expect(mockLoggerService.log).toHaveBeenCalledWith(
-                    `Message received on topic: ${topic}`,
-                    'MqttService',
-                );
-            }
+        it('should log the received topic', async () => {
+            const t = topic('sensors');
+            await messageHandler(t, Buffer.from(mqttTestMessages.validSensorData));
+            expect(mockLoggerService.log).toHaveBeenCalledWith(
+                `Message received on topic: ${t}`,
+                'MqttService',
+            );
         });
 
-        it('should handle invalid topic format', async () => {
-            const messageHandler = mockMqttClient.on.mock.calls.find(
-                (call) => call[0] === 'message',
-            )?.[1] as ((topic: string, message: any) => Promise<void>) | undefined;
-
-            if (messageHandler) {
-                const invalidTopic = 'invalid/topic/format';
-                const message = Buffer.from('test message');
-
-                await messageHandler(invalidTopic, message);
-
-                expect(mockLoggerService.warn).toHaveBeenCalledWith(
-                    expect.stringContaining('Invalid topic format'),
-                    'MqttService',
-                );
-            }
+        it('should warn on invalid topic format', async () => {
+            await messageHandler('invalid/topic/format', Buffer.from('test'));
+            expect(mockLoggerService.warn).toHaveBeenCalledWith(
+                expect.stringContaining('Invalid topic format'),
+                'MqttService',
+            );
         });
 
-        it('should handle unknown message type', async () => {
-            const messageHandler = mockMqttClient.on.mock.calls.find(
-                (call) => call[0] === 'message',
-            )?.[1] as ((topic: string, message: any) => Promise<void>) | undefined;
-
-            if (messageHandler) {
-                const topic = `nurtura/rack/${mqttTestMacAddresses.valid}/unknown`;
-                const message = Buffer.from('test message');
-
-                await messageHandler(topic, message);
-
-                expect(mockLoggerService.warn).toHaveBeenCalledWith(
-                    expect.stringContaining('Unknown message type'),
-                    'MqttService',
-                );
-            }
+        it('should warn on unknown message type', async () => {
+            await messageHandler(topic('unknown'), Buffer.from('test'));
+            expect(mockLoggerService.warn).toHaveBeenCalledWith(
+                expect.stringContaining('Unknown message type'),
+                'MqttService',
+            );
         });
 
         it('should log error if message processing fails', async () => {
             mockSensorsService.processSensorData.mockRejectedValue(new Error('Processing failed'));
-
-            const messageHandler = mockMqttClient.on.mock.calls.find(
-                (call) => call[0] === 'message',
-            )?.[1] as ((topic: string, message: any) => Promise<void>) | undefined;
-
-            if (messageHandler) {
-                const topic = `nurtura/rack/${mqttTestMacAddresses.valid}/sensors`;
-                const message = Buffer.from(mqttTestMessages.validSensorData);
-
-                await messageHandler(topic, message);
-
-                expect(mockLoggerService.error).toHaveBeenCalledWith(
-                    expect.stringContaining('Error routing message'),
-                    'Processing failed',
-                    'MqttService',
-                );
-            }
+            await messageHandler(topic('sensors'), Buffer.from(mqttTestMessages.validSensorData));
+            // The message handler uses a fire-and-forget .catch() — flush the microtask
+            // queue so the rejection handler runs before we assert on the logger.
+            await Promise.resolve();
+            expect(mockLoggerService.error).toHaveBeenCalledWith(
+                expect.stringContaining('Error routing message'),
+                'Processing failed',
+                'MqttService',
+            );
         });
     });
 
+    // ─────────────────────────────────────────────
+    // publishCommand
+    // ─────────────────────────────────────────────
+
     describe('publishCommand', () => {
+        const mac = mqttTestMacAddresses.valid;
+
         beforeEach(async () => {
-            setImmediate(() => {
-                const connectHandler = mockMqttClient.once.mock.calls.find(
-                    (call) => call[0] === 'connect',
-                )?.[1] as (packet: IConnackPacket) => void; // Explicitly type the handler
-
-                if (connectHandler) {
-                    connectHandler({
-                        cmd: 'connack',
-                        returnCode: 0,
-                        retain: false,
-                        qos: 0,
-                        dup: false,
-                        length: 0,
-                        topic: null,
-                        payload: null,
-                    } as unknown as IConnackPacket); // Cast to the actual Interface
-                }
-            });
-
+            triggerConnect(mockMqttClient);
             await service.onModuleInit();
             mockMqttClient.connected = true;
             jest.clearAllMocks();
         });
 
-        it('should publish watering command', async () => {
-            const payload = { action: 'on', duration: 5000 };
+        /** Makes client.publish() call its callback with no error. */
+        const mockPublishSuccess = () => {
+            mockMqttClient.publish.mockImplementation(
+                (
+                    _t: string,
+                    _m: string | Buffer,
+                    _o?: IClientPublishOptions,
+                    cb?: (e?: Error, p?: Packet) => void,
+                ) => {
+                    cb?.();
+                    return mockMqttClient;
+                },
+            );
+        };
 
-            await service.publishCommand(mqttTestMacAddresses.valid, 'watering', payload);
+        /** Makes client.publish() call its callback with the given error. */
+        const mockPublishError = (error: Error) => {
+            mockMqttClient.publish.mockImplementation(
+                (
+                    _t: string,
+                    _m: string | Buffer,
+                    _o?: IClientPublishOptions,
+                    cb?: (e?: Error, p?: Packet) => void,
+                ) => {
+                    cb?.(error);
+                    return mockMqttClient;
+                },
+            );
+        };
 
+        it.each([
+            ['watering', { action: 'on', duration: 5000 }],
+            ['lighting', { action: 'on' }],
+            ['sensors', { action: 'read' }],
+        ] as const)('should publish %s command to the correct topic', async (type, payload) => {
+            await service.publishCommand(mac, type, payload);
             expect(jest.spyOn(mockMqttClient, 'publish')).toHaveBeenCalledWith(
-                `nurtura/rack/${mqttTestMacAddresses.valid}/commands/watering`,
+                `nurtura/rack/${mac}/commands/${type}`,
                 JSON.stringify(payload),
                 { qos: 1 },
                 expect.any(Function),
             );
         });
 
-        it('should publish lighting command', async () => {
-            const payload = { action: 'on' };
-
-            await service.publishCommand(mqttTestMacAddresses.valid, 'lighting', payload);
-
-            expect(jest.spyOn(mockMqttClient, 'publish')).toHaveBeenCalledWith(
-                `nurtura/rack/${mqttTestMacAddresses.valid}/commands/lighting`,
-                JSON.stringify(payload),
-                { qos: 1 },
-                expect.any(Function),
-            );
-        });
-
-        it('should publish sensors command', async () => {
-            const payload = { action: 'read' };
-
-            await service.publishCommand(mqttTestMacAddresses.valid, 'sensors', payload);
-
-            expect(jest.spyOn(mockMqttClient, 'publish')).toHaveBeenCalledWith(
-                `nurtura/rack/${mqttTestMacAddresses.valid}/commands/sensors`,
-                JSON.stringify(payload),
-                { qos: 1 },
-                expect.any(Function),
-            );
-        });
-
-        it('should use QoS 1 for commands', async () => {
-            const payload = { action: 'on' };
-
-            await service.publishCommand(mqttTestMacAddresses.valid, 'watering', payload);
-
+        it('should use QoS 1 for all commands', async () => {
+            await service.publishCommand(mac, 'watering', { action: 'on' });
             expect(jest.spyOn(mockMqttClient, 'publish')).toHaveBeenCalledWith(
                 expect.any(String),
                 expect.any(String),
@@ -1119,49 +613,25 @@ describe('MqttService', () => {
             );
         });
 
-        it('should log published command', async () => {
-            const payload = { action: 'on' };
-            const mac = mqttTestMacAddresses.valid;
-
-            mockMqttClient.publish.mockImplementation(
-                (
-                    topic: string,
-                    message: string | Buffer,
-                    options: IClientPublishOptions,
-                    callback?: (error?: Error, packet?: Packet) => void,
-                ) => {
-                    if (callback) {
-                        callback();
-                    }
-                    return mockMqttClient;
-                },
-            );
-
-            await service.publishCommand(mac, 'watering', payload);
-
+        it('should log the published command', async () => {
+            mockPublishSuccess();
+            await service.publishCommand(mac, 'watering', { action: 'on' });
             expect(mockLoggerService.log).toHaveBeenCalledWith(
                 expect.stringContaining('Published command'),
                 'MqttService',
             );
         });
 
-        it('should throw error if client is not connected', async () => {
+        it('should throw if client is not connected', async () => {
             mockMqttClient.connected = false;
-            const payload = { action: 'on' };
-
-            await expect(
-                service.publishCommand(mqttTestMacAddresses.valid, 'watering', payload),
-            ).rejects.toThrow('MQTT client not connected');
+            await expect(service.publishCommand(mac, 'watering', { action: 'on' })).rejects.toThrow(
+                'MQTT client not connected',
+            );
         });
 
         it('should log error if client is not connected', async () => {
             mockMqttClient.connected = false;
-            const payload = { action: 'on' };
-
-            await expect(
-                service.publishCommand(mqttTestMacAddresses.valid, 'watering', payload),
-            ).rejects.toThrow();
-
+            await expect(service.publishCommand(mac, 'watering', {})).rejects.toThrow();
             expect(mockLoggerService.error).toHaveBeenCalledWith(
                 'Cannot publish: MQTT client not connected',
                 '',
@@ -1170,211 +640,109 @@ describe('MqttService', () => {
         });
 
         it('should reject if publish fails', async () => {
-            const publishError = new Error('Publish failed');
-
-            mockMqttClient.publish.mockImplementation(
-                (
-                    _topic: string,
-                    _message: string | Buffer,
-                    _options: IClientPublishOptions,
-                    callback?: (error?: Error, packet?: Packet) => void,
-                ) => {
-                    if (callback) callback(publishError);
-                    return mockMqttClient;
-                },
-            );
-
-            const payload = { action: 'on' };
-            const mac = mqttTestMacAddresses.valid;
-
-            await expect(service.publishCommand(mac, 'watering', payload)).rejects.toThrow(
-                'Publish failed',
-            );
-        });
-
-        it('should reject if publish fails', async () => {
-            const publishError = new Error('Publish failed');
-
-            mockMqttClient.publish.mockImplementation(
-                (
-                    _topic: string,
-                    _message: string | Buffer,
-                    _options: IClientPublishOptions,
-                    callback?: (error?: Error, packet?: Packet) => void,
-                ) => {
-                    if (callback) callback(publishError);
-                    return mockMqttClient;
-                },
-            );
-
-            const payload = { action: 'on' };
-            const mac = mqttTestMacAddresses.valid;
-
-            await expect(service.publishCommand(mac, 'watering', payload)).rejects.toThrow(
+            mockPublishError(new Error('Publish failed'));
+            await expect(service.publishCommand(mac, 'watering', {})).rejects.toThrow(
                 'Publish failed',
             );
         });
     });
 
+    // ─────────────────────────────────────────────
+    // health check methods
+    // ─────────────────────────────────────────────
+
     describe('health check methods', () => {
+        let connectHandler: ((p: Partial<ConnackPacket>) => void) | undefined;
+        let reconnectHandler: (() => void) | undefined;
+
+        /** Triggers the persistent on-connect handler and resolves all subscribe callbacks. */
+        const fireConnectAndResolveSubscriptions = () => {
+            mockMqttClient.connected = true;
+            connectHandler?.(CONNACK_SESSION);
+            (mockMqttClient.subscribe as jest.Mock).mock.calls.forEach(
+                ([topic, , cb]: [string, unknown, SubscribeCallback]) => {
+                    cb?.(null, [{ topic, qos: 1 }]);
+                },
+            );
+        };
+
         beforeEach(async () => {
-            setImmediate(() => {
-                const connectHandler = mockMqttClient.once.mock.calls.find(
-                    (call) => call[0] === 'connect',
-                )?.[1] as (packet: IConnackPacket) => void; // Explicitly type the handler
-
-                if (connectHandler) {
-                    connectHandler({
-                        cmd: 'connack',
-                        returnCode: 0,
-                        retain: false,
-                        qos: 0,
-                        dup: false,
-                        length: 0,
-                        topic: null,
-                        payload: null,
-                    } as unknown as IConnackPacket); // Cast to the actual Interface
-                }
-            });
-
+            triggerConnect(mockMqttClient);
             await service.onModuleInit();
+            // Capture before clearing — clearAllMocks() wipes on.mock.calls
+            connectHandler = getEventHandler<(p: Partial<ConnackPacket>) => void>(
+                mockMqttClient,
+                'connect',
+            );
+            reconnectHandler = getEventHandler<() => void>(mockMqttClient, 'reconnect');
             jest.clearAllMocks();
         });
 
-        it('should return true if client is connected', () => {
+        it('should return true when client is connected', () => {
             mockMqttClient.connected = true;
             expect(service.isConnected()).toBe(true);
         });
 
-        it('should return false if client is not connected', () => {
+        it('should return false when client is not connected', () => {
             mockMqttClient.connected = false;
             expect(service.isConnected()).toBe(false);
         });
 
-        it('should return subscribed topics', () => {
-            const connectHandler = mockMqttClient.on.mock.calls.find(
-                (call) => call[0] === 'connect',
-            )?.[1] as (packet: IConnackPacket) => void;
-
-            if (connectHandler) {
-                mockMqttClient.connected = true;
-                connectHandler({
-                    cmd: 'connack',
-                    returnCode: 0,
-                    sessionPresent: false,
-                } as IConnackPacket);
-
-                type SubscribeCallback = (err: Error | null, grants: ISubscriptionGrant[]) => void;
-                const subscribeCalls = (mockMqttClient.subscribe as jest.Mock).mock.calls as Array<
-                    [string, any, SubscribeCallback]
-                >;
-
-                subscribeCalls.forEach((call) => {
-                    const [topic, , callback] = call;
-                    if (callback) {
-                        callback(null, [{ topic, qos: 1 }]);
-                    }
-                });
-
-                const topics = service.getSubscribedTopics();
-
-                expect(topics).toContain('nurtura/rack/+/sensors');
-                expect(topics).toContain('nurtura/rack/+/status');
-                expect(topics).toContain('nurtura/rack/+/errors');
-            }
+        it('should return the subscribed topics', () => {
+            fireConnectAndResolveSubscriptions();
+            expect(service.getSubscribedTopics()).toEqual(
+                expect.arrayContaining([
+                    'nurtura/rack/+/sensors',
+                    'nurtura/rack/+/status',
+                    'nurtura/rack/+/errors',
+                ]),
+            );
         });
 
-        it('should return connection status', () => {
-            mockMqttClient.connected = true;
-
-            const connectHandler = mockMqttClient.on.mock.calls.find(
-                (call) => call[0] === 'connect',
-            )?.[1] as (packet: IConnackPacket) => void;
-
-            if (connectHandler) {
-                connectHandler({
-                    cmd: 'connack',
-                    returnCode: 0,
-                    sessionPresent: false,
-                } as IConnackPacket);
-
-                type SubscribeCallback = (err: Error | null, grants: ISubscriptionGrant[]) => void;
-                const subscribeCalls = (mockMqttClient.subscribe as jest.Mock).mock.calls as Array<
-                    [string, any, SubscribeCallback]
-                >;
-
-                subscribeCalls.forEach((call) => {
-                    const [topic, , callback] = call;
-                    if (callback) {
-                        callback(null, [{ topic, qos: 1 }]);
-                    }
-                });
-
-                const status = service.getConnectionStatus();
-
-                expect(status).toEqual({
-                    connected: true,
-                    reconnectAttempts: 0,
-                    subscribedTopics: expect.arrayContaining([
-                        'nurtura/rack/+/sensors',
-                        'nurtura/rack/+/status',
-                        'nurtura/rack/+/errors',
-                    ]) as unknown as string[],
-                });
-            }
+        it('should return full connection status', () => {
+            fireConnectAndResolveSubscriptions();
+            expect(service.getConnectionStatus()).toEqual({
+                connected: true,
+                reconnectAttempts: 0,
+                subscribedTopics: expect.arrayContaining([
+                    'nurtura/rack/+/sensors',
+                    'nurtura/rack/+/status',
+                    'nurtura/rack/+/errors',
+                ]) as unknown as string[],
+            });
         });
 
         it('should track reconnect attempts in status', () => {
-            const reconnectHandler = mockMqttClient.on.mock.calls.find(
-                (call) => call[0] === 'reconnect',
-            )?.[1] as () => void;
-
-            if (reconnectHandler) {
-                reconnectHandler();
-                reconnectHandler();
-
-                const status = service.getConnectionStatus();
-
-                expect(status.reconnectAttempts).toBe(2);
-            }
+            reconnectHandler?.();
+            reconnectHandler?.();
+            expect(service.getConnectionStatus().reconnectAttempts).toBe(2);
         });
     });
 
+    // ─────────────────────────────────────────────
+    // onModuleDestroy
+    // ─────────────────────────────────────────────
+
     describe('onModuleDestroy', () => {
+        /** Makes client.end() call its callback immediately. */
+        const mockEndCallback = () => {
+            mockMqttClient.end.mockImplementation(
+                (_force?: boolean, _opts?: Partial<IClientOptions>, cb?: () => void) => {
+                    cb?.();
+                    return mockMqttClient;
+                },
+            );
+        };
+
         beforeEach(async () => {
-            setImmediate(() => {
-                const connectHandler = mockMqttClient.once.mock.calls.find(
-                    (call) => call[0] === 'connect',
-                )?.[1] as (packet: IConnackPacket) => void; // Explicitly type the handler
-
-                if (connectHandler) {
-                    connectHandler({
-                        cmd: 'connack',
-                        returnCode: 0,
-                        retain: false,
-                        qos: 0,
-                        dup: false,
-                        length: 0,
-                        topic: null,
-                        payload: null,
-                    } as unknown as IConnackPacket); // Cast to the actual Interface
-                }
-            });
-
+            triggerConnect(mockMqttClient);
             await service.onModuleInit();
             jest.clearAllMocks();
         });
 
-        it('should close MQTT connection on module destruction', async () => {
-            mockMqttClient.end.mockImplementation(
-                (_force: boolean, _options: IClientOptions, callback?: () => void) => {
-                    if (callback) callback();
-                    return mockMqttClient;
-                },
-            );
-
+        it('should call client.end(false) on module destruction', async () => {
+            mockEndCallback();
             await service.onModuleDestroy();
-
             expect(jest.spyOn(mockMqttClient, 'end')).toHaveBeenCalledWith(
                 false,
                 {},
@@ -1382,32 +750,18 @@ describe('MqttService', () => {
             );
         });
 
-        it('should log closing message', async () => {
-            mockMqttClient.end.mockImplementation(
-                (_force: boolean, _options: IClientOptions, callback?: () => void) => {
-                    if (callback) callback();
-                    return mockMqttClient;
-                },
-            );
-
+        it('should log the closing message', async () => {
+            mockEndCallback();
             await service.onModuleDestroy();
-
             expect(mockLoggerService.log).toHaveBeenCalledWith(
                 'Closing MQTT connection...',
                 'MqttService',
             );
         });
 
-        it('should log successful closure', async () => {
-            mockMqttClient.end.mockImplementation(
-                (_force: boolean, _options: IClientOptions, callback?: () => void) => {
-                    if (callback) callback();
-                    return mockMqttClient;
-                },
-            );
-
+        it('should log graceful closure', async () => {
+            mockEndCallback();
             await service.onModuleDestroy();
-
             expect(mockLoggerService.log).toHaveBeenCalledWith(
                 'MQTT connection closed gracefully',
                 'MqttService',
@@ -1415,161 +769,45 @@ describe('MqttService', () => {
         });
 
         it('should handle destruction if client is null', async () => {
-            // Create service without initializing
-            const module: TestingModule = await Test.createTestingModule({
-                providers: [
-                    MqttService,
-                    {
-                        provide: ConfigService,
-                        useValue: createMockConfigService({
-                            MQTT_HOST: undefined,
-                        }),
-                    },
-                    {
-                        provide: MyLoggerService,
-                        useValue: mockLoggerService,
-                    },
-                    {
-                        provide: SensorsService,
-                        useValue: mockSensorsService,
-                    },
-                    {
-                        provide: RacksService,
-                        useValue: mockRacksService,
-                    },
-                    {
-                        provide: EventEmitter2,
-                        useValue: mockEventEmitter,
-                    },
-                ],
-            }).compile();
-
-            const uninitializedService = module.get<MqttService>(MqttService);
-
-            await expect(uninitializedService.onModuleDestroy()).resolves.not.toThrow();
+            const svc = await buildModule({ MQTT_HOST: undefined }, createMockMqttClient());
+            await expect(svc.onModuleDestroy()).resolves.not.toThrow();
         });
     });
 
+    // ─────────────────────────────────────────────
+    // integration
+    // ─────────────────────────────────────────────
+
     describe('integration', () => {
-        it('should work with ConfigService', async () => {
-            setImmediate(() => {
-                const connectHandler = mockMqttClient.once.mock.calls.find(
-                    (call) => call[0] === 'connect',
-                )?.[1] as (packet: IConnackPacket) => void; // Explicitly type the handler
-
-                if (connectHandler) {
-                    connectHandler({
-                        cmd: 'connack',
-                        returnCode: 0,
-                        retain: false,
-                        qos: 0,
-                        dup: false,
-                        length: 0,
-                        topic: null,
-                        payload: null,
-                    } as unknown as IConnackPacket); // Cast to the actual Interface
-                }
-            });
+        beforeEach(async () => {
+            triggerConnect(mockMqttClient);
             await service.onModuleInit();
+        });
 
+        it('should use ConfigService during initialisation', () => {
             expect(mockConfigService.get).toHaveBeenCalled();
         });
 
-        it('should work with MyLoggerService', async () => {
-            setImmediate(() => {
-                const connectHandler = mockMqttClient.once.mock.calls.find(
-                    (call) => call[0] === 'connect',
-                )?.[1] as (packet: IConnackPacket) => void; // Explicitly type the handler
-
-                if (connectHandler) {
-                    connectHandler({
-                        cmd: 'connack',
-                        returnCode: 0,
-                        retain: false,
-                        qos: 0,
-                        dup: false,
-                        length: 0,
-                        topic: null,
-                        payload: null,
-                    } as unknown as IConnackPacket); // Cast to the actual Interface
-                }
-            });
-
-            await service.onModuleInit();
-
+        it('should use MyLoggerService during initialisation', () => {
             expect(mockLoggerService.bootstrap).toHaveBeenCalled();
         });
 
-        it('should work with SensorsService', async () => {
-            setImmediate(() => {
-                const connectHandler = mockMqttClient.once.mock.calls.find(
-                    (call) => call[0] === 'connect',
-                )?.[1] as (packet: IConnackPacket) => void; // Explicitly type the handler
-
-                if (connectHandler) {
-                    connectHandler({
-                        cmd: 'connack',
-                        returnCode: 0,
-                        retain: false,
-                        qos: 0,
-                        dup: false,
-                        length: 0,
-                        topic: null,
-                        payload: null,
-                    } as unknown as IConnackPacket); // Cast to the actual Interface
-                }
-            });
-
-            await service.onModuleInit();
-
-            const messageHandler = mockMqttClient.on.mock.calls.find(
-                (call) => call[0] === 'message',
-            )?.[1] as ((topic: string, message: any) => Promise<void>) | undefined;
-
-            if (messageHandler) {
-                const topic = `nurtura/rack/${mqttTestMacAddresses.valid}/sensors`;
-                const message = Buffer.from(mqttTestMessages.validSensorData);
-
-                await messageHandler(topic, message);
-
-                expect(mockSensorsService.processSensorData).toHaveBeenCalled();
-            }
+        it('should delegate sensor messages to SensorsService', async () => {
+            const handler = getEventHandler<MessageHandler>(mockMqttClient, 'message')!;
+            await handler(
+                `nurtura/rack/${mqttTestMacAddresses.valid}/sensors`,
+                Buffer.from(mqttTestMessages.validSensorData),
+            );
+            expect(mockSensorsService.processSensorData).toHaveBeenCalled();
         });
 
-        it('should work with RacksService', async () => {
-            setImmediate(() => {
-                const connectHandler = mockMqttClient.once.mock.calls.find(
-                    (call) => call[0] === 'connect',
-                )?.[1] as (packet: IConnackPacket) => void; // Explicitly type the handler
-
-                if (connectHandler) {
-                    connectHandler({
-                        cmd: 'connack',
-                        returnCode: 0,
-                        retain: false,
-                        qos: 0,
-                        dup: false,
-                        length: 0,
-                        topic: null,
-                        payload: null,
-                    } as unknown as IConnackPacket); // Cast to the actual Interface
-                }
-            });
-
-            await service.onModuleInit();
-
-            const messageHandler = mockMqttClient.on.mock.calls.find(
-                (call) => call[0] === 'message',
-            )?.[1] as ((topic: string, message: any) => Promise<void>) | undefined;
-
-            if (messageHandler) {
-                const topic = `nurtura/rack/${mqttTestMacAddresses.valid}/status`;
-                const message = Buffer.from(mqttTestMessages.deviceOnline);
-
-                await messageHandler(topic, message);
-
-                expect(mockRacksService.processDeviceStatus).toHaveBeenCalled();
-            }
+        it('should delegate status messages to RacksService', async () => {
+            const handler = getEventHandler<MessageHandler>(mockMqttClient, 'message')!;
+            await handler(
+                `nurtura/rack/${mqttTestMacAddresses.valid}/status`,
+                Buffer.from(mqttTestMessages.deviceOnline),
+            );
+            expect(mockRacksService.processDeviceStatus).toHaveBeenCalled();
         });
     });
 });
