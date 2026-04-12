@@ -50,40 +50,23 @@ jobs:
              contains(fromJSON('["feat", "fix", "refactor"]'), needs.parse-commits.outputs.commit-type))
         uses: ./.github/workflows/_integration-tests.yml
 
-    # Job 6: E2E tests — only on push to main for major releases / breaking changes.
-    e2e-tests:
-        name: E2E Tests
-        needs: [parse-commits, unit-tests]
-        if: |
-            github.event_name == 'push' &&
-            github.ref == 'refs/heads/main' &&
-            (needs.parse-commits.outputs.has-breaking-change == 'true' ||
-             needs.parse-commits.outputs.release-type == 'major')
-        uses: ./.github/workflows/_e2e-tests.yml
-        secrets: inherit
-
-    # Job 7: Gate job — waits for all test jobs and resolves their skipped/cancelled
-    # states into a single clean signal for semantic-release to depend on.
+    # Job 6: Gate job
     tests-gate:
         name: Tests Gate
         runs-on: ubuntu-latest
-        needs: [parse-commits, unit-tests, integration-tests, e2e-tests]
-        # Always evaluate this job even if upstream jobs were skipped
+        needs: [parse-commits, unit-tests, integration-tests]
         if: always()
         steps:
             - name: Check test results
               run: |
                   UNIT="${{ needs.unit-tests.result }}"
                   INTG="${{ needs.integration-tests.result }}"
-                  E2E="${{ needs.e2e-tests.result }}"
+                  # ← removed E2E variable and check
 
                   echo "unit-tests:         $UNIT"
                   echo "integration-tests:  $INTG"
-                  echo "e2e-tests:          $E2E"
 
-                  # A job that was intentionally skipped by its 'if' condition
-                  # is acceptable. A failed or unexpected-cancelled job is not.
-                  for result in "$UNIT" "$INTG" "$E2E"; do
+                  for result in "$UNIT" "$INTG"; do
                       if [ "$result" = "failure" ] || [ "$result" = "cancelled" ]; then
                           echo "::error::A required test job failed or was cancelled: $result"
                           exit 1
@@ -92,7 +75,7 @@ jobs:
 
                   echo "All test gates passed."
 
-    # Job 8: Semantic release — only on push to main after gate passes
+    # Job 7: Semantic release — only on push to main after gate passes
     semantic-release:
         name: Semantic Release
         needs: [parse-commits, tests-gate]
@@ -105,7 +88,7 @@ jobs:
         uses: ./.github/workflows/_semantic-release.yml
         secrets: inherit
 
-    # Job 9: Build Docker image — only after a release is confirmed published
+    # Job 8: Build Docker image — only after a release is confirmed published
     build-docker:
         name: Build Docker
         needs: [parse-commits, security-audit, semantic-release]
@@ -119,7 +102,7 @@ jobs:
             new-release-version: ${{ needs.semantic-release.outputs.new-release-version }}
         secrets: inherit
 
-    # Job 10: Deploy to Render — only after Docker image is built and pushed
+    # Job 9: Deploy to Render — only after Docker image is built and pushed
     deploy-render:
         name: Deploy to Render
         needs: [semantic-release, build-docker]

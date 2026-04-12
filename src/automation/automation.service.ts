@@ -557,8 +557,8 @@ export class AutomationService implements OnModuleInit {
             type: NotificationType.AUTOMATION,
             title: isOn ? 'Grow Light Turned On' : 'Grow Light Turned Off',
             message: isOn
-                ? `Grow light turned on automatically (${source}).`
-                : `Grow light turned off automatically (${source}).`,
+                ? `Scheduled grow light turned on automatically.`
+                : `Scheduled grow light turned off automatically.`,
             metadata: {
                 screen: '/(tabs)/(activity)/plant-care',
                 plantId: rack.currentPlant?.id,
