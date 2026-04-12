@@ -49,6 +49,7 @@ export const createMockSensorsService = () => ({
     getLatestReading: jest.fn(),
     getReadings: jest.fn(),
     getAggregatedData: jest.fn(),
+    aggregateReadingsForCleanup: jest.fn(),
     getHistory: jest.fn(),
     getStatistics: jest.fn(),
     calculateStats: jest.fn(),

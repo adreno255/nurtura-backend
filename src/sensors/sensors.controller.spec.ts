@@ -95,6 +95,53 @@ describe('SensorsController', () => {
         });
     });
 
+    describe('aggregateForCleanup', () => {
+        const mockSummary = {
+            from: new Date('2026-04-09T00:00:00.000Z'),
+            to: new Date('2026-04-12T00:00:00.000Z'),
+            processedReadings: 120,
+            aggregatedRows: 24,
+            days: 3,
+        };
+
+        it('should trigger aggregation with default days', async () => {
+            mockSensorsService.aggregateReadingsForCleanup.mockResolvedValue(mockSummary);
+
+            await controller.aggregateForCleanup(3);
+
+            expect(mockSensorsService.aggregateReadingsForCleanup).toHaveBeenCalledWith(3);
+        });
+
+        it('should trigger aggregation with custom days', async () => {
+            mockSensorsService.aggregateReadingsForCleanup.mockResolvedValue({
+                ...mockSummary,
+                days: 5,
+            });
+
+            await controller.aggregateForCleanup(5);
+
+            expect(mockSensorsService.aggregateReadingsForCleanup).toHaveBeenCalledWith(5);
+        });
+
+        it('should return formatted response', async () => {
+            mockSensorsService.aggregateReadingsForCleanup.mockResolvedValue(mockSummary);
+
+            const result = await controller.aggregateForCleanup(3);
+
+            expect(result).toEqual({
+                message: 'Sensor aggregation completed',
+                ...mockSummary,
+            });
+        });
+
+        it('should propagate service errors', async () => {
+            const serviceError = new Error('Aggregation failed');
+            mockSensorsService.aggregateReadingsForCleanup.mockRejectedValue(serviceError);
+
+            await expect(controller.aggregateForCleanup(3)).rejects.toThrow('Aggregation failed');
+        });
+    });
+
     describe('getReadings', () => {
         it('should retrieve readings without date filters', async () => {
             mockSensorsService.getReadings.mockResolvedValue(mockReadings);
@@ -507,6 +554,13 @@ describe('SensorsController', () => {
     describe('integration with services', () => {
         it('should delegate all logic to services', async () => {
             mockSensorsService.getLatestReading.mockResolvedValue(mockSensorReading);
+            mockSensorsService.aggregateReadingsForCleanup.mockResolvedValue({
+                from: new Date('2026-04-09T00:00:00.000Z'),
+                to: new Date('2026-04-12T00:00:00.000Z'),
+                processedReadings: 120,
+                aggregatedRows: 24,
+                days: 3,
+            });
             mockSensorsService.getReadings.mockResolvedValue(mockReadings);
             mockRacksService.verifyRackOwnership.mockResolvedValue(undefined);
             mockSensorsService.getAggregatedData.mockResolvedValue(mockAggregatedData);
@@ -514,12 +568,14 @@ describe('SensorsController', () => {
             mockSensorsService.getStatistics.mockResolvedValue(mockStatistics);
 
             await controller.getLatestReading(testRackId);
+            await controller.aggregateForCleanup(3);
             await controller.getReadings(testRackId);
             await controller.getAggregated(testRackId, 24, testUser);
             await controller.getHistory(testRackId, 24, testUser);
             await controller.getStatistics(testRackId, 24, testUser);
 
             expect(mockSensorsService.getLatestReading).toHaveBeenCalled();
+            expect(mockSensorsService.aggregateReadingsForCleanup).toHaveBeenCalled();
             expect(mockSensorsService.getReadings).toHaveBeenCalled();
             expect(mockSensorsService.getAggregatedData).toHaveBeenCalled();
             expect(mockSensorsService.getHistory).toHaveBeenCalled();

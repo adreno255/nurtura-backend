@@ -217,6 +217,161 @@ export class SensorsService {
     }
 
     /**
+     * Aggregates recent raw sensor readings into hourly rows for cleanup workflows.
+     *
+     * @param days - Number of days to process (default: 3)
+     * @returns Aggregation summary
+     */
+    async aggregateReadingsForCleanup(days: number = 3) {
+        const normalizedDays = Number.isFinite(days) && days > 0 ? days : 3;
+        const to = new Date();
+        const from = new Date(to.getTime() - normalizedDays * 24 * 60 * 60 * 1000);
+
+        try {
+            const readings = await this.databaseService.sensorReading.findMany({
+                where: {
+                    timestamp: {
+                        gte: from,
+                        lt: to,
+                    },
+                },
+                select: {
+                    rackId: true,
+                    temperature: true,
+                    humidity: true,
+                    moisture: true,
+                    lightLevel: true,
+                    timestamp: true,
+                },
+                orderBy: { timestamp: 'asc' },
+            });
+
+            if (readings.length === 0) {
+                this.logger.log(
+                    `No sensor readings found for aggregation window (${normalizedDays} day(s))`,
+                    'SensorsService',
+                );
+
+                return {
+                    from,
+                    to,
+                    processedReadings: 0,
+                    aggregatedRows: 0,
+                    days: normalizedDays,
+                };
+            }
+
+            const buckets = new Map<
+                string,
+                {
+                    rackId: string;
+                    hour: Date;
+                    temperatureSum: number;
+                    humiditySum: number;
+                    moistureSum: number;
+                    lightLevelSum: number;
+                    minTemperature: number;
+                    maxTemperature: number;
+                    minMoisture: number;
+                    maxMoisture: number;
+                    count: number;
+                }
+            >();
+
+            for (const reading of readings) {
+                const hour = new Date(reading.timestamp);
+                hour.setMinutes(0, 0, 0);
+
+                const key = `${reading.rackId}:${hour.toISOString()}`;
+                const existing = buckets.get(key);
+
+                if (!existing) {
+                    buckets.set(key, {
+                        rackId: reading.rackId,
+                        hour,
+                        temperatureSum: reading.temperature,
+                        humiditySum: reading.humidity,
+                        moistureSum: reading.moisture,
+                        lightLevelSum: reading.lightLevel,
+                        minTemperature: reading.temperature,
+                        maxTemperature: reading.temperature,
+                        minMoisture: reading.moisture,
+                        maxMoisture: reading.moisture,
+                        count: 1,
+                    });
+                    continue;
+                }
+
+                existing.temperatureSum += reading.temperature;
+                existing.humiditySum += reading.humidity;
+                existing.moistureSum += reading.moisture;
+                existing.lightLevelSum += reading.lightLevel;
+                existing.minTemperature = Math.min(existing.minTemperature, reading.temperature);
+                existing.maxTemperature = Math.max(existing.maxTemperature, reading.temperature);
+                existing.minMoisture = Math.min(existing.minMoisture, reading.moisture);
+                existing.maxMoisture = Math.max(existing.maxMoisture, reading.moisture);
+                existing.count += 1;
+            }
+
+            for (const bucket of buckets.values()) {
+                await this.databaseService.aggregatedSensorReading.upsert({
+                    where: {
+                        rackId_hour: {
+                            rackId: bucket.rackId,
+                            hour: bucket.hour,
+                        },
+                    },
+                    create: {
+                        rackId: bucket.rackId,
+                        hour: bucket.hour,
+                        avgTemperature: bucket.temperatureSum / bucket.count,
+                        avgHumidity: bucket.humiditySum / bucket.count,
+                        avgMoisture: bucket.moistureSum / bucket.count,
+                        avgLightLevel: bucket.lightLevelSum / bucket.count,
+                        minTemperature: bucket.minTemperature,
+                        maxTemperature: bucket.maxTemperature,
+                        minMoisture: bucket.minMoisture,
+                        maxMoisture: bucket.maxMoisture,
+                        readingCount: bucket.count,
+                    },
+                    update: {
+                        avgTemperature: bucket.temperatureSum / bucket.count,
+                        avgHumidity: bucket.humiditySum / bucket.count,
+                        avgMoisture: bucket.moistureSum / bucket.count,
+                        avgLightLevel: bucket.lightLevelSum / bucket.count,
+                        minTemperature: bucket.minTemperature,
+                        maxTemperature: bucket.maxTemperature,
+                        minMoisture: bucket.minMoisture,
+                        maxMoisture: bucket.maxMoisture,
+                        readingCount: bucket.count,
+                    },
+                });
+            }
+
+            this.logger.log(
+                `Aggregated ${readings.length} readings into ${buckets.size} hourly row(s) for cleanup`,
+                'SensorsService',
+            );
+
+            return {
+                from,
+                to,
+                processedReadings: readings.length,
+                aggregatedRows: buckets.size,
+                days: normalizedDays,
+            };
+        } catch (error) {
+            this.logger.error(
+                'Failed to aggregate sensor readings for cleanup',
+                error instanceof Error ? error.message : String(error),
+                'SensorsService',
+            );
+
+            throw new InternalServerErrorException('Failed to aggregate sensor readings');
+        }
+    }
+
+    /**
      * Helper function to calculate statistics for a rack
      *
      * @param values - Array of sensor values

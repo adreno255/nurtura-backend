@@ -511,6 +511,103 @@ describe('SensorsService', () => {
         });
     });
 
+    describe('aggregateReadingsForCleanup', () => {
+        it('should aggregate hourly data and upsert rows', async () => {
+            const timestampA = new Date('2026-04-12T10:15:00.000Z');
+            const timestampB = new Date('2026-04-12T10:45:00.000Z');
+            const timestampC = new Date('2026-04-12T11:05:00.000Z');
+
+            mockDatabaseService.sensorReading.findMany.mockResolvedValue([
+                {
+                    rackId: testRackId,
+                    temperature: 24,
+                    humidity: 60,
+                    moisture: 40,
+                    lightLevel: 500,
+                    timestamp: timestampA,
+                },
+                {
+                    rackId: testRackId,
+                    temperature: 26,
+                    humidity: 64,
+                    moisture: 46,
+                    lightLevel: 700,
+                    timestamp: timestampB,
+                },
+                {
+                    rackId: testRackId,
+                    temperature: 25,
+                    humidity: 62,
+                    moisture: 44,
+                    lightLevel: 650,
+                    timestamp: timestampC,
+                },
+            ]);
+            mockDatabaseService.aggregatedSensorReading.upsert.mockResolvedValue({});
+
+            const result = await service.aggregateReadingsForCleanup(3);
+
+            expect(mockDatabaseService.sensorReading.findMany).toHaveBeenCalledWith({
+                where: {
+                    timestamp: {
+                        gte: expect.any(Date) as Date,
+                        lt: expect.any(Date) as Date,
+                    },
+                },
+                select: {
+                    rackId: true,
+                    temperature: true,
+                    humidity: true,
+                    moisture: true,
+                    lightLevel: true,
+                    timestamp: true,
+                },
+                orderBy: { timestamp: 'asc' },
+            });
+
+            expect(mockDatabaseService.aggregatedSensorReading.upsert).toHaveBeenCalledTimes(2);
+            expect(result.processedReadings).toBe(3);
+            expect(result.aggregatedRows).toBe(2);
+            expect(result.days).toBe(3);
+        });
+
+        it('should return zero summary when no readings are found', async () => {
+            mockDatabaseService.sensorReading.findMany.mockResolvedValue([]);
+
+            const result = await service.aggregateReadingsForCleanup();
+
+            expect(mockDatabaseService.aggregatedSensorReading.upsert).not.toHaveBeenCalled();
+            expect(result).toEqual(
+                expect.objectContaining({
+                    processedReadings: 0,
+                    aggregatedRows: 0,
+                    days: 3,
+                }),
+            );
+        });
+
+        it('should fallback to 3 days when days is invalid', async () => {
+            mockDatabaseService.sensorReading.findMany.mockResolvedValue([]);
+
+            const result = await service.aggregateReadingsForCleanup(0);
+
+            expect(result.days).toBe(3);
+        });
+
+        it('should throw InternalServerErrorException on aggregation failure', async () => {
+            mockDatabaseService.sensorReading.findMany.mockRejectedValue(
+                new Error('Database error'),
+            );
+
+            await expect(service.aggregateReadingsForCleanup()).rejects.toThrow(
+                InternalServerErrorException,
+            );
+            await expect(service.aggregateReadingsForCleanup()).rejects.toThrow(
+                'Failed to aggregate sensor readings',
+            );
+        });
+    });
+
     describe('processSensorData', () => {
         const rawMessage = JSON.stringify(mockSensorData);
 
