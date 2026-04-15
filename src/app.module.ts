@@ -23,6 +23,7 @@ import { AutomationModule } from './automation/automation.module';
 import { PlantsModule } from './plants/plants.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { SystemRulesModule } from './system-rules/system-rules.module';
+import { SimulationModule } from './simulation/simulation.module';
 
 @Module({
     imports: [
@@ -59,6 +60,7 @@ import { SystemRulesModule } from './system-rules/system-rules.module';
         PlantsModule,
         NotificationsModule,
         SystemRulesModule,
+        SimulationModule,
     ],
     controllers: [AppController],
     providers: [
